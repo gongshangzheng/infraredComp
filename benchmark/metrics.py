@@ -26,16 +26,42 @@ class CompressionResult:
 
 
 def compute_psnr(original: np.ndarray, reconstructed: np.ndarray) -> float:
-    """Compute PSNR between original and reconstructed images."""
-    return peak_signal_noise_ratio(original, reconstructed)
+    """Compute PSNR between original and reconstructed images.
+
+    Always uses a fixed data_range based on dtype to ensure consistent
+    comparison across codecs (traditional vs learned).
+    """
+    if original.dtype == np.uint16 or np.issubdtype(original.dtype, np.floating):
+        # For float images normalised from uint16, use full 16-bit range (1.0).
+        # For uint16, skimage auto-detects 65535.
+        if np.issubdtype(original.dtype, np.floating):
+            data_range = 1.0
+        else:
+            data_range = 65535
+    elif original.dtype == np.uint8:
+        data_range = 255
+    else:
+        data_range = original.max() - original.min()
+        if data_range == 0:
+            data_range = 1.0
+    return peak_signal_noise_ratio(original, reconstructed, data_range=data_range)
 
 
 def compute_ssim(original: np.ndarray, reconstructed: np.ndarray) -> float:
-    """Compute SSIM between original and reconstructed images."""
-    # Determine data range
-    data_range = original.max() - original.min()
-    if data_range == 0:
+    """Compute SSIM between original and reconstructed images.
+
+    Uses a fixed data_range based on dtype for consistent comparison.
+    """
+    if original.dtype == np.uint16:
+        data_range = 65535
+    elif original.dtype == np.uint8:
+        data_range = 255
+    elif np.issubdtype(original.dtype, np.floating):
         data_range = 1.0
+    else:
+        data_range = original.max() - original.min()
+        if data_range == 0:
+            data_range = 1.0
     # Handle multi-channel vs single-channel
     if original.ndim == 3:
         channel_axis = -1
