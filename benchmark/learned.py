@@ -77,15 +77,38 @@ def _unpad(x: torch.Tensor, pad: tuple[int, int]) -> torch.Tensor:
     return x
 
 
-def _img_to_tensor(img: np.ndarray) -> torch.Tensor:
-    """Convert numpy image to (1, 3, H, W) float tensor in [0, 1]."""
+def _img_to_tensor(img: np.ndarray) -> tuple[torch.Tensor, dict]:
+    """Convert numpy image to (1, 3, H, W) float tensor in [0, 1].
+
+    For uint16 / uint8 inputs, applies min-max normalization so that the signal
+    fills [0, 1]. This matches the approach used by traditional codecs
+    (which also stretch the signal before compression) and ensures PSNR values
+    are comparable across codec families.
+
+    Returns (tensor, norm_stats) where norm_stats is needed for denormalization.
+    """
+    stats: dict = {}
+
     if img.dtype == np.uint16:
-        arr = img.astype(np.float32) / 65535.0
+        img_min, img_max = int(img.min()), int(img.max())
+        if img_max > img_min:
+            arr = (img.astype(np.float32) - img_min) / (img_max - img_min)
+        else:
+            arr = np.zeros_like(img, dtype=np.float32)
+        stats = {"src_dtype": "uint16", "img_min": img_min, "img_max": img_max}
     elif img.dtype == np.uint8:
-        arr = img.astype(np.float32) / 255.0
+        img_min, img_max = int(img.min()), int(img.max())
+        if img_max > img_min:
+            arr = (img.astype(np.float32) - img_min) / (img_max - img_min)
+        else:
+            arr = np.zeros_like(img, dtype=np.float32)
+        stats = {"src_dtype": "uint8", "img_min": img_min, "img_max": img_max}
     else:
         arr = img.astype(np.float32)
-        arr = (arr - arr.min()) / (arr.max() - arr.min() + 1e-8)
+        arr_min, arr_max = arr.min(), arr.max()
+        if arr_max > arr_min:
+            arr = (arr - arr_min) / (arr_max - arr_min)
+        stats = {"src_dtype": "float", "img_min": float(arr_min), "img_max": float(arr_max)}
 
     if arr.ndim == 2:
         arr = np.stack([arr, arr, arr], axis=0)  # (3, H, W)
@@ -96,18 +119,33 @@ def _img_to_tensor(img: np.ndarray) -> torch.Tensor:
     else:
         arr = np.stack([arr, arr, arr], axis=0)
 
-    return torch.from_numpy(arr).unsqueeze(0)  # (1, 3, H, W)
+    return torch.from_numpy(arr).unsqueeze(0), stats  # (1, 3, H, W)
 
 
-def _tensor_to_img(t: torch.Tensor, ref_dtype: np.dtype) -> np.ndarray:
-    """Convert (1, 3, H, W) tensor back to numpy, taking first channel."""
+def _tensor_to_img(
+    t: torch.Tensor,
+    norm_stats: dict,
+) -> np.ndarray:
+    """Convert (1, 3, H, W) tensor back to numpy, reversing the normalization
+    applied by ``_img_to_tensor``.
+
+    Parameters
+    ----------
+    t : tensor in [0, 1] (min-max normalized)
+    norm_stats : dict returned by ``_img_to_tensor``
+    """
     arr = t.squeeze(0).cpu().numpy()  # (3, H, W)
     arr = arr[0]  # take first channel (grayscale)
     arr = np.clip(arr, 0, 1)
-    if ref_dtype == np.uint8:
-        return (arr * 255).astype(np.uint8)
-    elif ref_dtype == np.uint16:
-        return (arr * 65535).astype(np.uint16)
+
+    src_dtype = norm_stats.get("src_dtype", "float")
+    img_min = norm_stats.get("img_min", 0)
+    img_max = norm_stats.get("img_max", 1)
+
+    if src_dtype == "uint8":
+        return (arr * (img_max - img_min) + img_min).astype(np.uint8)
+    elif src_dtype == "uint16":
+        return (arr * (img_max - img_min) + img_min).astype(np.uint16)
     else:
         return arr.astype(np.float32)
 
@@ -121,7 +159,8 @@ def compress_learned(
 ) -> CompressionResult:
     """Compress an image with a CompressAI neural codec."""
     model = _load_model(model_name, quality, device)
-    x = _img_to_tensor(img).to(device)
+    x, norm_stats = _img_to_tensor(img)
+    x = x.to(device)
 
     # Pad to multiple of 64 (required by most learned codecs)
     x_padded, pad = _pad_to_multiple(x, 64)
@@ -145,20 +184,20 @@ def compress_learned(
 
     # Unpad
     x_hat = _unpad(out_dec["x_hat"], pad)
-    reconstructed = _tensor_to_img(x_hat, img.dtype)
 
-    # Align for metrics
-    ref = img
-    rec_for_metrics = reconstructed
-    if ref.dtype == np.uint16:
-        ref = ref.astype(np.float32) / 65535.0
-        rec_for_metrics = reconstructed.astype(np.float32) / 65535.0
-    elif ref.dtype == np.uint8:
-        ref = ref.astype(np.float32) / 255.0
-        rec_for_metrics = reconstructed.astype(np.float32) / 255.0
+    # Reconstruct in original dtype using the stored normalization stats
+    reconstructed = _tensor_to_img(x_hat, norm_stats)
 
-    psnr = compute_psnr(ref, rec_for_metrics)
-    ssim = compute_ssim(ref, rec_for_metrics)
+    # Metric computation on float [0,1] min-max normalized arrays.
+    # This is equivalent to how traditional codecs compute PSNR after stretching
+    # the signal to fill [0, 255]: both measure quality on the stretched signal,
+    # making the PSNR values directly comparable.
+    ref_norm = x.squeeze(0)[0].cpu().numpy()  # (H, W) in [0,1] first channel
+    rec_norm = x_hat.squeeze(0)[0].cpu().numpy()  # (H, W) in [0,1] first channel
+    rec_norm = np.clip(rec_norm, 0, 1)
+
+    psnr = compute_psnr(ref_norm, rec_norm)
+    ssim = compute_ssim(ref_norm, rec_norm)
     pixel_count = orig_h * orig_w
     bpp = bits / pixel_count
     compression_ratio = img.nbytes / compressed_bytes if compressed_bytes else 0
