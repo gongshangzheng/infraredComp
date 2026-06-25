@@ -23,6 +23,7 @@ _DEMO_CODECS = [
     ("AVIF q75", lambda img, name: compress_avif(img, name, quality=75)),
     ("bmshj-factorized-q1", lambda img, name: _learned(img, name, "bmshj2018-factorized", 1)),
     ("mbt-mean-q4", lambda img, name: _learned(img, name, "mbt2018-mean", 4)),
+    ("cheng2020-attn-q1", lambda img, name: _learned(img, name, "cheng2020-attn", 1)),
     ("PNG", compress_png),
 ]
 
@@ -110,8 +111,9 @@ def generate_demo_figure(
     """
     Generate a comparison figure and return (path, image_name).
 
-    The figure shows a center crop of the original image, reconstructions from
-    JPEG/WebP/AVIF, their error heatmaps, and a PNG lossless reference.
+    Two-column layout:
+      Left column  — Original image + each codec's reconstruction.
+      Right column — Error heatmaps (original row shows all-black / zero error).
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     image_name, original = _find_demo_image()
@@ -122,48 +124,59 @@ def generate_demo_figure(
     for label, fn in _DEMO_CODECS:
         results.append(fn(original, image_name))
 
-    n_cols = len(results)
-    fig, axes = plt.subplots(2, n_cols, figsize=(4.2 * n_cols, 8))
+    n_rows = 1 + len(results)  # 1 (original) + N codecs
+    fig, axes = plt.subplots(n_rows, 2, figsize=(9, 4.2 * n_rows))
 
-    # Top row: original + reconstructions for all lossy codecs.
+    # --- Row 0: Original ---
     axes[0, 0].imshow(original_crop, cmap="gray")
-    axes[0, 0].set_title(f"Original ({original.shape[1]}×{original.shape[0]})", fontsize=11)
+    axes[0, 0].set_title(
+        f"Original ({original.shape[1]}×{original.shape[0]})",
+        fontsize=11, fontweight="bold",
+    )
     axes[0, 0].axis("off")
 
-    lossy_results = results[:-1]  # everything except PNG reference
-    for idx, result in enumerate(lossy_results):
+    axes[0, 1].imshow(np.zeros_like(original_crop), cmap="gray", vmin=0, vmax=255)
+    axes[0, 1].set_title("Error (none)", fontsize=11)
+    axes[0, 1].axis("off")
+
+    # --- Rows 1..N: each codec ---
+    for idx, result in enumerate(results):
+        row = idx + 1
         decoded = result.decoded if result.decoded is not None else np.zeros_like(original)
         decoded_crop = _crop_center(_to_uint8(decoded), crop_size)
-        axes[0, idx + 1].imshow(decoded_crop, cmap="gray")
-        axes[0, idx + 1].set_title(
-            f"{result.codec}\nPSNR {result.psnr:.1f} dB  BPP {result.bpp:.2f}",
-            fontsize=9,
-        )
-        axes[0, idx + 1].axis("off")
 
-    # Bottom row: error maps for all lossy codecs + PNG reference.
-    for idx, result in enumerate(lossy_results):
-        decoded = result.decoded if result.decoded is not None else np.zeros_like(original)
-        err = _error_map(original_crop, _crop_center(_to_uint8(decoded), crop_size))
-        axes[1, idx].imshow(err, cmap="hot")
-        axes[1, idx].set_title(f"{result.codec} Error", fontsize=9)
-        axes[1, idx].axis("off")
+        # Left: reconstruction
+        axes[row, 0].imshow(decoded_crop, cmap="gray")
+        if result.codec == "PNG":
+            axes[row, 0].set_title(
+                f"PNG (lossless)  BPP {result.bpp:.2f}",
+                fontsize=9,
+            )
+        else:
+            axes[row, 0].set_title(
+                f"{result.codec}\nPSNR {result.psnr:.1f} dB  BPP {result.bpp:.2f}",
+                fontsize=9,
+            )
+        axes[row, 0].axis("off")
 
-    png_result = results[-1]
-    png_decoded = png_result.decoded if png_result.decoded is not None else np.zeros_like(original)
-    png_crop = _crop_center(_to_uint8(png_decoded), crop_size)
-    axes[1, -1].imshow(png_crop, cmap="gray")
-    axes[1, -1].set_title(
-        f"PNG (lossless)\nBPP {png_result.bpp:.2f}",
-        fontsize=9,
-    )
-    axes[1, -1].axis("off")
+        # Right: error map
+        if result.codec == "PNG":
+            # PNG is lossless → show near-black error
+            axes[row, 1].imshow(
+                np.zeros_like(original_crop), cmap="gray", vmin=0, vmax=255
+            )
+            axes[row, 1].set_title("PNG Error ≈ 0", fontsize=9)
+        else:
+            err = _error_map(original_crop, decoded_crop)
+            axes[row, 1].imshow(err, cmap="hot")
+            axes[row, 1].set_title(f"{result.codec} Error", fontsize=9)
+        axes[row, 1].axis("off")
 
     fig.suptitle(
-        f"Infrared Compression Effect Demo — Center {crop_size}×{crop_size} crop of {image_name}",
+        f"Infrared Compression Demo — Center {crop_size}×{crop_size} crop of {image_name}",
         fontsize=14,
     )
-    fig.tight_layout(rect=[0, 0.02, 1, 0.95])
+    fig.tight_layout(rect=[0, 0.01, 1, 0.96])
 
     out_path = output_dir / "demo_comparison.png"
     fig.savefig(out_path, dpi=150)
@@ -178,9 +191,10 @@ def demo_html_section(image_name: str, crop_size: int = 256) -> str:
   <!-- DEMO -->
   <div class="section">
     <h2>Visual Effect Demo</h2>
-    <p>Center {crop_size}×{crop_size} crop of <code>{image_name}</code>. The top row shows the original,
-    traditional (JPEG/WebP/AVIF), and learned (CompressAI) reconstructions. The bottom row shows
-    absolute error heatmaps for lossy codecs and the PNG lossless reference.</p>
+    <p>Center {crop_size}×{crop_size} crop of <code>{image_name}</code>.
+    Left column shows the original and each codec's reconstruction;
+    right column shows the corresponding absolute error heatmaps
+    (brighter red = larger error).</p>
     <div class="chart-card">
       <img src="demo_comparison.png" alt="Compression Effect Demo">
     </div>
