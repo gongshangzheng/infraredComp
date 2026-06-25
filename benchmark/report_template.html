@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infrared Image Compression Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242836;
+    --border: #2e3345;
+    --text: #e1e4ed;
+    --text-dim: #8b90a0;
+    --accent: #6c8cff;
+    --accent2: #ff6c8c;
+    --green: #4ade80;
+    --orange: #fb923c;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+  }
+
+  .container { max-width: 1200px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    text-align: center;
+    padding: 3rem 0 2rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2rem;
+  }
+  .header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+  .header .subtitle {
+    color: var(--text-dim);
+    font-size: 1rem;
+  }
+  .header .meta {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+  .header .meta-item {
+    background: var(--surface);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+  }
+  .header .meta-item span { color: var(--accent); font-weight: 600; }
+
+  /* Section */
+  .section {
+    margin-bottom: 3rem;
+  }
+  .section h2 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--accent);
+    display: inline-block;
+  }
+  .section p {
+    color: var(--text-dim);
+    margin-bottom: 1rem;
+    max-width: 800px;
+  }
+
+  /* Table */
+  .table-wrapper {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  thead th {
+    background: var(--surface2);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    border-bottom: 2px solid var(--border);
+    position: sticky;
+    top: 0;
+  }
+  tbody td {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr:hover { background: var(--surface2); }
+  tbody tr:last-child td { border-bottom: none; }
+
+  /* Codec badges */
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .badge-jpeg { background: #1e3a5f; color: #60a5fa; }
+  .badge-webp { background: #1e3a2f; color: #4ade80; }
+  .badge-png { background: #3a2e1e; color: #fb923c; }
+  .badge-j2k { background: #3a1e3a; color: #c084fc; }
+  .badge-avif { background: #2a2a1e; color: #facc15; }
+  .badge-learned { background: #3a1e1e; color: #f87171; }
+  .badge-lossless { background: #1e3a3a; color: #2dd4bf; }
+
+  /* Highlight best values */
+  .best-psnr { color: var(--green); font-weight: 700; }
+  .best-bpp { color: var(--green); font-weight: 700; }
+  .best-speed { color: var(--green); font-weight: 700; }
+  .lossless-val { color: var(--accent); }
+
+  /* Tabs */
+  .tabs-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 1.5rem;
+  }
+  .tab-btn {
+    padding: 0.6rem 1.2rem;
+    border: none;
+    background: none;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.15s, border-color 0.15s;
+    font-family: inherit;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Chart grid */
+  .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+    gap: 1.5rem;
+  }
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .chart-card h3 {
+    padding: 1rem 1.25rem 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  .chart-card p {
+    padding: 0 1.25rem;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 0.5rem;
+  }
+  .chart-card img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  /* Key findings */
+  .findings {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  .finding-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+  .finding-card h4 {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+  }
+  .finding-card .value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .finding-card .detail {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-top: 0.25rem;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 2rem 0;
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
+    <h1>Infrared Image Compression Benchmark</h1>
+    <p class="subtitle">FLIR ADAS 1.3 Thermal Dataset — Traditional & Learned Codecs</p>
+    <div class="meta">
+      <div class="meta-item">Dataset: <span>FLIR ADAS 1.3</span></div>
+      <div class="meta-item">Images: <span>{{NUM_IMAGES}}</span></div>
+      <div class="meta-item">Resolution: <span>{{RESOLUTION}}</span></div>
+      <div class="meta-item">Bit Depth: <span>{{BIT_DEPTH}}</span></div>
+      <div class="meta-item">Date: <span>{{DATE}}</span></div>
+    </div>
+  </div>
+
+  <!-- KEY FINDINGS -->
+  <div class="section">
+    <h2>Key Findings</h2>
+    <div class="findings">
+      <div class="finding-card">
+        <h4>Best PSNR (Lossy)</h4>
+        <div class="value">{{BEST_PSNR_VAL}}</div>
+        <div class="detail">{{BEST_PSNR_CODEC}}</div>
+      </div>
+      <div class="finding-card">
+        <h4>Best Compression Ratio</h4>
+        <div class="value">{{BEST_RATIO_VAL}}</div>
+        <div class="detail">{{BEST_RATIO_CODEC}}</div>
+      </div>
+      <div class="finding-card">
+        <h4>Fastest Encoder</h4>
+        <div class="value">{{BEST_ENC_VAL}}</div>
+        <div class="detail">{{BEST_ENC_CODEC}}</div>
+      </div>
+      <div class="finding-card">
+        <h4>Best RD Tradeoff</h4>
+        <div class="value">{{BEST_RD_VAL}}</div>
+        <div class="detail">{{BEST_RD_CODEC}}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULTS TABLE -->
+  <div class="section">
+    <h2>Results Summary</h2>
+    <p>Average metrics across all test images for each codec configuration.</p>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Codec</th>
+            <th>Images</th>
+            <th>PSNR (dB)</th>
+            <th>SSIM</th>
+            <th>BPP</th>
+            <th>Ratio</th>
+            <th>Enc (ms)</th>
+            <th>Dec (ms)</th>
+            <th>Size (KB)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{TABLE_ROWS}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- CHARTS with TABS -->
+  <div class="section">
+    <h2>Visualizations</h2>
+    <p>Rate-distortion curves and comparative charts across all tested codecs.</p>
+
+    <div class="tabs-nav">
+      <button class="tab-btn active" data-tab="rd">Rate-Distortion</button>
+      <button class="tab-btn" data-tab="quality">Quality</button>
+      <button class="tab-btn" data-tab="compression">Compression</button>
+      <button class="tab-btn" data-tab="speed">Speed</button>
+    </div>
+
+    <div class="tab-panel active" id="tab-rd">
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Rate-Distortion (PSNR)</h3>
+          <p>Higher PSNR at lower BPP = better codec efficiency</p>
+          <img src="rd_curve_psnr_bpp.png" alt="PSNR vs BPP">
+        </div>
+        <div class="chart-card">
+          <h3>Rate-Distortion (SSIM)</h3>
+          <p>Structural similarity vs bits per pixel</p>
+          <img src="rd_curve_ssim_bpp.png" alt="SSIM vs BPP">
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-quality">
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>PSNR Comparison</h3>
+          <p>Peak signal-to-noise ratio by codec (higher is better)</p>
+          <img src="psnr_comparison.png" alt="PSNR Comparison">
+        </div>
+        <div class="chart-card">
+          <h3>Quality vs Encoding Speed</h3>
+          <p>PSNR vs encoding time — top-right is ideal</p>
+          <img src="quality_vs_speed.png" alt="Quality vs Speed">
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-compression">
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Compression Ratio</h3>
+          <p>Original size / compressed size (higher is better)</p>
+          <img src="compression_ratio.png" alt="Compression Ratio">
+        </div>
+        <div class="chart-card">
+          <h3>BPP Comparison</h3>
+          <p>Bits per pixel by codec (lower is better)</p>
+          <img src="bpp_comparison.png" alt="BPP Comparison">
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-speed">
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Speed Comparison</h3>
+          <p>Encode and decode time by codec (lower is better)</p>
+          <img src="speed_comparison.png" alt="Speed Comparison">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {{DEMO_SECTION}}
+
+  <!-- NOTES -->
+  <div class="section">
+    <h2>Notes</h2>
+    <ul style="color: var(--text-dim); padding-left: 1.5rem;">
+      <li>FLIR ADAS 1.3 images are 14-bit thermal data stored as 16-bit TIFF (640×512).</li>
+      <li>JPEG/WebP require 8-bit input — images are normalized via min-max scaling before encoding.</li>
+      <li>PNG, JPEG2000, and WebP-lossless are lossless — PSNR is ∞ (perfect reconstruction).</li>
+      <li>Learned codecs use CompressAI pretrained models; input is padded to multiples of 64.</li>
+      <li>Timing measurements are single-threaded on CPU (Apple {{CPU}}).</li>
+    </ul>
+  </div>
+
+  <div class="footer">
+    Generated by infraredComp benchmark — {{DATE}}
+  </div>
+
+</div>
+
+<script>
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

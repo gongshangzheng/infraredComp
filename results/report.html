@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infrared Image Compression Benchmark Report</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242836;
+    --border: #2e3345;
+    --text: #e1e4ed;
+    --text-dim: #8b90a0;
+    --accent: #6c8cff;
+    --accent2: #ff6c8c;
+    --green: #4ade80;
+    --orange: #fb923c;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+  }
+
+  .container { max-width: 1200px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    text-align: center;
+    padding: 3rem 0 2rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2rem;
+  }
+  .header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+  .header .subtitle {
+    color: var(--text-dim);
+    font-size: 1rem;
+  }
+  .header .meta {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+  .header .meta-item {
+    background: var(--surface);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+  }
+  .header .meta-item span { color: var(--accent); font-weight: 600; }
+
+  /* Section */
+  .section {
+    margin-bottom: 3rem;
+  }
+  .section h2 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--accent);
+    display: inline-block;
+  }
+  .section p {
+    color: var(--text-dim);
+    margin-bottom: 1rem;
+    max-width: 800px;
+  }
+
+  /* Table */
+  .table-wrapper {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  thead th {
+    background: var(--surface2);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    border-bottom: 2px solid var(--border);
+    position: sticky;
+    top: 0;
+  }
+  tbody td {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr:hover { background: var(--surface2); }
+  tbody tr:last-child td { border-bottom: none; }
+
+  /* Codec badges */
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .badge-jpeg { background: #1e3a5f; color: #60a5fa; }
+  .badge-webp { background: #1e3a2f; color: #4ade80; }
+  .badge-png { background: #3a2e1e; color: #fb923c; }
+  .badge-j2k { background: #3a1e3a; color: #c084fc; }
+  .badge-avif { background: #2a2a1e; color: #facc15; }
+  .badge-learned { background: #3a1e1e; color: #f87171; }
+  .badge-lossless { background: #1e3a3a; color: #2dd4bf; }
+
+  /* Highlight best values */
+  .best-psnr { color: var(--green); font-weight: 700; }
+  .best-bpp { color: var(--green); font-weight: 700; }
+  .best-speed { color: var(--green); font-weight: 700; }
+  .lossless-val { color: var(--accent); }
+
+  /* Tabs */
+  .tabs-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 1.5rem;
+  }
+  .tab-btn {
+    padding: 0.6rem 1.2rem;
+    border: none;
+    background: none;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.15s, border-color 0.15s;
+    font-family: inherit;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Chart grid */
+  .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+    gap: 1.5rem;
+  }
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .chart-card h3 {
+    padding: 1rem 1.25rem 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  .chart-card p {
+    padding: 0 1.25rem;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 0.5rem;
+  }
+  .chart-card img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  /* Key findings */
+  .findings {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  .finding-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+  .finding-card h4 {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+  }
+  .finding-card .value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .finding-card .detail {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-top: 0.25rem;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 2rem 0;
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
+    <h1>Infrared Image Compression Benchmark</h1>
+    <p class="subtitle">FLIR ADAS 1.3 Thermal Dataset — Traditional & Learned Codecs</p>
+    <div class="meta">
+      <div class="meta-item">Dataset: <span>FLIR ADAS 1.3</span></div>
+      <div class="meta-item">Images: <span>50</span></div>
+      <div class="meta-item">Resolution: <span>640×512</span></div>
+      <div class="meta-item">Bit Depth: <span>16-bit</span></div>
+      <div class="meta-item">Date: <span>2026-06-25 14:26</span></div>
+    </div>
+  </div>
+
+  <!-- KEY FINDINGS -->
+  <div class="section">
+    <h2>Key Findings</h2>
+    <div class="findings">
+      <div class="finding-card">
+        <h4>Best PSNR (Lossy)</h4>
+        <div class="value">73.4 dB</div>
+        <div class="detail">HEIC q95</div>
+      </div>
+      <div class="finding-card">
+        <h4>Best Compression Ratio</h4>
+        <div class="value">4762x</div>
+        <div class="detail">mbt2018-q1</div>
+      </div>
+      <div class="finding-card">
+        <h4>Fastest Encoder</h4>
+        <div class="value">0.4 ms</div>
+        <div class="detail">JPEG q25</div>
+      </div>
+      <div class="finding-card">
+        <h4>Best RD Tradeoff</h4>
+        <div class="value">60.1 dB @ 0.05 bpp</div>
+        <div class="detail">mbt2018-mean-q8</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULTS TABLE -->
+  <div class="section">
+    <h2>Results Summary</h2>
+    <p>Average metrics across all test images for each codec configuration.</p>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Codec</th>
+            <th>Images</th>
+            <th>PSNR (dB)</th>
+            <th>SSIM</th>
+            <th>BPP</th>
+            <th>Ratio</th>
+            <th>Enc (ms)</th>
+            <th>Dec (ms)</th>
+            <th>Size (KB)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="badge badge-avif">AVIF q25</span></td><td>50</td><td>40.73</td><td>0.9661</td><td>0.05</td><td>310.3x</td><td>11.6</td><td>0.1</td><td>2.1</td></tr>
+<tr><td><span class="badge badge-avif">AVIF q50</span></td><td>50</td><td>45.17</td><td>0.9825</td><td>0.13</td><td>129.4x</td><td>15.2</td><td>0.1</td><td>5.1</td></tr>
+<tr><td><span class="badge badge-avif">AVIF q75</span></td><td>50</td><td>48.06</td><td>0.9885</td><td>0.25</td><td>68.5x</td><td>18.2</td><td>0.1</td><td>9.8</td></tr>
+<tr><td><span class="badge badge-avif">AVIF q95</span></td><td>50</td><td>51.73</td><td>0.9939</td><td>0.94</td><td>18.0x</td><td>39.5</td><td>0.1</td><td>37.5</td></tr>
+<tr><td><span class="badge badge-lossless">AVIF-lossless</span></td><td>50</td><td>48.06</td><td>0.9885</td><td>0.25</td><td>68.5x</td><td>18.3</td><td>0.1</td><td>9.8</td></tr>
+<tr><td><span class="badge badge-jpeg">HEIC q25</span></td><td>50</td><td>41.71</td><td>0.9703</td><td>0.07</td><td>250.5x</td><td>23.5</td><td>0.1</td><td>2.6</td></tr>
+<tr><td><span class="badge badge-jpeg">HEIC q50</span></td><td>50</td><td>47.73</td><td>0.9883</td><td>0.22</td><td>74.4x</td><td>41.3</td><td>0.1</td><td>8.9</td></tr>
+<tr><td><span class="badge badge-jpeg">HEIC q75</span></td><td>50</td><td>56.96</td><td>0.9985</td><td>1.85</td><td>8.7x</td><td>106.2</td><td>0.1</td><td>74.2</td></tr>
+<tr><td><span class="badge badge-jpeg">HEIC q95</span></td><td>50</td><td class="best-psnr">73.42</td><td>1.0000</td><td>2.67</td><td>6.1x</td><td>112.0</td><td>0.1</td><td>106.9</td></tr>
+<tr><td><span class="badge badge-jpeg">JPEG q25</span></td><td>50</td><td>41.17</td><td>0.9637</td><td>0.17</td><td>93.3x</td><td class="best-speed">0.4</td><td>0.0</td><td>7.0</td></tr>
+<tr><td><span class="badge badge-jpeg">JPEG q50</span></td><td>50</td><td>44.39</td><td>0.9792</td><td>0.24</td><td>67.8x</td><td>0.4</td><td>0.0</td><td>9.6</td></tr>
+<tr><td><span class="badge badge-jpeg">JPEG q75</span></td><td>50</td><td>46.87</td><td>0.9864</td><td>0.35</td><td>47.6x</td><td>0.4</td><td>0.0</td><td>13.8</td></tr>
+<tr><td><span class="badge badge-jpeg">JPEG q95</span></td><td>50</td><td>50.81</td><td>0.9930</td><td>1.05</td><td>15.6x</td><td>0.6</td><td>0.0</td><td>41.9</td></tr>
+<tr><td><span class="badge badge-j2k">JPEG2000 q75</span></td><td>50</td><td><span class="lossless-val">∞</span></td><td><span class="lossless-val">1.0000</span></td><td>4.86</td><td>3.3x</td><td>42.7</td><td>0.1</td><td>194.5</td></tr>
+<tr><td><span class="badge badge-lossless">JPEG2000-lossless</span></td><td>50</td><td><span class="lossless-val">∞</span></td><td><span class="lossless-val">1.0000</span></td><td>4.86</td><td>3.3x</td><td>43.5</td><td>0.1</td><td>194.5</td></tr>
+<tr><td><span class="badge badge-lossless">PNG</span></td><td>50</td><td><span class="lossless-val">∞</span></td><td><span class="lossless-val">1.0000</span></td><td>6.79</td><td>2.4x</td><td>9.8</td><td>0.0</td><td>271.6</td></tr>
+<tr><td><span class="badge badge-webp">WebP q25</span></td><td>50</td><td>40.41</td><td>0.9642</td><td>0.07</td><td>242.8x</td><td>11.0</td><td>0.2</td><td>2.8</td></tr>
+<tr><td><span class="badge badge-webp">WebP q50</span></td><td>50</td><td>42.41</td><td>0.9732</td><td>0.10</td><td>173.2x</td><td>9.7</td><td>0.1</td><td>3.9</td></tr>
+<tr><td><span class="badge badge-webp">WebP q75</span></td><td>50</td><td>43.78</td><td>0.9784</td><td>0.13</td><td>129.8x</td><td>10.3</td><td>0.1</td><td>5.2</td></tr>
+<tr><td><span class="badge badge-webp">WebP q95</span></td><td>50</td><td>48.53</td><td>0.9898</td><td>0.51</td><td>34.1x</td><td>15.2</td><td>0.1</td><td>20.5</td></tr>
+<tr><td><span class="badge badge-lossless">WebP-lossless</span></td><td>50</td><td><span class="lossless-val">∞</span></td><td><span class="lossless-val">1.0000</span></td><td>2.26</td><td>7.2x</td><td>78.9</td><td>0.1</td><td>90.3</td></tr>
+<tr><td><span class="badge badge-learned">bmshj2018-factorized-q1</span></td><td>50</td><td>36.67</td><td>0.2418</td><td>0.05</td><td>302.0x</td><td>73.3</td><td>101.2</td><td>2.1</td></tr>
+<tr><td><span class="badge badge-learned">bmshj2018-factorized-q4</span></td><td>50</td><td>51.42</td><td>0.4559</td><td>0.15</td><td>108.7x</td><td>72.0</td><td>101.5</td><td>5.9</td></tr>
+<tr><td><span class="badge badge-learned">bmshj2018-factorized-q8</span></td><td>50</td><td>58.21</td><td>0.6675</td><td>0.53</td><td>29.9x</td><td>125.8</td><td>167.7</td><td>21.4</td></tr>
+<tr><td><span class="badge badge-learned">bmshj2018-hyperprior-q1</span></td><td>50</td><td>49.78</td><td>0.2500</td><td>0.02</td><td>659.4x</td><td>84.4</td><td>113.0</td><td>1.0</td></tr>
+<tr><td><span class="badge badge-learned">bmshj2018-hyperprior-q4</span></td><td>50</td><td>45.78</td><td>0.3288</td><td>0.04</td><td>385.8x</td><td>84.1</td><td>112.2</td><td>1.7</td></tr>
+<tr><td><span class="badge badge-learned">bmshj2018-hyperprior-q8</span></td><td>50</td><td>56.38</td><td>0.8980</td><td>0.06</td><td>288.1x</td><td>144.0</td><td>178.6</td><td>2.2</td></tr>
+<tr><td><span class="badge badge-learned">mbt2018-mean-q1</span></td><td>50</td><td>44.00</td><td>0.2061</td><td>0.01</td><td>2551.0x</td><td>92.6</td><td>121.8</td><td>0.3</td></tr>
+<tr><td><span class="badge badge-learned">mbt2018-mean-q4</span></td><td>50</td><td>53.66</td><td>0.5327</td><td>0.02</td><td>787.1x</td><td>85.7</td><td>114.2</td><td>0.8</td></tr>
+<tr><td><span class="badge badge-learned">mbt2018-mean-q8</span></td><td>50</td><td>60.07</td><td>0.8599</td><td>0.05</td><td>322.6x</td><td>155.0</td><td>192.6</td><td>2.0</td></tr>
+<tr><td><span class="badge badge-learned">mbt2018-q1</span></td><td>50</td><td>44.96</td><td>0.3751</td><td class="best-bpp">0.00</td><td>4761.7x</td><td>531.8</td><td>2432.3</td><td>0.1</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- CHARTS with TABS -->
+  <div class="section">
+    <h2>Visualizations</h2>
+    <p>Rate-distortion curves and comparative charts across all tested codecs.</p>
+
+    <div class="tabs-nav">
+      <button class="tab-btn active" data-tab="rd">Rate-Distortion</button>
+      <button class="tab-btn" data-tab="quality">Quality</button>
+      <button class="tab-btn" data-tab="compression">Compression</button>
+      <button class="tab-btn" data-tab="speed">Speed</button>
+    </div>
+
+    <div class="tab-panel active" id="tab-rd">
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Rate-Distortion (PSNR)</h3>
+          <p>Higher PSNR at lower BPP = better codec efficiency</p>
+          <img src="rd_curve_psnr_bpp.png" alt="PSNR vs BPP">
+        </div>
+        <div class="chart-card">
+          <h3>Rate-Distortion (SSIM)</h3>
+          <p>Structural similarity vs bits per pixel</p>
+          <img src="rd_curve_ssim_bpp.png" alt="SSIM vs BPP">
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-quality">
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>PSNR Comparison</h3>
+          <p>Peak signal-to-noise ratio by codec (higher is better)</p>
+          <img src="psnr_comparison.png" alt="PSNR Comparison">
+        </div>
+        <div class="chart-card">
+          <h3>Quality vs Encoding Speed</h3>
+          <p>PSNR vs encoding time — top-right is ideal</p>
+          <img src="quality_vs_speed.png" alt="Quality vs Speed">
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-compression">
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Compression Ratio</h3>
+          <p>Original size / compressed size (higher is better)</p>
+          <img src="compression_ratio.png" alt="Compression Ratio">
+        </div>
+        <div class="chart-card">
+          <h3>BPP Comparison</h3>
+          <p>Bits per pixel by codec (lower is better)</p>
+          <img src="bpp_comparison.png" alt="BPP Comparison">
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-speed">
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Speed Comparison</h3>
+          <p>Encode and decode time by codec (lower is better)</p>
+          <img src="speed_comparison.png" alt="Speed Comparison">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  
+  <!-- DEMO -->
+  <div class="section">
+    <h2>Visual Effect Demo</h2>
+    <p>Center 256×256 crop of <code>FLIR_00001.tiff</code>. The top row shows the original,
+    traditional (JPEG/WebP/AVIF), and learned (CompressAI) reconstructions. The bottom row shows
+    absolute error heatmaps for lossy codecs and the PNG lossless reference.</p>
+    <div class="chart-card">
+      <img src="demo_comparison.png" alt="Compression Effect Demo">
+    </div>
+  </div>
+
+
+  <!-- NOTES -->
+  <div class="section">
+    <h2>Notes</h2>
+    <ul style="color: var(--text-dim); padding-left: 1.5rem;">
+      <li>FLIR ADAS 1.3 images are 14-bit thermal data stored as 16-bit TIFF (640×512).</li>
+      <li>JPEG/WebP require 8-bit input — images are normalized via min-max scaling before encoding.</li>
+      <li>PNG, JPEG2000, and WebP-lossless are lossless — PSNR is ∞ (perfect reconstruction).</li>
+      <li>Learned codecs use CompressAI pretrained models; input is padded to multiples of 64.</li>
+      <li>Timing measurements are single-threaded on CPU (Apple arm).</li>
+    </ul>
+  </div>
+
+  <div class="footer">
+    Generated by infraredComp benchmark — 2026-06-25 14:26
+  </div>
+
+</div>
+
+<script>
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

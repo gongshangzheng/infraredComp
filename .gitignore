@@ -10,6 +10,7 @@ datasets/
 # Environment
 .env
 .env.local
+.qoder/
 
 # OS
 .DS_Store

@@ -1,6 +1,6 @@
-def main():
-    print("Hello from infraredcomp!")
+"""Infrared image compression benchmark entry point."""
 
+from benchmark.runner import main
 
 if __name__ == "__main__":
     main()
