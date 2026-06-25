@@ -17,6 +17,7 @@ LEARNED_MODELS = [
     ("mbt2018-mean", [1, 4, 8]),           # Mean Scale Hyperprior
     ("mbt2018", [1, 4, 8]),                # Scale Hyperprior
     ("cheng2020-anchor", [1, 4, 6]),       # Channel Autoregressive (q1-q6 only)
+    ("cheng2020-attn", [1, 4, 6]),           # Attention-guided (q1-q6 only)
 ]
 
 # Model cache: avoids reloading for every image
