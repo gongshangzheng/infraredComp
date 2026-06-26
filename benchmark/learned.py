@@ -10,6 +10,9 @@ import torch.nn.functional as F
 from .metrics import CompressionResult, compute_psnr, compute_ssim, timed
 
 
+# ELIC quality levels: 1=low bpp (~0.1), 4=medium (~0.5), 5=high (~1.0)
+ELIC_QUALITIES = [1, 4, 5]
+
 # CompressAI model names and their quality levels (1-8)
 LEARNED_MODELS = [
     ("bmshj2018-factorized", [1, 4, 8]),   # Factorized Prior
@@ -231,4 +234,112 @@ def get_learned_codecs(device: str = "cpu") -> list[Callable]:
                 return codec
 
             codecs.append(make_codec())
+    return codecs
+
+
+def _count_elic_bits(out_enc: dict) -> int:
+    """Count total bits in ELIC's non-standard bitstream format.
+
+    ELIC compress returns:
+        strings[0]: list of [anchor_strings, non_anchor_strings] per slice
+        strings[1]: list of bytes for z (hyperprior)
+    Each stream element is either bytes or list[bytes] (batch dim).
+    """
+    bits = 0
+    # y strings: list of [anchor_strings, non_anchor_strings] per slice
+    for slice_pair in out_enc["strings"][0]:
+        for stream in slice_pair:
+            if isinstance(stream, list):
+                for b in stream:
+                    if isinstance(b, bytes):
+                        bits += len(b) * 8
+            elif isinstance(stream, bytes):
+                bits += len(stream) * 8
+    # z strings: list of bytes
+    for b in out_enc["strings"][1]:
+        if isinstance(b, bytes):
+            bits += len(b) * 8
+        elif isinstance(b, list):
+            for bb in b:
+                bits += len(bb) * 8
+    return bits
+
+
+def _load_elic_model(quality: int, device: str = "cpu"):
+    """Load a pretrained ELIC model (cached)."""
+    cache_key = f"elic_{quality}_{device}"
+    if cache_key in _MODEL_CACHE:
+        return _MODEL_CACHE[cache_key]
+
+    from .elic_model import load_elic_model
+    model = load_elic_model(quality, device)
+    _MODEL_CACHE[cache_key] = model
+    return model
+
+
+def compress_elic(
+    img: np.ndarray,
+    name: str,
+    quality: int,
+    device: str = "cpu",
+) -> CompressionResult:
+    """Compress an image with ELIC (Efficient Learned Image Compression)."""
+    model = _load_elic_model(quality, device)
+    x, norm_stats = _img_to_tensor(img)
+    x = x.to(device)
+
+    # ELIC uses 64x downsampling (4 conv layers with stride 2 + 2 hyper layers)
+    x_padded, pad = _pad_to_multiple(x, 64)
+    _, _, orig_h, orig_w = x.shape
+
+    with torch.no_grad():
+        def _encode():
+            return model.compress(x_padded)
+
+        out_enc, encode_ms = timed(_encode)
+        bits = _count_elic_bits(out_enc)
+        compressed_bytes = bits // 8
+
+        def _decode():
+            return model.decompress(out_enc["strings"], out_enc["shape"])
+
+        out_dec, decode_ms = timed(_decode)
+
+    x_hat = _unpad(out_dec["x_hat"], pad)
+    reconstructed = _tensor_to_img(x_hat, norm_stats)
+
+    ref_norm = x.squeeze(0)[0].cpu().numpy()
+    rec_norm = x_hat.squeeze(0)[0].cpu().numpy()
+    rec_norm = np.clip(rec_norm, 0, 1)
+
+    psnr = compute_psnr(ref_norm, rec_norm)
+    ssim = compute_ssim(ref_norm, rec_norm)
+    pixel_count = orig_h * orig_w
+    bpp = bits / pixel_count
+    compression_ratio = img.nbytes / compressed_bytes if compressed_bytes else 0
+
+    return CompressionResult(
+        codec=f"ELIC-q{quality}",
+        image_name=name,
+        psnr=psnr,
+        ssim=ssim,
+        bpp=bpp,
+        compression_ratio=compression_ratio,
+        encode_time_ms=encode_ms,
+        decode_time_ms=decode_ms,
+        original_shape=img.shape,
+        compressed_bytes=compressed_bytes,
+        decoded=reconstructed,
+    )
+
+
+def get_elic_codecs(device: str = "cpu") -> list[Callable]:
+    """Return list of ELIC codec functions for all quality levels."""
+    codecs = []
+    for q in ELIC_QUALITIES:
+        def make_codec(qual=q):
+            def codec(img: np.ndarray, name: str) -> CompressionResult:
+                return compress_elic(img, name, qual, device)
+            return codec
+        codecs.append(make_codec())
     return codecs

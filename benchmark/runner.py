@@ -113,6 +113,18 @@ def build_codec_list(include_learned: bool = False, device: str = "cpu"):
                     label = f"{model_name}-q{q}"
                     codecs.append((label, make_fn()))
             print(f"Included {sum(len(qs) for _, qs in LEARNED_MODELS)} learned compression codecs")
+
+            # ELIC (separate model, custom checkpoint loading)
+            try:
+                from .learned import ELIC_QUALITIES, compress_elic
+                for q in ELIC_QUALITIES:
+                    def make_elic(qual=q):
+                        return lambda img, name: compress_elic(img, name, qual, device)
+                    label = f"ELIC-q{q}"
+                    codecs.append((label, make_elic()))
+                print(f"Included {len(ELIC_QUALITIES)} ELIC compression codecs")
+            except Exception as e:
+                print(f"Warning: could not load ELIC codecs: {e}")
         except Exception as e:
             print(f"Warning: could not load learned codecs: {e}")
 

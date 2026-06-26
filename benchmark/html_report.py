@@ -26,7 +26,7 @@ def _badge_class(codec: str) -> str:
     if "png" in c:
         return "badge-png"
     # learned
-    for k in ("bmshj", "mbt", "cheng", "hyperprior", "factorized", "anchor"):
+    for k in ("bmshj", "mbt", "cheng", "hyperprior", "factorized", "anchor", "ELIC"):
         if k in c:
             return "badge-learned"
     return "badge-jpeg"

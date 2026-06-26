@@ -127,6 +127,7 @@ _CODEC_STYLES = {
     "bmshj": {"color": "#00BCD4", "marker": "P", "hatch": "+"},    # cyan filled plus
     "mbt": {"color": "#795548", "marker": "X", "hatch": "-"},       # brown cross
     "cheng": {"color": "#FFEB3B", "marker": "*", "hatch": "|"},     # yellow star
+    "ELIC": {"color": "#E91E63", "marker": "s", "hatch": "O"},      # pink square
 }
 
 
@@ -138,7 +139,7 @@ def _codec_family(codec: str) -> str:
         return c
     # Learned codec families.
     lower = c.lower()
-    for family in ("bmshj", "mbt", "cheng"):
+    for family in ("bmshj", "mbt", "cheng", "ELIC"):
         if family in lower:
             return family
     # Traditional families (order matters: JPEG2000 before JPEG).

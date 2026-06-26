@@ -24,6 +24,7 @@ _DEMO_CODECS = [
     ("bmshj-factorized-q1", lambda img, name: _learned(img, name, "bmshj2018-factorized", 1)),
     ("mbt-mean-q4", lambda img, name: _learned(img, name, "mbt2018-mean", 4)),
     ("cheng2020-attn-q1", lambda img, name: _learned(img, name, "cheng2020-attn", 1)),
+    ("ELIC-q4", lambda img, name: _elic(img, name, 4)),
     ("PNG", compress_png),
 ]
 
@@ -33,6 +34,13 @@ def _learned(img: np.ndarray, name: str, model: str, quality: int):
     from .learned import compress_learned
 
     return compress_learned(img, name, model, quality, device="cpu")
+
+
+def _elic(img: np.ndarray, name: str, quality: int):
+    """Helper to call ELIC codec with default CPU device."""
+    from .learned import compress_elic
+
+    return compress_elic(img, name, quality, device="cpu")
 
 
 def _find_demo_image() -> tuple[str, np.ndarray]:
