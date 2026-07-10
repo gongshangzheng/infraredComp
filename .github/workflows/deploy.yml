@@ -27,18 +27,9 @@ jobs:
         with:
           node-version: 24
 
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        id: dep-cache
-        with:
-          path: web/node_modules
-          key: deps-${{ hashFiles('web/package-lock.json') }}
-          restore-keys: deps-
-
       - name: Install dependencies
-        if: steps.dep-cache.outputs.cache-hit != 'true'
         working-directory: web
-        run: npm ci
+        run: npm install
 
       - name: Build
         working-directory: web
