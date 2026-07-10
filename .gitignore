@@ -12,6 +12,10 @@ datasets/
 .env.local
 .qoder/
 
+# Web frontend
+web/node_modules/
+web/dist/
+
 # OS
 .DS_Store
 Thumbs.db
