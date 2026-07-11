@@ -7,7 +7,7 @@ description: |
 
 # infraredComp Web 全栈开发指南
 
-本 skill 提供 `server/`(FastAPI 后端)+ `web/`(Vue3 前端)的完整开发指南。仓库位于 `/Users/zhengxinyu/infraredComp`,架构镜像 ProjFlow。
+本 skill 提供 `server/`(FastAPI 后端)+ `web/`(Vue3 前端)的完整开发指南。仓库根(含 `pyproject.toml` 的目录),架构镜像 ProjFlow。所有路径相对仓库根;先 `cd` 到仓库根再运行,或用 `$(git rev-parse --show-toplevel)` 定位。
 
 ## 项目结构
 
@@ -42,12 +42,12 @@ infraredComp/
 
 ```bash
 # 一键(后端 :8091 + 前端 :3001)
-bash /Users/zhengxinyu/infraredComp/start_services.sh
+bash start_services.sh
 
 # 手动分开
-cd /Users/zhengxinyu/infraredComp
+cd <repo-root>
 uv run uvicorn server.main:app --host 0.0.0.0 --port 8091          # 后端
-cd web && PATH=/opt/homebrew/opt/node@25/bin:$PATH pnpm dev         # 前端(需 Node22+)
+cd web && pnpm dev                                                  # 前端(需 Node 22+;start_services.sh 自动选 node@25/24/22)
 ```
 
 访问:前端 `http://localhost:3001/infraredComp/`,后端文档 `http://localhost:8091/api/docs`。
@@ -97,40 +97,40 @@ curl --noproxy '*' 'http://localhost:8091/api/benchmark/results?codec=x264&crf=2
 
 ```bash
 # 从 web/src/data/papers.json 导入到 data/papers.db(字段映射见 scripts/import_papers.py)
-uv run python /Users/zhengxinyu/infraredComp/scripts/import_papers.py
+uv run python scripts/import_papers.py
 ```
 
 ## 5. 调试 / 查看日志
 
 ```bash
 # 后端启动失败查日志
-tail -50 /Users/zhengxinyu/infraredComp/backend.log
+tail -50 backend.log
 # 前端
-tail -50 /Users/zhengxinyu/infraredComp/frontend.log
+tail -50 frontend.log
 
 # 端口占用
 lsof -nP -iTCP:8091 -sTCP:LISTEN
 lsof -nP -iTCP:3001 -sTCP:LISTEN
 
 # 启动后端单进程调试
-cd /Users/zhengxinyu/infraredComp && uv run uvicorn server.main:app --port 8091 --reload
+cd <repo-root> && uv run uvicorn server.main:app --port 8091 --reload
 
 # 前端构建检查
-cd /Users/zhengxinyu/infraredComp/web && PATH=/opt/homebrew/opt/node@25/bin:$PATH npx vite build
+cd web && npx vite build                                           # 需 PATH 含 Node 22+
 ```
 
 ## 关键约定
 
 - **CORS**:`server/config.py::CORS_ORIGINS` 允许 `localhost:3001/5173/3002`(Vite dev 默认 3001)。
 - **Pages 部署**:`.github/workflows/deploy.yml` 静态部署 `web/dist` 到 GitHub Pages(base `/infraredComp/`)。本地 dev 走 proxy;Pages 上无后端时 API 视图降级 EmptyState(生产托管后端为后续)。
-- **node 版本**:pnpm 需 Node 22+(系统默认 node 20 会崩 `node:sqlite`)。本地用 `/opt/homebrew/opt/node@25/bin/node`。CI 用 Node 24。
+- **node 版本**:pnpm 需 Node 22+(系统默认 node 20 会崩 `node:sqlite`)。`start_services.sh` 自动 pick `node@25`/`@24`/`@22`;CI 用 Node 24。
 - **数据目录**:management(markdown)/papers(SQLite 在 `data/`)/benchmark(`results/video/results.json`)各模块自带数据目录,后端只读(论文笔记除外)。
 
 ## 常用命令
 
 ```bash
 # 启动
-bash /Users/zhengxinyu/infraredComp/start_services.sh
+bash start_services.sh
 # 健康检查
 curl --noproxy '*' http://localhost:8091/api/health
 # 三模块各取一个端点
@@ -140,5 +140,5 @@ curl --noproxy '*' http://localhost:8091/api/benchmark/results
 # 重启后端
 lsof -nP -iTCP:8091 -sTCP:LISTEN -t | xargs kill; uv run uvicorn server.main:app --port 8091
 # 论文迁移
-uv run python /Users/zhengxinyu/infraredComp/scripts/import_papers.py
+uv run python scripts/import_papers.py
 ```
