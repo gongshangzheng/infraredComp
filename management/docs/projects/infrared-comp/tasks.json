@@ -1,0 +1,66 @@
+{
+  "project": "infrared-comp",
+  "tasks": [
+    {
+      "id": "t1",
+      "title": "轮廓视频压缩评测库",
+      "status": "completed",
+      "startDate": "2026-06-23",
+      "endDate": "2026-07-11",
+      "assignee": "李四",
+      "description": "benchmark/video/ 两阶段评测：阶段1 提取轮廓帧(canny/sobel)，阶段2 用 x264/x265/svtav1/vp9 压缩并出 PSNR/SSIM/码率/BD-Rate",
+      "notePath": "notes/01-contour-video.md",
+      "children": [
+        {
+          "id": "t1-1",
+          "title": "阶段1 轮廓提取器 + manifest",
+          "status": "completed",
+          "assignee": "李四",
+          "description": "stage1_extract：resolve_input/demux_to_frames/extract_contour_video，可插拔 @register 提取器",
+          "children": []
+        },
+        {
+          "id": "t1-2",
+          "title": "阶段2 codec 压缩评测 + results.json",
+          "status": "completed",
+          "assignee": "李四",
+          "description": "stage2_benchmark：统一 yuv420p、奇数尺寸 pad、per-frame 指标聚合",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "t2",
+      "title": "OSU Color-Thermal 数据集落地",
+      "status": "completed",
+      "startDate": "2026-07-11",
+      "endDate": "2026-07-11",
+      "assignee": "李四",
+      "description": "下载脚本从 OTCBVS Dataset 03 取 6 段热红外序列，归一化为 datasets/raw/osu_color_thermal/seqN.mp4",
+      "notePath": "notes/02-dataset.md",
+      "children": []
+    },
+    {
+      "id": "t3",
+      "title": "management CRUD skill + parser 空表修复",
+      "status": "completed",
+      "startDate": "2026-07-11",
+      "endDate": "2026-07-11",
+      "assignee": "李四",
+      "description": "task/member/meeting/report 全套自定位 CRUD 脚本；修 markdown_table 空表被丢导致 tasks_parser 位置映射错位的 bug",
+      "notePath": "",
+      "children": []
+    },
+    {
+      "id": "t4",
+      "title": "dark 主题 + breadcrumb 回退 + 论文刷新保位",
+      "status": "active",
+      "startDate": "2026-07-12",
+      "endDate": "2026-07-13",
+      "assignee": "李四",
+      "description": "从 ProjFlow 上游移植 theme store/Pinia/暗主题令牌；修项目树 tooltip 透明背景；breadcrumb 可点回退；论文列表刷新保滚动位置",
+      "notePath": "",
+      "children": []
+    }
+  ]
+}

@@ -31,12 +31,26 @@
       <n-layout-header bordered class="app-header">
         <div class="header-left">
           <n-breadcrumb>
-            <n-breadcrumb-item v-for="item in breadcrumbs" :key="item.path">
+            <n-breadcrumb-item
+              v-for="item in breadcrumbs"
+              :key="item.path || item.title"
+              :to="item.path || undefined"
+              :clickable="!!item.path"
+              @click="onBreadcrumbClick(item)"
+            >
               {{ item.title }}
             </n-breadcrumb-item>
           </n-breadcrumb>
         </div>
         <div class="header-right">
+          <n-button quaternary circle class="theme-toggle" @click="themeStore.toggle">
+            <template #icon>
+              <n-icon size="18">
+                <sunny-outline v-if="themeStore.isDark" />
+                <moon-outline v-else />
+              </n-icon>
+            </template>
+          </n-button>
           <span class="header-date">{{ today }}</span>
         </div>
       </n-layout-header>
@@ -54,17 +68,20 @@ import { ref, computed, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NLayout, NLayoutSider, NLayoutHeader, NLayoutContent,
-  NMenu, NBreadcrumb, NBreadcrumbItem, NIcon,
+  NMenu, NBreadcrumb, NBreadcrumbItem, NButton, NIcon,
 } from 'naive-ui'
 import {
   HomeOutline, DocumentTextOutline, LibraryOutline,
   PeopleOutline, GridOutline, CalendarOutline,
   CheckboxOutline, FlagOutline, ChatbubblesOutline, BarChartOutline,
+  SunnyOutline, MoonOutline,
 } from '@vicons/ionicons5'
+import { useThemeStore } from '../stores/theme'
 
 const route = useRoute()
 const router = useRouter()
 const collapsed = ref(false)
+const themeStore = useThemeStore()
 
 function renderIcon(icon) {
   return () => h(NIcon, null, { default: () => h(icon) })
@@ -126,18 +143,30 @@ function handleMenuSelect(key) {
   router.push(key)
 }
 
+function onBreadcrumbClick(item) {
+  if (item.path && item.path !== route.path) router.push(item.path)
+}
+
+// 模块 -> 模块首页路径（让 breadcrumb 的模块项可点回退）
+const MODULE_PATH = {
+  management: '/management/projects',
+  papers: '/papers/list',
+  benchmark: '/benchmark',
+}
+const MODULE_LABEL = {
+  papers: '论文库',
+  management: '项目管理',
+  benchmark: '基准测试',
+}
+
 const breadcrumbs = computed(() => {
   const items = [{ title: '首页', path: '/' }]
-  const moduleMap = {
-    papers: '论文库',
-    management: '项目管理',
-    benchmark: '基准测试',
+  if (route.meta.module && MODULE_LABEL[route.meta.module]) {
+    items.push({ title: MODULE_LABEL[route.meta.module], path: MODULE_PATH[route.meta.module] || '' })
   }
-  if (route.meta.module && moduleMap[route.meta.module]) {
-    items.push({ title: moduleMap[route.meta.module], path: '' })
-  }
+  // 当前页放最后、不可点击（已在当前页）
   if (route.meta.title && route.meta.title !== '首页') {
-    items.push({ title: route.meta.title, path: route.path })
+    items.push({ title: route.meta.title, path: '' })
   }
   return items
 })
@@ -155,7 +184,7 @@ const today = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-bottom: 1px solid #2a2a3e;
+  border-bottom: 1px solid var(--color-border);
   color: #fff;
   font-weight: 700;
 
@@ -174,16 +203,28 @@ const today = computed(() => {
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  background: #fff;
+  background: var(--color-card);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.theme-toggle {
+  color: var(--color-text-secondary);
 }
 
 .header-date {
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--color-text-dim);
 }
 
 .app-content {
   height: calc(100vh - 56px);
   padding: 0;
+  background: var(--color-bg);
 }
 </style>
