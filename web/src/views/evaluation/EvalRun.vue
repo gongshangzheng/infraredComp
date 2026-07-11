@@ -6,6 +6,9 @@
           <n-form-item label="选择模型" required>
             <n-select v-model:value="form.model_id" :options="modelOptions" placeholder="请选择模型" />
           </n-form-item>
+          <n-form-item label="提取方法" required>
+            <n-select v-model:value="form.method" :options="methodOptions" placeholder="选择轮廓提取方法 (canny/sobel)" />
+          </n-form-item>
           <n-form-item label="选择数据集" required>
             <n-select v-model:value="form.dataset_id" :options="datasetOptions" placeholder="请选择数据集" />
           </n-form-item>
@@ -46,16 +49,13 @@
         </n-descriptions>
       </div>
     </n-card>
-
-    <VideoModal v-model:show="videoShow" :src="videoSrc" :title="videoTitle" />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { NCard, NSpin, NForm, NFormItem, NSelect, NInputNumber, NRadioGroup, NRadio, NInput, NButton, NAlert, NDescriptions, NDescriptionsItem, useMessage } from 'naive-ui'
-import { getModels, getDatasets, getEvalConfigs, runEvaluation, getOutputUrl } from '../../api/evaluation'
-import VideoModal from '../../components/common/VideoModal.vue'
+import { getModels, getDatasets, getEvalConfigs, getMethods, runEvaluation, getOutputUrl } from '../../api/evaluation'
 
 const message = useMessage()
 const loading = ref(false)
@@ -63,19 +63,22 @@ const running = ref(false)
 const models = ref([])
 const datasets = ref([])
 const configs = ref([])
+const methods = ref([])
 const runResult = ref(null)
-const videoShow = ref(false)
-const videoSrc = ref('')
-const videoTitle = ref('')
-const form = ref({ model_id: null, dataset_id: null, config_id: null, batch_size: 8, device: 'cuda', extra_args: '' })
+const form = ref({ model_id: null, method: 'canny', dataset_id: null, config_id: null, batch_size: 8, device: 'cuda', extra_args: '' })
 
 const modelOptions = computed(() => models.value.map(m => ({ label: `${m.name} (${m.type})`, value: m.id })))
+const methodOptions = computed(() => methods.value.map(m => ({ label: m, value: m })))
 const datasetOptions = computed(() => datasets.value.map(d => ({ label: d.name, value: d.id })))
 const configOptions = computed(() => configs.value.map(c => ({ label: c.name || c.id, value: c.id })))
 
 async function handleRun() {
   if (!form.value.model_id || !form.value.dataset_id) {
     message.warning('请选择模型和数据集')
+    return
+  }
+  if (!form.value.method) {
+    message.warning('请选择轮廓提取方法')
     return
   }
   running.value = true
@@ -101,14 +104,17 @@ async function handleRun() {
 onMounted(async () => {
   loading.value = true
   try {
-    const [m, d, c] = await Promise.all([
+    const [m, d, c, meth] = await Promise.all([
       getModels().catch(() => []),
       getDatasets().catch(() => []),
       getEvalConfigs().catch(() => []),
+      getMethods().catch(() => ({ methods: [] })),
     ])
     models.value = m || []
     datasets.value = d || []
     configs.value = c || []
+    methods.value = meth?.methods || []
+    if (!form.value.method && methods.value.length) form.value.method = methods.value[0]
   } catch {}
   loading.value = false
 })

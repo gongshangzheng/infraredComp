@@ -127,18 +127,9 @@ const routes = [
         component: () => import('../views/evaluation/EvalResults.vue'),
         meta: { title: '评测结果', module: 'evaluation' },
       },
-      {
-        path: 'evaluation/compare',
-        name: 'EvalMethodCompare',
-        component: () => import('../views/evaluation/EvalMethodCompare.vue'),
-        meta: { title: '方法对比', module: 'evaluation' },
-      },
-      {
-        path: 'evaluation/outputs',
-        name: 'EvalOutputs',
-        component: () => import('../views/evaluation/EvalOutputs.vue'),
-        meta: { title: '查看输出', module: 'evaluation' },
-      },
+      // 评测结果页已合并「方法对比 + 查看输出」，旧链 redirect 回结果页
+      { path: 'evaluation/compare', redirect: '/evaluation/results' },
+      { path: 'evaluation/outputs', redirect: '/evaluation/results' },
       {
         path: 'evaluation/models',
         name: 'ModelManage',

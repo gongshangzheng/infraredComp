@@ -4,6 +4,9 @@ import request from './request'
 export const getModels = () => request.get('/evaluation/models')
 export const getModelDetail = (id) => request.get(`/evaluation/models/${id}`)
 
+// 轮廓提取方法（canny/sobel/...）
+export const getMethods = () => request.get('/evaluation/methods')
+
 // 数据集
 export const getDatasets = () => request.get('/evaluation/datasets')
 export const getDatasetDetail = (id) => request.get(`/evaluation/datasets/${id}`)

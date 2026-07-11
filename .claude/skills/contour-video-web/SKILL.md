@@ -31,8 +31,8 @@ infraredComp/
 │   └── src/
 │       ├── api/                 # request.js + {management,papers,benchmark,evaluation}.js
 │       ├── stores/theme.js      # Pinia dark/light store(localStorage + <html data-theme>)
-│       ├── components/common/   # EmptyState/MarkdownRenderer/StatusBadge/VideoModal
-│       ├── views/{management,papers,evaluation}/  # 评测子页 7 个(见下)
+│       ├── components/common/   # EmptyState/MarkdownRenderer/StatusBadge
+│       ├── views/{management,papers,evaluation}/  # 评测子页 5 个(见下)
 │       ├── router/index.js      # 路由(/evaluation/* 子路由组,meta.module 驱动侧边栏)
 │       └── layouts/MainLayout.vue  # 侧边栏(评测体系子菜单) + 主题切换按钮 + breadcrumb
 ├── management/                  # management 数据(markdown)
@@ -42,11 +42,13 @@ infraredComp/
 └── start_services.sh            # 一键启动
 ```
 
-### 评测子页（/evaluation/*，7 个，取代原单页 /benchmark）
-`EvalRun`(运行,触发 run_osu_baseline 后按需看视频+指标) · `EvalResults`(指标表+图,行内「查看视频」按需弹) · `EvalMethodCompare`(方法对比矩阵:canny/sobel 各方法下 baseline) · `EvalOutputs`(浏览 bitstreams/recon,按需播放) · `ModelManage`(codec 配置) · `DatasetManage`(序列) · `ConfigManage`(评测配置)。菜单「评测体系」下 7 children。`/benchmark` 保留 redirect→`/evaluation/results`。
+### 评测子页（/evaluation/*，5 个，取代原单页 /benchmark）
+`EvalRun`(运行:选方法+codec+序列,触发 run_osu_baseline,运行后内联看视频+指标) · `EvalResults`(**合并页**:方法选择器 + 常驻大播放框 + 评测结果表 + 方法对比矩阵 + 输出文件列表) · `ModelManage`(codec 配置) · `DatasetManage`(序列) · `ConfigManage`(评测配置)。菜单「评测体系」下 5 children。`/benchmark`、`/evaluation/compare`、`/evaluation/outputs` 保留 redirect→`/evaluation/results`（后两者已并入 EvalResults）。
+
+**EvalResults 合并页**（infraredComp 独有，未进上游）：原「评测结果 + 方法对比 + 查看输出」三页合一。顶部筛选含**提取方法选择器**（canny/sobel，来自 `/api/evaluation/methods`）；常驻大 `<video preload="none">`（选结果/输出时才赋 src，按 play 才取字节，不点开弹窗）；结果表行内「播放」→ 加载到常驻框 + 显示指标 n-descriptions；方法对比矩阵行=序列×codec×CRF、列=方法；输出文件列表点「播放」→ 加载到常驻框。
 
 ### 评测模块的上下游关系（见 upstream-sync skill）
-共享脚手架（6 视图 + VideoModal + api/evaluation.js + evaluation.py 通用契约 + /outputs 视频端点）在 **ProjFlow 上游**（commit `c41bb78`）。infraredComp 经 `git checkout upstream/main -- web/src/views/evaluation/ web/src/components/common/VideoModal.vue web/src/api/evaluation.js` 取回（保留 git 血缘）；**后端 `evaluation.py` 是 infraredComp 定制**（接 contour-video 数据源:models=codecs、datasets=序列、results=results.json+output_video、outputs=bitstreams/recon、run=run_osu_baseline）——不直接取上游通用版。EvalMethodCompare 是 infraredComp 独有（contour-video 双阶段多方法对比），未进上游。
+共享脚手架（EvalRun/ModelManage/DatasetManage/ConfigManage 视图 + api/evaluation.js + evaluation.py 通用契约 + /outputs 视频端点）在 **ProjFlow 上游**（commit `c41bb78`）。infraredComp 经 `git checkout upstream/main -- web/src/views/evaluation/ web/src/api/evaluation.js` 取回（保留 git 血缘）；**后端 `evaluation.py` 是 infraredComp 定制**（接 contour-video 数据源:models=codecs、datasets=序列、results=results.json+output_video、outputs=bitstreams/recon、run=run_osu_baseline）——不直接取上游通用版。**EvalResults 合并页**（三合一 + 常驻播放框 + 方法选择器）是 infraredComp 独有定制，未进上游；上游的 EvalOutputs/EvalMethodCompare/VideoModal 在 infraredComp 已删（合并后不用）。
 
 ## 启动服务
 
@@ -98,13 +100,12 @@ curl --noproxy '*' 'http://localhost:8091/api/benchmark/results?codec=x264&crf=2
 
 - **一个 api 模块对应一个 router**:`web/src/api/{management,papers,benchmark,evaluation}.js` ↔ `server/routers/{...}.py`。
 - **dark/light 主题**:Pinia store `web/src/stores/theme.js`(localStorage key `infraredcomp-theme`,默认跟随 `prefers-color-scheme`);App.vue 绑 `:theme="naiveTheme"`(dark 用 darkTheme)+ `<html data-theme>` 同步;MainLayout 右上角切换按钮;`styles/index.scss` 的 `:root` + `:root[data-theme=dark]` token 块是暗色基础(视图样式用 `var(--color-card/border/text-*)` 等 token,勿硬编码 `#fff/#f8fafc`)。从 ProjFlow 上游移植(见 upstream-sync)。
-- **输出视频按需加载**(核心):统一用 `components/common/VideoModal.vue` —— `<video v-if="show" :src preload="none">`,**仅在弹窗打开 + 用户按 play 时才请求字节**。调用方(EvalRun/EvalResults/EvalOutputs/EvalMethodCompare)点击时才 `videoSrc = getOutputUrl(path); videoShow = true`。视频 URL = `/api/evaluation/outputs/<relpath>`(vite proxy 转 backend)。**禁止页面预加载所有视频**。
-- **评测子页 7 个**(见项目结构节),路由 `/evaluation/*`,`/benchmark` redirect→`/evaluation/results`。
-- **vue-echarts**:EvalResults/EvalMethodCompare 用 `vue-echarts` + `echarts`(已在 package.json)。
-- **axios**:`web/src/api/request.js`,`baseURL:'/api'`,timeout 15000,响应拦截器返回 `response.data`。
-- **视图**:`<script setup>` + Naive UI 按需 import + `ref`/`onMounted`;空态用 `EmptyState.vue`,markdown 用 `MarkdownRenderer.vue`,状态用 `StatusBadge.vue`,视频弹窗用 `VideoModal.vue`。
+- **输出视频按需加载**(核心):EvalResults 合并页用**常驻大 `<video preload="none">`**（不点开弹窗），选结果/输出时才赋 `src`，**按 play 才请求字节**。EvalRun 运行结果同样内联 `<video preload="none">`。视频 URL = `/api/evaluation/outputs/<relpath>`(vite proxy 转 backend)。**禁止页面预加载所有视频**（不用 VideoModal 弹窗模式）。
+- **评测子页 5 个**(见项目结构节),路由 `/evaluation/*`,`/benchmark`+`/evaluation/compare`+`/evaluation/outputs` redirect→`/evaluation/results`。
+- **vue-echarts**:EvalResults 用 `vue-echarts` + `echarts`(已在 package.json)。
+- **视图**:`<script setup>` + Naive UI 按需 import + `ref`/`onMounted`;空态用 `EmptyState.vue`,markdown 用 `MarkdownRenderer.vue`,状态用 `StatusBadge.vue`。
 - **路由**:`web/src/router/index.js`,每路由带 `meta:{title,module}`,`router.beforeEach` 设 `document.title`;`meta.module=evaluation` 驱动 `MainLayout` 侧边栏「评测体系」高亮与面包屑。
-- **侧边栏**:`MainLayout.vue` 的 `menuOptions`(评测体系含 7 children)+ `allKeys`(activeKey 匹配)+ `moduleMap`(面包屑)。
+- **侧边栏**:`MainLayout.vue` 的 `menuOptions`(评测体系含 5 children)+ `allKeys`(activeKey 匹配)+ `moduleMap`(面包屑)。
 - **样式**:复用 `web/src/styles/variables.scss` token(`$primary-color #4f46e5` 等)+ `var(--color-*)` 运行时 token(暗色适配)。
 
 ## 4. 论文导入(迁移种子数据)
