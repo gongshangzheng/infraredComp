@@ -7,7 +7,7 @@ description: |
 
 # Contour-Video 轮廓视频压缩评测库
 
-本 skill 提供 `benchmark/video/` 库的完整使用与基准测试指南。库位于 `/Users/zhengxinyu/infraredComp`。
+本 skill 提供 `benchmark/video/` 库的完整使用与基准测试指南。库位于**仓库根**下的 `benchmark/video/`(infraredComp 项目)。所有路径相对仓库根;先 `cd` 到含 `pyproject.toml` 的仓库根再运行命令,或用 `$(git rev-parse --show-toplevel)` 定位。
 
 ## 项目结构
 
@@ -37,12 +37,31 @@ infraredComp/benchmark/video/
 ## 安装
 
 ```bash
-cd /Users/zhengxinyu/infraredComp
+cd <repo-root>                          # 含 pyproject.toml 的仓库根
 uv sync                                   # 安装依赖(含 torch/compressai/opencv)
 ffmpeg -version                           # 需带 libx264/libx265/libsvtav1/libvpx
 ```
 
-数据目录约定:`datasets/raw/`(用户原始视频)、`datasets/contour/<source>/`(阶段1 产物)、`results/video/`(阶段2 产物)。
+数据目录约定:`datasets/raw/`(用户原始视频)、`datasets/contour/<source>/`(阶段1 产物)、`results/video/`(阶段2 产物)。`datasets/` 整目录在 `.gitignore` 内(大数据本地存),不入库。
+
+## 0. 数据集准备
+
+`datasets/raw/` 里的视频由下载脚本准备(脚本本身入库,产物不入库):
+
+| 脚本 | 数据集 | 产出 |
+|------|--------|------|
+| `scripts/download_osu_color_thermal.py` | OTCBVS Dataset 03(OSU Color-Thermal)热红外 | `datasets/raw/osu_color_thermal/seq{1..6}.mp4` + `manifest.json` |
+| `scripts/download_dataset.py` | FLIR ADAS(红外,via kagglehub) | `datasets/FLIR_ADAS_1_3/` |
+
+```bash
+# OSU Color-Thermal:6 段热红外序列(320×240,h264/yuv420p/25fps)
+python3 scripts/download_osu_color_thermal.py            # 幂等;--force 重下;--dry-run 预览
+# 跑评测:每段单独喂 stage1
+uv run python -m benchmark.video --input datasets/raw/osu_color_thermal/seq1.mp4 \
+  --method canny --crfs 18,23,28,33
+```
+
+baseline 选型与样本量说明见博客 `infrared-compression-datasets-survey`:OSU Color-Thermal 6 段够做方向性 baseline,正式结论建议扩到 ~12-16 段(补 BU-TIV / FLIR ADAS)。
 
 ## 1. 阶段1 提取轮廓视频
 
@@ -61,7 +80,7 @@ uv run python -m benchmark.video --input datasets/raw/frames_dir --method sobel 
 | source_name | str | 原始视频名(stem) |
 | method | str | 提取器名(canny/sobel) |
 | frame_count | int | 帧数 |
-| fps | float | 视频帧率(帧目录默认 25) |
+| fps | float | 视频帧率(帧目录默认 25,可用 `--fps` 覆盖) |
 | width/height | int | 轮廓帧尺寸 |
 | duration_s | float | 时长 |
 
