@@ -8,8 +8,9 @@ MANAGEMENT_DIR = os.path.join(BASE_DIR, "management")
 PAPERS_DIR = os.path.join(BASE_DIR, "papers")
 
 # 轮廓视频评测模块路径
-DATASETS_DIR = os.path.join(BASE_DIR, "datasets")
-RAW_DIR = os.path.join(DATASETS_DIR, "raw")          # 用户原始视频
+# Datasets 树位置可经环境变量配置:大数据集可移出仓库,默认 <repo>/datasets。
+# CONTOUR_DIR 由 DATASETS_DIR 派生,自动跟随;/runs 端点据此列出 contour 目录。
+DATASETS_DIR = os.environ.get("INFRACOMP_DATASETS_DIR", os.path.join(BASE_DIR, "datasets"))
 CONTOUR_DIR = os.path.join(DATASETS_DIR, "contour")  # 阶段1 产出的无损轮廓帧
 RESULTS_VIDEO_DIR = os.path.join(BASE_DIR, "results", "video")
 RESULTS_VIDEO_JSON = os.path.join(RESULTS_VIDEO_DIR, "results.json")

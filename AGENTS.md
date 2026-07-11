@@ -96,6 +96,7 @@ curl --noproxy '*' http://localhost:8091/api/management/team
 ## 约定
 
 - **路径单一来源**:所有路径常量在 `server/config.py` / `benchmark/video/config.py`,不在业务代码硬编码。
+- **数据集位置可配置**:`DATASETS_DIR` 经 `INFRACOMP_DATASETS_DIR` 环境变量重定位(默认 `<repo>/datasets`),`benchmark/video/config.py`、`server/config.py`、`scripts/download_dataset.py`、`benchmark/runner.py`、`benchmark/demo.py` 同步读取;获取/接入数据集见 `datasets/README.md` 与 `/dataset-management` skill。
 - **只读后端**:management/benchmark 后端只读;papers 仅 note/star/pin/blog 改动。所有写操作除论文笔记外经 CLI。
 - **路径穿越防护**:`server/utils/file_utils.py::safe_resolve` + 各 router 的 regex 校验。
 - **ffmpeg 统一 `-pix_fmt yuv420p`**:所有 codec 编码统一像素格式(可移植、chroma 一致、PSNR 可比),

@@ -70,3 +70,5 @@ infraredComp/
 
 - **FLIR ADAS 1.3** — FLIR 热成像数据集，包含约 10k+ 张红外图像
 - 来源: [Kaggle](https://www.kaggle.com/datasets/deepnewbie/flir-thermal-images-dataset)
+- 下载: `uv run python scripts/download_dataset.py`（需 Kaggle 凭证；`--version N` 锁版本，`--force` 覆盖）
+- 位置可配置: `INFRACOMP_DATASETS_DIR` 环境变量重定位数据集树（默认 `<repo>/datasets`），详见 `datasets/README.md`

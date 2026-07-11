@@ -1,5 +1,6 @@
 """Generate a visual demo comparing compression artifacts across codecs."""
 
+import os
 from pathlib import Path
 
 import matplotlib
@@ -45,12 +46,13 @@ def _elic(img: np.ndarray, name: str, quality: int):
 
 def _find_demo_image() -> tuple[str, np.ndarray]:
     """Load the first available 16-bit thermal image from the FLIR dataset."""
-    dataset_root = (
-        Path(__file__).resolve().parent.parent
-        / "datasets"
-        / "FLIR_ADAS_1_3"
-        / "FLIR_ADAS_1_3"
-    )
+    # Datasets 树位置可经 INFRACOMP_DATASETS_DIR 配置(默认 <repo>/datasets)。
+    # 单层 FLIR_ADAS_1_3 匹配 download 脚本产出(历史双层路径已修正)。
+    datasets_dir = Path(os.getenv(
+        "INFRACOMP_DATASETS_DIR",
+        str(Path(__file__).resolve().parent.parent / "datasets"),
+    ))
+    dataset_root = datasets_dir / "FLIR_ADAS_1_3"
     subdirs = ["train/thermal_16_bit", "val/thermal_16_bit", "video/thermal_16_bit"]
     for subdir in subdirs:
         search_dir = dataset_root / subdir

@@ -4,12 +4,15 @@ Mirrors ProjFlow's single-source-of-truth config pattern: every path lives here,
 no other module hardcodes filesystem locations.
 """
 
+import os
 from pathlib import Path
 
 # /Users/zhengxinyu/infraredComp/benchmark/video/../../  -> repo root
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-DATASETS_DIR = BASE_DIR / "datasets"
+# Datasets 树位置可经环境变量配置:大数据集可移出仓库(换盘/省备份),默认 <repo>/datasets。
+# RAW_DIR / CONTOUR_DIR 均由 DATASETS_DIR 派生,自动跟随。
+DATASETS_DIR = Path(os.getenv("INFRACOMP_DATASETS_DIR", str(BASE_DIR / "datasets")))
 RAW_DIR = DATASETS_DIR / "raw"            # user-provided raw videos (mp4/avi)
 CONTOUR_DIR = DATASETS_DIR / "contour"    # stage-1 output: lossless PNG + manifest
 
