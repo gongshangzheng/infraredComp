@@ -76,12 +76,12 @@ onMounted(async () => {
 .task-list { display: flex; flex-direction: column; gap: 8px; }
 .task-card {
   padding: 12px;
-  background: #f9fafb;
+  background: var(--color-elevated);
   border-radius: 8px;
-  border-left: 3px solid #e5e7eb;
+  border-left: 3px solid var(--color-border-light);
 
   .task-name { font-weight: 500; margin-bottom: 6px; }
-  .task-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6b7280; }
-  .task-note { font-size: 12px; color: #9ca3af; margin-top: 4px; }
+  .task-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text-secondary); }
+  .task-note { font-size: 12px; color: var(--color-text-dim); margin-top: 4px; }
 }
 </style>
