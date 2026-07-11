@@ -112,12 +112,50 @@ const routes = [
         meta: { title: '数据源配置', module: 'papers' },
       },
 
-      // ===== benchmark (阶段4 实现) =====
+      // ===== evaluation 评测子页（取代原单页 /benchmark）=====
+      { path: 'benchmark', redirect: '/evaluation/results' },  // 旧链兼容
+      { path: 'evaluation', redirect: '/evaluation/results' },
       {
-        path: 'benchmark',
-        name: 'BenchmarkResults',
-        component: () => import('../views/benchmark/BenchmarkResults.vue'),
-        meta: { title: '基准测试', module: 'benchmark' },
+        path: 'evaluation/run',
+        name: 'EvalRun',
+        component: () => import('../views/evaluation/EvalRun.vue'),
+        meta: { title: '评测运行', module: 'evaluation' },
+      },
+      {
+        path: 'evaluation/results',
+        name: 'EvalResults',
+        component: () => import('../views/evaluation/EvalResults.vue'),
+        meta: { title: '评测结果', module: 'evaluation' },
+      },
+      {
+        path: 'evaluation/compare',
+        name: 'EvalMethodCompare',
+        component: () => import('../views/evaluation/EvalMethodCompare.vue'),
+        meta: { title: '方法对比', module: 'evaluation' },
+      },
+      {
+        path: 'evaluation/outputs',
+        name: 'EvalOutputs',
+        component: () => import('../views/evaluation/EvalOutputs.vue'),
+        meta: { title: '查看输出', module: 'evaluation' },
+      },
+      {
+        path: 'evaluation/models',
+        name: 'ModelManage',
+        component: () => import('../views/evaluation/ModelManage.vue'),
+        meta: { title: '模型(codec)配置', module: 'evaluation' },
+      },
+      {
+        path: 'evaluation/datasets',
+        name: 'DatasetManage',
+        component: () => import('../views/evaluation/DatasetManage.vue'),
+        meta: { title: '数据集配置', module: 'evaluation' },
+      },
+      {
+        path: 'evaluation/configs',
+        name: 'ConfigManage',
+        component: () => import('../views/evaluation/ConfigManage.vue'),
+        meta: { title: '评测配置', module: 'evaluation' },
       },
     ],
   },

@@ -129,7 +129,7 @@ def extract_contour_video(
     ----------
     raw_input : video file or frame directory
     method : registered extractor name (canny / sobel)
-    out_dir : output dir (default datasets/contour/<source_name>)
+    out_dir : output dir (default datasets/contour/<source_name>/<method>)
     frames : cap frame count (useful for AV1-heavy stage-2 runs)
     fps : override fps (default: probed for video, 25 for frame dir)
     """
@@ -141,7 +141,9 @@ def extract_contour_video(
     source_name = src_path.stem or src_path.name
 
     if out_dir is None:
-        out_dir = config.CONTOUR_DIR / source_name
+        # 按方法分目录: datasets/contour/<source>/<method>/ —— 不同提取方法
+        # (canny/sobel) 不互相覆盖；rmtree 只清该方法子目录，保留其它方法产物。
+        out_dir = config.CONTOUR_DIR / source_name / method
     out_dir = Path(out_dir)
     if out_dir.exists():
         shutil.rmtree(out_dir)

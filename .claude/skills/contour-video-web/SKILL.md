@@ -14,8 +14,8 @@ description: |
 ```text
 infraredComp/
 ├── server/                      # FastAPI 后端(:8091)
-│   ├── main.py                  # app + CORS + 挂载 routers + /api/health
-│   ├── config.py                # 所有路径常量 + CORS_ORIGINS(单一来源)
+│   ├── main.py                  # app + CORS + 挂载 routers(management/papers/benchmark/evaluation) + /api/health
+│   ├── config.py                # 路径常量 + CORS_ORIGINS + OUTPUTS_DIR(=results/video/)
 │   ├── db.py                    # papers SQLite(schema/upsert_paper/row_to_dict)
 │   ├── parsers/                 # management markdown 解析器
 │   │   ├── markdown_table.py team_parser.py report_parser.py
@@ -23,20 +23,30 @@ infraredComp/
 │   ├── routers/
 │   │   ├── management.py        # /api/management/* (16 GET,只读)
 │   │   ├── papers.py            # /api/papers/* (10 端点)
-│   │   └── benchmark.py         # /api/benchmark/* (读 results/video/results.json)
+│   │   ├── benchmark.py         # /api/benchmark/* (读 results.json + /runs 列 contour)
+│   │   └── evaluation.py        # /api/evaluation/* (contour-video 适配:codecs/序列/results+output_video/outputs 按需视频/run)
 │   └── utils/file_utils.py      # safe_resolve/scan_directory/read_file
-├── web/                         # Vue3 + Naive UI + Chart.js(:3001)
+├── web/                         # Vue3 + Naive UI + vue-echarts(:3001)
 │   ├── vite.config.js           # base /infraredComp/ + proxy /api→:8091
 │   └── src/
-│       ├── api/                 # request.js(axios) + {management,papers,benchmark}.js
-│       ├── views/{management,papers,benchmark}/
-│       ├── router/index.js      # 路由(meta.module 驱动侧边栏)
-│       └── layouts/MainLayout.vue
+│       ├── api/                 # request.js + {management,papers,benchmark,evaluation}.js
+│       ├── stores/theme.js      # Pinia dark/light store(localStorage + <html data-theme>)
+│       ├── components/common/   # EmptyState/MarkdownRenderer/StatusBadge/VideoModal
+│       ├── views/{management,papers,evaluation}/  # 评测子页 7 个(见下)
+│       ├── router/index.js      # 路由(/evaluation/* 子路由组,meta.module 驱动侧边栏)
+│       └── layouts/MainLayout.vue  # 侧边栏(评测体系子菜单) + 主题切换按钮 + breadcrumb
 ├── management/                  # management 数据(markdown)
 ├── data/papers.db              # papers SQLite
-├── results/video/results.json  # benchmark 持久化结果
+├── results/video/              # 评测产物:results.json + bitstreams/(压缩码流) + recon/(重建帧)
+│   └── contour 存储按方法分目录: datasets/contour/<source>/<method>/
 └── start_services.sh            # 一键启动
 ```
+
+### 评测子页（/evaluation/*，7 个，取代原单页 /benchmark）
+`EvalRun`(运行,触发 run_osu_baseline 后按需看视频+指标) · `EvalResults`(指标表+图,行内「查看视频」按需弹) · `EvalMethodCompare`(方法对比矩阵:canny/sobel 各方法下 baseline) · `EvalOutputs`(浏览 bitstreams/recon,按需播放) · `ModelManage`(codec 配置) · `DatasetManage`(序列) · `ConfigManage`(评测配置)。菜单「评测体系」下 7 children。`/benchmark` 保留 redirect→`/evaluation/results`。
+
+### 评测模块的上下游关系（见 upstream-sync skill）
+共享脚手架（6 视图 + VideoModal + api/evaluation.js + evaluation.py 通用契约 + /outputs 视频端点）在 **ProjFlow 上游**（commit `c41bb78`）。infraredComp 经 `git checkout upstream/main -- web/src/views/evaluation/ web/src/components/common/VideoModal.vue web/src/api/evaluation.js` 取回（保留 git 血缘）；**后端 `evaluation.py` 是 infraredComp 定制**（接 contour-video 数据源:models=codecs、datasets=序列、results=results.json+output_video、outputs=bitstreams/recon、run=run_osu_baseline）——不直接取上游通用版。EvalMethodCompare 是 infraredComp 独有（contour-video 双阶段多方法对比），未进上游。
 
 ## 启动服务
 
@@ -60,7 +70,8 @@ cd web && pnpm dev                                                  # 前端(需
 | health | `GET /api/health` | `{status:ok}` |
 | management | `GET /api/management/{team,team/:id,daily,daily/:date/:author,weekly,weekly/:y/:w/:author,monthly,monthly/:y/:m/:author,tasks,milestones,meetings,meetings/:date,projects,projects/:slug,projects/:slug/tasks,projects/:slug/notes/:path}` | 16 个只读端点,parser 解析 markdown |
 | papers | `GET /api/papers`(limit/offset/source/category)、`/stats/summary`、`/{id}`、`/{id}/note`;`PUT /{id}/note`、`/{id}/blog`、`/{id}/star`、`/{id}/pin`;`POST /{id}/summarize`(桩) | SQLite |
-| benchmark | `GET /api/benchmark/results`(codec/sequence/crf 过滤)、`/results/compare`、`/runs`(列 contour manifest)、`POST /run`(桩) | 只读 results.json |
+| benchmark | `GET /api/benchmark/results`(codec/sequence/crf 过滤)、`/results/compare`、`/runs`(列 contour manifest,兼容 `<source>/<method>/` 与旧扁平)、`POST /run`(桩) | 只读 results.json |
+| evaluation | `GET /api/evaluation/{models,datasets,configs,methods,results,results/compare,results/{id},outputs,outputs/{path}}` `POST /run` | models=codecs、datasets=序列+contour、results=results.json(每条附 output_video)、`/outputs/{path}` 流式 FileResponse(按需服务 bitstreams/recon,safe_resolve 防穿越)、`/run` 异步触发 run_osu_baseline |
 
 curl 示例:
 
@@ -85,13 +96,16 @@ curl --noproxy '*' 'http://localhost:8091/api/benchmark/results?codec=x264&crf=2
 
 ## 3. 前端开发约定(镜像 ProjFlow)
 
-- **一个 api 模块对应一个 router**:`web/src/api/{management,papers,benchmark}.js` ↔ `server/routers/{management,papers,benchmark}.py`。
+- **一个 api 模块对应一个 router**:`web/src/api/{management,papers,benchmark,evaluation}.js` ↔ `server/routers/{...}.py`。
+- **dark/light 主题**:Pinia store `web/src/stores/theme.js`(localStorage key `infraredcomp-theme`,默认跟随 `prefers-color-scheme`);App.vue 绑 `:theme="naiveTheme"`(dark 用 darkTheme)+ `<html data-theme>` 同步;MainLayout 右上角切换按钮;`styles/index.scss` 的 `:root` + `:root[data-theme=dark]` token 块是暗色基础(视图样式用 `var(--color-card/border/text-*)` 等 token,勿硬编码 `#fff/#f8fafc`)。从 ProjFlow 上游移植(见 upstream-sync)。
+- **输出视频按需加载**(核心):统一用 `components/common/VideoModal.vue` —— `<video v-if="show" :src preload="none">`,**仅在弹窗打开 + 用户按 play 时才请求字节**。调用方(EvalRun/EvalResults/EvalOutputs/EvalMethodCompare)点击时才 `videoSrc = getOutputUrl(path); videoShow = true`。视频 URL = `/api/evaluation/outputs/<relpath>`(vite proxy 转 backend)。**禁止页面预加载所有视频**。
+- **评测子页 7 个**(见项目结构节),路由 `/evaluation/*`,`/benchmark` redirect→`/evaluation/results`。
+- **vue-echarts**:EvalResults/EvalMethodCompare 用 `vue-echarts` + `echarts`(已在 package.json)。
 - **axios**:`web/src/api/request.js`,`baseURL:'/api'`,timeout 15000,响应拦截器返回 `response.data`。
-- **视图**:`<script setup>` + Naive UI 按需 import + `ref`/`onMounted`;空态用 `components/common/EmptyState.vue`,markdown 用 `MarkdownRenderer.vue`,状态用 `StatusBadge.vue`。
-- **路由**:`web/src/router/index.js`,每路由带 `meta:{title,module}`,`router.beforeEach` 设 `document.title`;`meta.module` 驱动 `MainLayout` 侧边栏高亮与面包屑。
-- **侧边栏**:`MainLayout.vue` 的 `menuOptions`(含 children)+ `allKeys`(activeKey 匹配)+ `moduleMap`(面包屑)。
-- **图表**:`chart.js`(`import Chart from 'chart.js/auto'`),`ref` canvas + onMounted `new Chart`,onUnmounted `destroy`。
-- **样式**:复用 `web/src/styles/variables.scss` token(`$primary-color #4f46e5` 等)。
+- **视图**:`<script setup>` + Naive UI 按需 import + `ref`/`onMounted`;空态用 `EmptyState.vue`,markdown 用 `MarkdownRenderer.vue`,状态用 `StatusBadge.vue`,视频弹窗用 `VideoModal.vue`。
+- **路由**:`web/src/router/index.js`,每路由带 `meta:{title,module}`,`router.beforeEach` 设 `document.title`;`meta.module=evaluation` 驱动 `MainLayout` 侧边栏「评测体系」高亮与面包屑。
+- **侧边栏**:`MainLayout.vue` 的 `menuOptions`(评测体系含 7 children)+ `allKeys`(activeKey 匹配)+ `moduleMap`(面包屑)。
+- **样式**:复用 `web/src/styles/variables.scss` token(`$primary-color #4f46e5` 等)+ `var(--color-*)` 运行时 token(暗色适配)。
 
 ## 4. 论文导入(迁移种子数据)
 

@@ -67,30 +67,42 @@ async def compare_results(codecs: Optional[str] = None, sequences: Optional[str]
 
 @router.get("/runs")
 async def list_runs():
-    """List available contour videos (datasets/contour/<name>/ manifest)."""
+    """List available contour videos (datasets/contour/<source>/<method>/ manifest).
+
+    兼容旧扁平布局 datasets/contour/<source>/manifest.json（单方法）。
+    """
     if not os.path.isdir(CONTOUR_DIR):
         return {"runs": []}
     runs = []
     for d in sorted(os.listdir(CONTOUR_DIR)):
         full = os.path.join(CONTOUR_DIR, d)
-        manifest = os.path.join(full, "manifest.json")
         if not os.path.isdir(full):
             continue
-        m = {}
-        if os.path.isfile(manifest):
+        # 新布局：<source>/<method>/manifest.json；旧布局：<source>/manifest.json
+        has_top_manifest = os.path.isfile(os.path.join(full, "manifest.json"))
+        sub_dirs = [s for s in sorted(os.listdir(full))
+                    if os.path.isdir(os.path.join(full, s)) and
+                    os.path.isfile(os.path.join(full, s, "manifest.json"))]
+        targets = [os.path.join(full, s) for s in sub_dirs] or (
+            [full] if has_top_manifest else []
+        )
+        for t in targets:
+            manifest = os.path.join(t, "manifest.json")
             try:
                 m = json.loads(read_file(manifest) or "{}")
             except json.JSONDecodeError:
                 m = {}
-        runs.append({
-            "name": d,
-            "method": m.get("method", "unknown"),
-            "frame_count": m.get("frame_count", 0),
-            "fps": m.get("fps", 0),
-            "width": m.get("width", 0),
-            "height": m.get("height", 0),
-            "duration_s": m.get("duration_s", 0),
-        })
+            method = m.get("method", os.path.basename(t) if t != full else "unknown")
+            runs.append({
+                "name": f"{d}/{method}" if t != full else d,
+                "source": d,
+                "method": method,
+                "frame_count": m.get("frame_count", 0),
+                "fps": m.get("fps", 0),
+                "width": m.get("width", 0),
+                "height": m.get("height", 0),
+                "duration_s": m.get("duration_s", 0),
+            })
     return {"runs": runs}
 
 

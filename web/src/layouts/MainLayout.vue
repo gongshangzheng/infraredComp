@@ -74,6 +74,7 @@ import {
   HomeOutline, DocumentTextOutline, LibraryOutline,
   PeopleOutline, GridOutline, CalendarOutline,
   CheckboxOutline, FlagOutline, ChatbubblesOutline, BarChartOutline,
+  FlaskOutline, FilmOutline, CubeOutline, LayersOutline, SettingsOutline,
   SunnyOutline, MoonOutline,
 } from '@vicons/ionicons5'
 import { useThemeStore } from '../stores/theme'
@@ -117,9 +118,18 @@ const menuOptions = [
     ],
   },
   {
-    label: '基准测试',
-    key: '/benchmark',
-    icon: renderIcon(BarChartOutline),
+    label: '评测体系',
+    key: 'evaluation',
+    icon: renderIcon(FlaskOutline),
+    children: [
+      { label: '评测运行', key: '/evaluation/run', icon: renderIcon(FlaskOutline) },
+      { label: '评测结果', key: '/evaluation/results', icon: renderIcon(BarChartOutline) },
+      { label: '方法对比', key: '/evaluation/compare', icon: renderIcon(LayersOutline) },
+      { label: '查看输出', key: '/evaluation/outputs', icon: renderIcon(FilmOutline) },
+      { label: '模型(codec)配置', key: '/evaluation/models', icon: renderIcon(CubeOutline) },
+      { label: '数据集配置', key: '/evaluation/datasets', icon: renderIcon(LayersOutline) },
+      { label: '评测配置', key: '/evaluation/configs', icon: renderIcon(SettingsOutline) },
+    ],
   },
 ]
 
@@ -130,7 +140,7 @@ const activeKey = computed(() => {
     '/management/projects', '/management/team', '/management/daily',
     '/management/weekly', '/management/monthly', '/management/tasks',
     '/management/milestones', '/management/meetings',
-    '/benchmark',
+    '/evaluation/run', '/evaluation/results', '/evaluation/compare', '/evaluation/outputs', '/evaluation/models', '/evaluation/datasets', '/evaluation/configs',
   ]
   let best = '/'
   for (const k of allKeys) {
@@ -151,12 +161,12 @@ function onBreadcrumbClick(item) {
 const MODULE_PATH = {
   management: '/management/projects',
   papers: '/papers/list',
-  benchmark: '/benchmark',
+  evaluation: '/evaluation/results',
 }
 const MODULE_LABEL = {
   papers: '论文库',
   management: '项目管理',
-  benchmark: '基准测试',
+  evaluation: '评测体系',
 }
 
 const breadcrumbs = computed(() => {

@@ -14,6 +14,8 @@ DATASETS_DIR = os.environ.get("INFRACOMP_DATASETS_DIR", os.path.join(BASE_DIR, "
 CONTOUR_DIR = os.path.join(DATASETS_DIR, "contour")  # 阶段1 产出的无损轮廓帧
 RESULTS_VIDEO_DIR = os.path.join(BASE_DIR, "results", "video")
 RESULTS_VIDEO_JSON = os.path.join(RESULTS_VIDEO_DIR, "results.json")
+# 评测输出根目录（压缩码流 bitstreams/ + 重建视频 recon/），供 /api/evaluation/outputs 按需服务
+OUTPUTS_DIR = RESULTS_VIDEO_DIR
 
 # 论文数据库路径(本地 SQLite)
 PAPERS_DB = os.path.join(BASE_DIR, "data", "papers.db")
