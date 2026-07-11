@@ -5,6 +5,7 @@ all video demux / encode / decode goes through the system ffmpeg subprocess.
 """
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -13,25 +14,65 @@ _FFMPEG_CANDIDATES = ("ffmpeg", "/opt/homebrew/bin/ffmpeg")
 _FFPROBE_CANDIDATES = ("ffprobe", "/opt/homebrew/bin/ffprobe")
 
 
+def _from_env(env_var: str, name: str) -> str | None:
+    """Resolve a binary from an env var pointing at the exe or its directory."""
+    val = os.getenv(env_var)
+    if not val:
+        return None
+    p = Path(val)
+    if p.is_dir():
+        for cand in (p / name, p / f"{name}.exe"):
+            if cand.is_file():
+                return str(cand)
+    elif p.is_file() and p.name.lower() in (name, f"{name}.exe"):
+        return str(p)
+    return None
+
+
+def _from_static_ffmpeg(name: str) -> str | None:
+    """Use the pip `static-ffmpeg` bundle if installed (ships ffmpeg + ffprobe)."""
+    try:
+        from static_ffmpeg.run import get_or_fetch_platform_executables_else_raise
+        ffmpeg, ffprobe = get_or_fetch_platform_executables_else_raise()
+        return ffmpeg if name == "ffmpeg" else ffprobe
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def find_ffmpeg() -> str:
-    """Locate the ffmpeg binary. Raises FileNotFoundError if missing."""
+    """Locate ffmpeg: INFRACOMP_FFMPEG_BIN env > PATH > static_ffmpeg bundle."""
+    path = _from_env("INFRACOMP_FFMPEG_BIN", "ffmpeg")
+    if path:
+        return path
     for c in _FFMPEG_CANDIDATES:
-        path = shutil.which(c)
-        if path:
-            return path
+        found = shutil.which(c)
+        if found:
+            return found
+    path = _from_static_ffmpeg("ffmpeg")
+    if path:
+        return path
     raise FileNotFoundError(
-        "ffmpeg not found. Install it (e.g. `brew install ffmpeg`) with "
-        "libx264/libx265/libsvtav1/libvpx support."
+        "ffmpeg not found. Set INFRACOMP_FFMPEG_BIN, install system ffmpeg, or "
+        "`uv add static-ffmpeg` (bundled ffmpeg + ffprobe)."
     )
 
 
 def find_ffprobe() -> str:
-    """Locate the ffprobe binary."""
+    """Locate ffprobe: INFRACOMP_FFMPEG_BIN env > PATH > static_ffmpeg bundle."""
+    path = _from_env("INFRACOMP_FFMPEG_BIN", "ffprobe")
+    if path:
+        return path
     for c in _FFPROBE_CANDIDATES:
-        path = shutil.which(c)
-        if path:
-            return path
-    raise FileNotFoundError("ffprobe not found. Install ffmpeg (it ships ffprobe).")
+        found = shutil.which(c)
+        if found:
+            return found
+    path = _from_static_ffmpeg("ffprobe")
+    if path:
+        return path
+    raise FileNotFoundError(
+        "ffprobe not found. Set INFRACOMP_FFMPEG_BIN, install system ffmpeg, or "
+        "`uv add static-ffmpeg`."
+    )
 
 
 def run_ffmpeg(args: list[str]) -> subprocess.CompletedProcess:

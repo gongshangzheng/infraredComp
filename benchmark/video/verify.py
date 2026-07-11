@@ -15,6 +15,7 @@ import cv2
 import numpy as np
 
 from . import config
+from .ffmpeg_util import find_ffmpeg
 from .stage1_extract import extract_contour_video, load_contour_frames
 from .stage2_benchmark import run_benchmark
 from .visualize import generate_report
@@ -37,7 +38,7 @@ def _make_video(frames_dir: Path, n: int = 8, h: int = 64, w: int = 64) -> Path:
     _make_frames(frames_dir, n, h, w)
     mp4 = frames_dir.parent / "verify.mp4"
     subprocess.run(
-        ["ffmpeg", "-y", "-framerate", "10", "-i", str(frames_dir / "f%02d.png"),
+        [find_ffmpeg(), "-y", "-framerate", "10", "-i", str(frames_dir / "f%02d.png"),
          "-pix_fmt", "yuv420p", "-vf", "format=gray", str(mp4)],
         capture_output=True, check=True,
     )

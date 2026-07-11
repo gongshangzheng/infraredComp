@@ -21,4 +21,5 @@ dependencies = [
     "tabulate>=0.10.0",
     "torch>=2.12.1",
     "uvicorn[standard]>=0.32.0",
+    "static-ffmpeg>=3.0",
 ]

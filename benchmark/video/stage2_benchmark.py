@@ -146,8 +146,14 @@ def run_benchmark(
     codecs: list[str] | None = None,
     crfs: list[int] | None = None,
     preset: str | None = None,
+    save: bool = True,
 ) -> list[VideoCompressionResult]:
-    """Run a (codecs × crfs) grid on one contour video; persist results.json."""
+    """Run a (codecs × crfs) grid on one contour video.
+
+    With save=True (default) persist results.json afterwards. Callers that
+    accumulate across multiple sequences pass save=False and write once via
+    save_results_json().
+    """
     if codecs is None:
         codecs = list_codecs()
     if crfs is None:
@@ -166,18 +172,29 @@ def run_benchmark(
             done += 1
             print(f"  [{codec_name} crf{crf}] done ({done}/{total})")
 
-    save_results_json(results)
+    if save:
+        save_results_json(results)
     return results
 
 
-def save_results_json(results: list[VideoCompressionResult], path: str | Path | None = None) -> Path:
-    """Persist results to results/video/results.json (overwrite)."""
+def save_results_json(
+    results: list[VideoCompressionResult],
+    path: str | Path | None = None,
+    metadata: dict | None = None,
+) -> Path:
+    """Persist results to results/video/results.json (overwrite).
+
+    Optional metadata (codec/crf/git-sha/dataset envelope) is merged at the top
+    level alongside generated_at/runs; the server tolerates the extra keys.
+    """
     out = Path(path) if path else config.RESULTS_JSON
     out.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": datetime.now().isoformat(),
         "runs": [r.to_dict() for r in results],
     }
+    if metadata:
+        payload.update(metadata)
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Wrote {len(results)} results to {out}")
     return out

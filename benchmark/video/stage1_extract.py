@@ -37,6 +37,35 @@ def resolve_input(path: str | Path) -> tuple[str, Path]:
     )
 
 
+def expand_inputs(input_args: list[str], *, skip_extract: bool = False) -> list[str]:
+    """Flatten repeatable --input values into concrete source paths.
+
+    - skip_extract=False: a directory is globbed for video files (VIDEO_EXTS);
+      a file is kept as-is.
+    - skip_extract=True: each entry is treated as ONE contour dir (no glob,
+      since contour dirs hold PNGs, not videos).
+    Raises FileNotFoundError on a missing path or an empty video directory.
+    """
+    out: list[str] = []
+    for arg in input_args:
+        p = Path(arg)
+        if not p.exists():
+            raise FileNotFoundError(f"Input path does not exist: {arg}")
+        if p.is_dir() and not skip_extract:
+            vids = sorted(
+                f for f in p.iterdir()
+                if f.is_file() and f.suffix.lower() in VIDEO_EXTS
+            )
+            if not vids:
+                raise FileNotFoundError(
+                    f"No video files ({sorted(VIDEO_EXTS)}) in directory: {arg}"
+                )
+            out.extend(str(v) for v in vids)
+        else:
+            out.append(arg)
+    return out
+
+
 def _video_fps(path: Path) -> float:
     """Best-effort fps from ffprobe (r_frame_rate)."""
     try:

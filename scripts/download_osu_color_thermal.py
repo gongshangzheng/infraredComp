@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -53,7 +54,29 @@ from pathlib import Path
 # Constants — single source of truth, no magic strings elsewhere.            #
 # --------------------------------------------------------------------------- #
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-OUT_DIR = PROJECT_ROOT / "datasets" / "raw" / "osu_color_thermal"
+# Datasets 树位置可经 INFRACOMP_DATASETS_DIR 配置;默认 <repo>/datasets。
+_DATASETS_DIR = Path(os.environ.get("INFRACOMP_DATASETS_DIR", str(PROJECT_ROOT / "datasets")))
+OUT_DIR = _DATASETS_DIR / "raw" / "osu_color_thermal"
+
+
+def _rel_or_abs(p: Path) -> str:
+    """Path relative to repo root if inside it, else absolute (relocated datasets)."""
+    try:
+        return str(p.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(p)
+
+
+def _ensure_ffmpeg_on_path() -> None:
+    """If system ffmpeg/ffprobe are missing, add the static-ffmpeg bundle to PATH."""
+    if shutil.which("ffmpeg") and shutil.which("ffprobe"):
+        return
+    try:
+        from static_ffmpeg.run import get_or_fetch_platform_executables_else_raise
+        ffmpeg, _ffprobe = get_or_fetch_platform_executables_else_raise()
+        os.environ["PATH"] = str(Path(ffmpeg).parent) + os.pathsep + os.environ.get("PATH", "")
+    except Exception:  # noqa: BLE001
+        pass
 
 BASE_URL = "https://vcipl-okstate.org/pbvs/bench/Data/03"
 THERMAL_ZIPS = [f"{i}a.zip" for i in range(1, 7)]  # 1a..6a (thermal only)
@@ -247,7 +270,7 @@ def write_manifest(infos: list[SeqInfo]) -> None:
         "sequences": [
             {
                 "id": f"seq{i.index}",
-                "file": str(i.mp4.relative_to(PROJECT_ROOT)),
+                "file": _rel_or_abs(i.mp4),
                 "source_kind": i.source_kind,
                 "source_name": i.source_name,
                 "fps": i.fps,
@@ -261,7 +284,7 @@ def write_manifest(infos: list[SeqInfo]) -> None:
     }
     manifest_path = OUT_DIR / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
-    print(f"\nmanifest -> {manifest_path.relative_to(PROJECT_ROOT)}")
+    print(f"\nmanifest -> {_rel_or_abs(manifest_path)}")
 
 
 def print_stage1_hint(infos: list[SeqInfo]) -> None:
@@ -269,7 +292,7 @@ def print_stage1_hint(infos: list[SeqInfo]) -> None:
         return
     print("\nRun stage1 + stage2 per sequence:")
     for i in infos:
-        rel = i.mp4.relative_to(PROJECT_ROOT)
+        rel = _rel_or_abs(i.mp4)
         print(f"  uv run python -m benchmark.video --input {rel} --method canny --crfs 18,23,28,33")
 
 
@@ -279,14 +302,16 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true", help="show the plan without downloading")
     args = ap.parse_args()
 
+    _ensure_ffmpeg_on_path()
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
-        print("error: ffmpeg/ffprobe not found on PATH", file=sys.stderr)
+        print("error: ffmpeg/ffprobe not found (set INFRACOMP_FFMPEG_BIN, install "
+              "system ffmpeg, or `uv add static-ffmpeg`)", file=sys.stderr)
         return 2
     if not shutil.which("curl"):
         print("error: curl not found on PATH", file=sys.stderr)
         return 2
 
-    print(f"output dir: {OUT_DIR.relative_to(PROJECT_ROOT)}")
+    print(f"output dir: {_rel_or_abs(OUT_DIR)}")
     infos = fetch_all(force=args.force, dry_run=args.dry_run)
     write_manifest(infos)
     print_stage1_hint(infos)

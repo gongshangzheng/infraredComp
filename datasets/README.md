@@ -10,9 +10,9 @@
 export INFRACOMP_DATASETS_DIR=/data/infrared   # 把大数据集放到仓库外(换盘/省备份)
 ```
 
-`benchmark/video/config.py`、`server/config.py`、`scripts/download_dataset.py`、`benchmark/runner.py`、`benchmark/demo.py` 均读取此变量。路径常量遵循**单一来源**约定,业务代码不硬编码路径。
+`benchmark/video/config.py`、`server/config.py`、`scripts/download_dataset.py`、`scripts/download_osu_color_thermal.py`、`benchmark/runner.py`、`benchmark/demo.py` 均读取此变量。路径常量遵循**单一来源**约定,业务代码不硬编码路径。
 
-## 两个数据域(请勿混为一谈)
+## 三个数据域(请勿混为一谈)
 
 ### 1. FLIR ADAS 1.3(红外图像集,legacy 图像 benchmark 用)
 
@@ -33,6 +33,19 @@ export INFRACOMP_DATASETS_DIR=/data/infrared   # 把大数据集放到仓库外(
 | contour | 阶段1 提取产物:无损灰度 PNG 帧序列 + `manifest.json`,存 `${INFRACOMP_DATASETS_DIR}/contour/<source>/`。可由 raw 重算,故帧 PNG 不进 git,仅 `manifest.json` 追踪 |
 | 获取/产生 | `uv run python -m benchmark.video --input <raw> --method canny [--extract-only]` |
 | 用途 | 阶段2 压缩评测的输入与质量基准 |
+
+### 3. OSU Color-Thermal(热红外视频序列,contour-video baseline 用)
+
+| 项 | 值 |
+|---|---|
+| 来源 | OTCBVS Dataset 03 — [vcipl-okstate.org](https://vcipl-okstate.org/pbvs/bench/Data/03/download.html) |
+| 模态 | 6 段热红外序列(`1a.zip`..`6a.zip`,仅 thermal 通道),归一化为 `seq1..6.mp4`,~320×240/25fps |
+| 许可证 | OTCBVS:仅研究/教学用途,使用须引用致谢(Davis & Sharma 2007) |
+| 获取 | `uv run python scripts/download_osu_color_thermal.py`(幂等;`--force` 重下) |
+| 一键 baseline | `uv run python scripts/run_osu_baseline.py`(下载 + 6 段评测 + 单一多序列 `results.json`) |
+| 路径 | `${INFRACOMP_DATASETS_DIR}/raw/osu_color_thermal/seq{1..6}.mp4` |
+
+详细用法见 `.claude/skills/contour-video-evaluation/SKILL.md`。
 
 ## 接入新数据集
 
