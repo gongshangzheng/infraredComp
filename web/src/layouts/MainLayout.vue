@@ -58,6 +58,8 @@ import {
 } from 'naive-ui'
 import {
   HomeOutline, DocumentTextOutline, LibraryOutline,
+  PeopleOutline, GridOutline, CalendarOutline,
+  CheckboxOutline, FlagOutline, ChatbubblesOutline, BarChartOutline,
 } from '@vicons/ionicons5'
 
 const route = useRoute()
@@ -75,6 +77,21 @@ const menuOptions = [
     icon: renderIcon(HomeOutline),
   },
   {
+    label: '项目管理',
+    key: 'management',
+    icon: renderIcon(GridOutline),
+    children: [
+      { label: '项目树', key: '/management/projects', icon: renderIcon(GridOutline) },
+      { label: '团队成员', key: '/management/team', icon: renderIcon(PeopleOutline) },
+      { label: '日报', key: '/management/daily', icon: renderIcon(CalendarOutline) },
+      { label: '周报', key: '/management/weekly', icon: renderIcon(CalendarOutline) },
+      { label: '月报', key: '/management/monthly', icon: renderIcon(CalendarOutline) },
+      { label: '任务看板', key: '/management/tasks', icon: renderIcon(CheckboxOutline) },
+      { label: '里程碑', key: '/management/milestones', icon: renderIcon(FlagOutline) },
+      { label: '会议纪要', key: '/management/meetings', icon: renderIcon(ChatbubblesOutline) },
+    ],
+  },
+  {
     label: '论文库',
     key: 'papers',
     icon: renderIcon(LibraryOutline),
@@ -82,11 +99,22 @@ const menuOptions = [
       { label: '论文列表', key: '/papers/list', icon: renderIcon(DocumentTextOutline) },
     ],
   },
+  {
+    label: '基准测试',
+    key: '/benchmark',
+    icon: renderIcon(BarChartOutline),
+  },
 ]
 
 const activeKey = computed(() => {
   const path = route.path
-  const allKeys = ['/', '/papers/list']
+  const allKeys = [
+    '/', '/papers/list',
+    '/management/projects', '/management/team', '/management/daily',
+    '/management/weekly', '/management/monthly', '/management/tasks',
+    '/management/milestones', '/management/meetings',
+    '/benchmark',
+  ]
   let best = '/'
   for (const k of allKeys) {
     if (path.startsWith(k) && k.length > best.length) best = k
@@ -102,6 +130,8 @@ const breadcrumbs = computed(() => {
   const items = [{ title: '首页', path: '/' }]
   const moduleMap = {
     papers: '论文库',
+    management: '项目管理',
+    benchmark: '基准测试',
   }
   if (route.meta.module && moduleMap[route.meta.module]) {
     items.push({ title: moduleMap[route.meta.module], path: '' })

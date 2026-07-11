@@ -1,121 +1,41 @@
-import papersData from '../data/papers.json'
+import request from './request'
 
-// 从静态 JSON 读取论文数据（无需后端）
-const STORAGE_KEY_STARRED = 'ir-comp:starred'
-const STORAGE_KEY_PINNED = 'ir-comp:pinned'
-const STORAGE_KEY_NOTES = 'ir-comp:notes'
+// 论文列表（代理 SeekVerse）
+export const getPaperList = (params) => request.get('/papers', { params })
 
-function getStarred() {
-  try { return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY_STARRED) || '[]')) }
-  catch { return new Set() }
-}
+// 论文统计
+export const getPaperStats = () => request.get('/papers/stats/summary')
 
-function getPinned() {
-  try { return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY_PINNED) || '[]')) }
-  catch { return new Set() }
-}
+// 论文详情
+export const getPaperDetail = (id) => request.get(`/papers/${id}`)
 
-function getNotes() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY_NOTES) || '{}') }
-  catch { return {} }
-}
+// 论文笔记
+export const getPaperNote = (id) => request.get(`/papers/${id}/note`)
+export const savePaperNote = (id, content) => request.put(`/papers/${id}/note`, { content })
 
-function decorate(paper) {
-  const starred = getStarred()
-  const pinned = getPinned()
-  const notes = getNotes()
-  return {
-    ...paper,
-    starred: starred.has(paper.id),
-    pinned: pinned.has(paper.id),
-    has_note: !!notes[paper.id],
-  }
-}
+// Blog 链接
+export const setPaperBlog = (id, blogUrl) => request.put(`/papers/${id}/blog`, { blog_url: blogUrl })
 
-export function getPaperList(params = {}) {
-  let papers = papersData.papers.map(decorate)
+// 通过 URL 拉取论文
+export const fetchPaper = (url, force = false) => request.post('/papers/fetch', { url, force })
 
-  // 分类筛选
-  if (params.category) {
-    papers = papers.filter(p => (p.categories || []).includes(params.category))
-  }
+// 触发摘要生成
+export const summarizePaper = (id) => request.post(`/papers/${id}/summarize`)
 
-  // 搜索
-  if (params.search) {
-    const q = params.search.toLowerCase()
-    papers = papers.filter(p =>
-      (p.title || '').toLowerCase().includes(q) ||
-      (p.title_zh || '').toLowerCase().includes(q) ||
-      (p.abstract || '').toLowerCase().includes(q) ||
-      (p.abstract_zh || '').toLowerCase().includes(q) ||
-      (p.tags || []).some(t => t.toLowerCase().includes(q))
-    )
-  }
+// 收藏 / 取消收藏
+export const starPaper = (id, starred) => request.put(`/papers/${id}/star`, { starred })
 
-  // 来源筛选
-  if (params.source) {
-    papers = papers.filter(p => p.source === params.source)
-  }
+// 置顶 / 取消置顶
+export const pinPaper = (id, pinned) => request.put(`/papers/${id}/pin`, { pinned })
 
-  return { papers, total: papers.length }
-}
+// 缩略图 URL
+export const getThumbnailUrl = (arxivId) => `/api/papers/thumbnails/${arxivId}`
 
-export function getPaperStats() {
-  const papers = papersData.papers
-  const by_category = {}
-  const by_source = {}
-  papers.forEach(p => {
-    ;(p.categories || []).forEach(c => { by_category[c] = (by_category[c] || 0) + 1 })
-    by_source[p.source] = (by_source[p.source] || 0) + 1
-  })
-  return { total: papers.length, by_category, by_source }
-}
+// 论文 digest
+export const getDailyDigest = () => request.get('/papers/digests/daily')
+export const generateDigest = (period = '今日', limit = 100) => request.post('/papers/digests/generate', null, { params: { period, limit } })
 
-export function getPaperDetail(id) {
-  const paper = papersData.papers.find(p => p.id === id)
-  if (!paper) return null
-  return decorate(paper)
-}
-
-export function getPaperNote(id) {
-  const notes = getNotes()
-  return { content: notes[id] || '' }
-}
-
-export function savePaperNote(id, content) {
-  const notes = getNotes()
-  notes[id] = content
-  localStorage.setItem(STORAGE_KEY_NOTES, JSON.stringify(notes))
-  return { success: true }
-}
-
-export function starPaper(id, starred) {
-  const set = getStarred()
-  if (starred) set.add(id); else set.delete(id)
-  localStorage.setItem(STORAGE_KEY_STARRED, JSON.stringify([...set]))
-  return { success: true }
-}
-
-export function pinPaper(id, pinned) {
-  const set = getPinned()
-  if (pinned) set.add(id); else set.delete(id)
-  localStorage.setItem(STORAGE_KEY_PINNED, JSON.stringify([...set]))
-  return { success: true }
-}
-
-export function getThumbnailUrl(arxivId) {
-  if (!arxivId) return ''
-  return `https://arxiv.org/html/${arxivId}v1/x1.png`
-}
-
-export function getCategories() {
-  return [
-    { label: '学习式压缩', value: 'learned_compression' },
-    { label: '生成式压缩', value: 'generative_compression' },
-    { label: '联合信源信道编码', value: 'jscc' },
-    { label: '视频压缩', value: 'video_compression' },
-    { label: '红外图像压缩', value: 'infrared_compression' },
-    { label: '视觉标记化', value: 'tokenization' },
-    { label: '知识蒸馏', value: 'distillation' },
-  ]
-}
+// 保留旧接口兼容
+export const getPaperCategories = () => Promise.resolve(['autoregressive', 'diffusion', 'image_compression', 'visual_tokenizer'])
+export const getPaperSources = () => request.get('/papers/sources')
+export const updatePaperSource = (id, data) => request.put(`/papers/sources/${id}`, data)

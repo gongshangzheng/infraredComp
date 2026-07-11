@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>轮廓视频压缩评测报告</title>
+<style>
+  body { background: #1e1e2d; color: #e5e7eb; font-family: -apple-system, sans-serif; margin: 0; padding: 24px; }
+  h1 { color: #fff; font-size: 22px; }
+  .meta { color: #9ca3af; font-size: 13px; margin-bottom: 16px; }
+  .cards { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .card { background: #2a2a3e; border-radius: 8px; padding: 14px 18px; min-width: 160px; }
+  .card .label { color: #9ca3af; font-size: 12px; }
+  .card .value { color: #4f46e5; font-size: 20px; font-weight: 700; }
+  table { border-collapse: collapse; width: 100%; background: #2a2a3e; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #1e1e2d; font-size: 13px; }
+  th { color: #9ca3af; }
+  .best { color: #10b981; font-weight: 700; }
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .chart-card { background: #2a2a3e; border-radius: 8px; padding: 8px; }
+  .chart-card img { width: 100%; border-radius: 4px; }
+</style>
+</head>
+<body>
+  <h1>轮廓视频压缩评测报告</h1>
+  <div class="meta">{{META}}</div>
+  <div class="cards">{{CARDS}}</div>
+  <table>{{TABLE}}</table>
+  <div class="charts">{{CHARTS}}</div>
+</body>
+</html>

@@ -12,6 +12,83 @@ const routes = [
         component: () => import('../views/Home.vue'),
         meta: { title: '首页' },
       },
+
+      // ===== management =====
+      { path: 'management', redirect: '/management/projects' },
+      {
+        path: 'management/projects',
+        name: 'Projects',
+        component: () => import('../views/management/Projects.vue'),
+        meta: { title: '项目树', module: 'management' },
+      },
+      {
+        path: 'management/team',
+        name: 'TeamList',
+        component: () => import('../views/management/TeamList.vue'),
+        meta: { title: '团队成员', module: 'management' },
+      },
+      {
+        path: 'management/team/:id',
+        name: 'TeamDetail',
+        component: () => import('../views/management/TeamDetail.vue'),
+        meta: { title: '成员档案', module: 'management' },
+      },
+      {
+        path: 'management/daily',
+        name: 'DailyList',
+        component: () => import('../views/management/DailyList.vue'),
+        meta: { title: '日报', module: 'management' },
+      },
+      {
+        path: 'management/daily/:date/:author',
+        name: 'DailyDetail',
+        component: () => import('../views/management/DailyDetail.vue'),
+        meta: { title: '日报详情', module: 'management' },
+      },
+      {
+        path: 'management/weekly',
+        name: 'WeeklyList',
+        component: () => import('../views/management/WeeklyList.vue'),
+        meta: { title: '周报', module: 'management' },
+      },
+      {
+        path: 'management/weekly/:year/:week/:author',
+        name: 'WeeklyDetail',
+        component: () => import('../views/management/WeeklyDetail.vue'),
+        meta: { title: '周报详情', module: 'management' },
+      },
+      {
+        path: 'management/monthly',
+        name: 'MonthlyList',
+        component: () => import('../views/management/MonthlyList.vue'),
+        meta: { title: '月报', module: 'management' },
+      },
+      {
+        path: 'management/monthly/:year/:month/:author',
+        name: 'MonthlyDetail',
+        component: () => import('../views/management/MonthlyDetail.vue'),
+        meta: { title: '月报详情', module: 'management' },
+      },
+      {
+        path: 'management/tasks',
+        name: 'TaskBoard',
+        component: () => import('../views/management/TaskBoard.vue'),
+        meta: { title: '任务看板', module: 'management' },
+      },
+      {
+        path: 'management/milestones',
+        name: 'MilestoneTimeline',
+        component: () => import('../views/management/MilestoneTimeline.vue'),
+        meta: { title: '里程碑', module: 'management' },
+      },
+      {
+        path: 'management/meetings',
+        name: 'MeetingList',
+        component: () => import('../views/management/MeetingList.vue'),
+        meta: { title: '会议纪要', module: 'management' },
+      },
+
+      // ===== papers (阶段2 将替换为 ProjFlow 版) =====
       {
         path: 'papers',
         redirect: '/papers/list',
@@ -28,19 +105,33 @@ const routes = [
         component: () => import('../views/papers/PaperDetail.vue'),
         meta: { title: '论文详情', module: 'papers' },
       },
+      {
+        path: 'papers/config',
+        name: 'SourceConfig',
+        component: () => import('../views/papers/SourceConfig.vue'),
+        meta: { title: '数据源配置', module: 'papers' },
+      },
+
+      // ===== benchmark (阶段4 实现) =====
+      {
+        path: 'benchmark',
+        name: 'BenchmarkResults',
+        component: () => import('../views/benchmark/BenchmarkResults.vue'),
+        meta: { title: '基准测试', module: 'benchmark' },
+      },
     ],
   },
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes,
 })
 
 router.beforeEach((to, from, next) => {
   document.title = to.meta.title
-    ? `${to.meta.title} - 红外图像压缩论文库`
-    : '红外图像压缩论文库'
+    ? `${to.meta.title} - infraredComp`
+    : 'infraredComp'
   next()
 })
 

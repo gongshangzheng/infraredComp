@@ -15,6 +15,24 @@ datasets/
 # Web frontend
 web/node_modules/
 web/dist/
+web/.vite/
+
+# Backend runtime
+backend.log
+frontend.log
+.playwright-mcp/
+
+# SQLite + caches
+data/*.db
+papers/cache/
+
+# Benchmark runtime outputs (keep results.json + charts + report; ignore large binary dirs)
+results/video/bitstreams/
+results/video/recon/
+results/video/_raw_frames/
+
+# Debug screenshots
+papers-with-previews.png
 
 # OS
 .DS_Store

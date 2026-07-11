@@ -149,10 +149,10 @@ function categoryColor(cat) {
 onMounted(async () => {
   loading.value = true
   try {
-    stats.value = getPaperStats()
-    const data = getPaperList({ limit: 500 })
+    stats.value = await getPaperStats()
+    const data = await getPaperList({ limit: 500 })
     // 按日期降序取最近10篇
-    recentPapers.value = [...data.papers]
+    recentPapers.value = [...(data.papers || [])]
       .sort((a, b) => new Date(b.published_at || 0) - new Date(a.published_at || 0))
       .slice(0, 10)
   } catch {}

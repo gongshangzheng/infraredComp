@@ -5,6 +5,12 @@ export default defineConfig({
   base: '/infraredComp/',
   plugins: [vue()],
   server: {
-    port: 3000,
+    port: 3001,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8091',
+        changeOrigin: true,
+      },
+    },
   },
 })
