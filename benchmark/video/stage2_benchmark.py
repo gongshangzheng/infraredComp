@@ -63,27 +63,58 @@ def benchmark_codec(
         shutil.rmtree(recon_dir)
     recon_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Encode (timed wall-clock around the ffmpeg subprocess)
-    def _encode():
-        from .ffmpeg_util import run_ffmpeg
-        run_ffmpeg(codec.encode_args(frames_dir, artifact.fps, bitstream))
+    if getattr(codec, "is_neural", False):
+        # ---- neural in-process path (learned video codecs: ssf2020 / dcvc-rt) ----
+        import cv2
+        gt_frames = load_contour_frames(artifact)  # np.ndarray (N,H,W) uint8
+        frame_list = [gt_frames[i] for i in range(len(gt_frames))]
 
-    _, encode_ms = timed(_encode)
+        def _encode():
+            bs = codec.encode_inprocess(frame_list, artifact.fps)
+            Path(bitstream).write_bytes(bs)
+            return bs
+        _, encode_ms = timed(_encode)
 
-    compressed_bytes = os.path.getsize(bitstream) if os.path.exists(bitstream) else 0
-    duration_s = (
-        artifact.frame_count / artifact.fps
-        if artifact.fps > 0 and artifact.frame_count > 0
-        else get_duration_seconds(bitstream)
-    )
-    bitrate_kbps = (compressed_bytes * 8 / duration_s) if duration_s > 0 else 0.0
+        compressed_bytes = os.path.getsize(bitstream) if os.path.exists(bitstream) else 0
+        duration_s = (
+            artifact.frame_count / artifact.fps
+            if artifact.fps > 0 and artifact.frame_count > 0
+            else 1.0
+        )
+        bitrate_kbps = (compressed_bytes * 8 / duration_s) if duration_s > 0 else 0.0
 
-    # 2. Decode (timed)
-    def _decode():
-        from .ffmpeg_util import run_ffmpeg
-        run_ffmpeg(codec.decode_args(bitstream, str(recon_dir)))
+        def _decode():
+            bs = Path(bitstream).read_bytes()
+            rec_frames = codec.decode_inprocess(bs, len(frame_list), (artifact.height, artifact.width))
+            # write recon frames as PNGs so the shared metrics pipeline works
+            for i, fr in enumerate(rec_frames):
+                if fr.ndim == 3 and fr.shape[2] == 1:
+                    fr = fr[:, :, 0]
+                cv2.imwrite(str(recon_dir / f"frame_{i:06d}.png"), fr)
+        _, decode_ms = timed(_decode)
+    else:
+        # ---- ffmpeg path (legacy: x264/x265/svtav1/vp9) ----
+        # 1. Encode (timed wall-clock around the ffmpeg subprocess)
+        def _encode():
+            from .ffmpeg_util import run_ffmpeg
+            run_ffmpeg(codec.encode_args(frames_dir, artifact.fps, bitstream))
 
-    _, decode_ms = timed(_decode)
+        _, encode_ms = timed(_encode)
+
+        compressed_bytes = os.path.getsize(bitstream) if os.path.exists(bitstream) else 0
+        duration_s = (
+            artifact.frame_count / artifact.fps
+            if artifact.fps > 0 and artifact.frame_count > 0
+            else get_duration_seconds(bitstream)
+        )
+        bitrate_kbps = (compressed_bytes * 8 / duration_s) if duration_s > 0 else 0.0
+
+        # 2. Decode (timed)
+        def _decode():
+            from .ffmpeg_util import run_ffmpeg
+            run_ffmpeg(codec.decode_args(bitstream, str(recon_dir)))
+
+        _, decode_ms = timed(_decode)
 
     # 3. Load GT + reconstructed, align by index
     gt = load_contour_frames(artifact)
