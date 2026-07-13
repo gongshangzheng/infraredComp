@@ -6,6 +6,13 @@
           <n-form-item label="选择模型" required>
             <n-select v-model:value="form.model_id" :options="modelOptions" placeholder="请选择模型" />
           </n-form-item>
+          <n-form-item v-if="selectedModel?.kind === 'dl'" label="checkpoint">
+            <n-select v-model:value="form.checkpoint_id" :options="checkpointOptions" :placeholder="checkpointOptions.length ? '选择 trained checkpoint（不选=pretrained）' : '暂无 trained checkpoint（将用 pretrained）'" clearable />
+            <span class="hint">该 DL 模型选 trained checkpoint → 用训练产出评测；不选=pretrained。</span>
+          </n-form-item>
+          <n-form-item v-if="selectedModel?.kind === 'dl'" label="quality" required>
+            <n-select v-model:value="form.quality" :options="qualityOptions" placeholder="quality 级" />
+          </n-form-item>
           <n-form-item label="提取方法" required>
             <n-select v-model:value="form.method" :options="methodOptions" placeholder="选择轮廓提取方法 (canny/sobel)" />
           </n-form-item>
@@ -65,9 +72,12 @@ const datasets = ref([])
 const configs = ref([])
 const methods = ref([])
 const runResult = ref(null)
-const form = ref({ model_id: null, method: 'canny', dataset_id: null, config_id: null, batch_size: 8, device: 'cuda', extra_args: '' })
+const form = ref({ model_id: null, method: 'canny', dataset_id: null, config_id: null, batch_size: 8, device: 'cuda', extra_args: '', checkpoint_id: null, quality: null })
 
-const modelOptions = computed(() => models.value.map(m => ({ label: `${m.name} (${m.type})`, value: m.id })))
+const selectedModel = computed(() => models.value.find(m => m.id === form.value.model_id) || null)
+const modelOptions = computed(() => models.value.map(m => ({ label: `${m.name} (${m.type}${m.kind === 'dl' ? ' · DL' : ''})`, value: m.id })))
+const checkpointOptions = computed(() => (selectedModel.value?.checkpoint || []).map(p => ({ label: p, value: p })))
+const qualityOptions = computed(() => (selectedModel.value?.qualities || []).map(q => ({ label: `q${q}`, value: q })))
 const methodOptions = computed(() => methods.value.map(m => ({ label: m, value: m })))
 const datasetOptions = computed(() => datasets.value.map(d => ({ label: d.name, value: d.id })))
 const configOptions = computed(() => configs.value.map(c => ({ label: c.name || c.id, value: c.id })))

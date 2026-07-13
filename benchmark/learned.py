@@ -27,35 +27,41 @@ LEARNED_MODELS = [
 _MODEL_CACHE: dict[str, object] = {}
 
 
-def _load_model(model_name: str, quality: int, device: str = "cpu"):
-    """Load a pretrained CompressAI model (cached).
+def _load_model(model_name: str, quality: int, device: str = "cpu", checkpoint_path: str | None = None):
+    """Load a CompressAI model (cached).
 
-    If the model weights are not already downloaded, raises RuntimeError
-    instead of attempting a slow download.
+    If ``checkpoint_path`` is given, instantiate fresh (pretrained=False) and load the
+    trained state_dict — this is the checkpoint→eval hook (use a model trained via
+    scripts/train_model.py for evaluation). Otherwise load pretrained (cached).
     """
-    cache_key = f"{model_name}_{quality}_{device}"
+    cache_key = f"{model_name}_{quality}_{device}_{checkpoint_path or 'pretrained'}"
     if cache_key in _MODEL_CACHE:
         return _MODEL_CACHE[cache_key]
 
     from compressai.zoo import image_models
-    from compressai.zoo.image import model_urls
     import os
 
-    # Pre-check: verify model weights are cached before attempting download
-    try:
-        url = model_urls[model_name]["mse"][quality]
-        fname = url.rsplit("/", 1)[-1]
-        cache_path = os.path.expanduser(f"~/.cache/torch/hub/checkpoints/{fname}")
-        if not os.path.isfile(cache_path):
-            raise RuntimeError(
-                f"Model weights not cached: {fname}. "
-                f"Download from {url} first."
-            )
-    except (KeyError, TypeError):
-        pass  # URL not in registry; let CompressAI handle the error
-
     model_cls = image_models[model_name]
-    model = model_cls(quality=quality, pretrained=True)
+    if checkpoint_path:
+        if not os.path.isfile(checkpoint_path):
+            raise RuntimeError(f"Trained checkpoint not found: {checkpoint_path}")
+        model = model_cls(quality=quality, pretrained=False)
+        model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=False))
+    else:
+        from compressai.zoo.image import model_urls
+        # Pre-check: verify pretrained weights are cached before attempting download
+        try:
+            url = model_urls[model_name]["mse"][quality]
+            fname = url.rsplit("/", 1)[-1]
+            cache_path = os.path.expanduser(f"~/.cache/torch/hub/checkpoints/{fname}")
+            if not os.path.isfile(cache_path):
+                raise RuntimeError(
+                    f"Model weights not cached: {fname}. "
+                    f"Download from {url} first."
+                )
+        except (KeyError, TypeError):
+            pass  # URL not in registry; let CompressAI handle the error
+        model = model_cls(quality=quality, pretrained=True)
     model = model.to(device)
     model.eval()
     model.update()

@@ -24,7 +24,8 @@ infraredComp/
 │   │   ├── management.py        # /api/management/* (16 GET,只读)
 │   │   ├── papers.py            # /api/papers/* (10 端点)
 │   │   ├── benchmark.py         # /api/benchmark/* (读 results.json + /runs 列 contour)
-│   │   └── evaluation.py        # /api/evaluation/* (contour-video 适配:codecs/序列/results+output_video/outputs 按需视频/run)
+│   │   ├── evaluation.py        # /api/evaluation/* (contour-video 适配:codecs+DL 模型/results+output_video/outputs 按需视频/run; DL 模型带 checkpoint 字段)
+│   │   └── training.py          # /api/training/* (CompressAI/ELIC 可训练模型/FLIR+OSU 数据集/runs+loss_series/checkpoints/outputs; POST /run 触发 scripts/train_model.py)
 │   └── utils/file_utils.py      # safe_resolve/scan_directory/read_file
 ├── web/                         # Vue3 + Naive UI + vue-echarts(:3001)
 │   ├── vite.config.js           # base /infraredComp/ + proxy /api→:8091
@@ -32,7 +33,7 @@ infraredComp/
 │       ├── api/                 # request.js + {management,papers,benchmark,evaluation}.js
 │       ├── stores/theme.js      # Pinia dark/light store(localStorage + <html data-theme>)
 │       ├── components/common/   # EmptyState/MarkdownRenderer/StatusBadge
-│       ├── views/{management,papers,evaluation}/  # 评测子页 5 个(见下)
+│       ├── views/{management,papers,evaluation,training}/  # 评测子页 5 + 训练子页 5(见下)
 │       ├── router/index.js      # 路由(/evaluation/* 子路由组,meta.module 驱动侧边栏)
 │       └── layouts/MainLayout.vue  # 侧边栏(评测体系子菜单) + 主题切换按钮 + breadcrumb
 ├── management/                  # management 数据(markdown)
@@ -46,6 +47,20 @@ infraredComp/
 `EvalRun`(运行:选方法+codec+序列,触发 run_osu_baseline,运行后内联看视频+指标) · `EvalResults`(**合并页**:方法选择器 + 常驻大播放框 + 评测结果表 + 方法对比矩阵 + 输出文件列表) · `ModelManage`(codec 配置) · `DatasetManage`(序列) · `ConfigManage`(评测配置)。菜单「评测体系」下 5 children。`/benchmark`、`/evaluation/compare`、`/evaluation/outputs` 保留 redirect→`/evaluation/results`（后两者已并入 EvalResults）。
 
 **EvalResults 合并页**（infraredComp 独有，未进上游）：原「评测结果 + 方法对比 + 查看输出」三页合一。顶部筛选含**提取方法选择器**（canny/sobel，来自 `/api/evaluation/methods`）；常驻大 `<video preload="none">`（选结果/输出时才赋 src，按 play 才取字节，不点开弹窗）；结果表行内「播放」→ 加载到常驻框 + 显示指标 n-descriptions；方法对比矩阵行=序列×codec×CRF、列=方法；输出文件列表点「播放」→ 加载到常驻框。
+
+### 训练子页（/training/*，5 个，镜像评测页结构）
+`TrainRun`(选模型 CompressAI/ELIC + 数据集 + 超参 preset + epochs/lr/batch/λ/device, 启动 → 后台跑 `scripts/train_model.py`) · `TrainResults`(**合并页**: 筛选 + 训练 run 列表 + 常驻 loss/PSNR/bpp 曲线区(vue-echarts, 选 run 显示 loss_series) + checkpoint 文件列表[复制路径/下载]) · `TrainModelManage`(可训练 DL 模型清单) · `TrainDatasetManage`(FLIR/OSU 训练数据集) · `TrainConfigManage`(超参 preset)。菜单「训练体系」5 children。
+
+**训练循环** `scripts/train_model.py`（greenfield，真实 RD 训练）：实例化 CompressAI `image_models[name](quality, pretrained=False)` 或 `ELICModel`（fresh 可训练）→ `ThermalFrameDataset`(FLIR 16-bit/OSU 帧归一化 0-1 复制 3 通道) → Adam + RD loss(`λ·bpp + MSE`, bpp=`-log2(likelihood)/像素`) → 每 epoch 写 `results/training/metrics.json` loss_series + `checkpoints/{run_id}.pth`(state_dict) + `logs/{run_id}.log`。命名 `{model}__q{quality}__{ts}.pth` 让 eval 自动发现。
+
+**checkpoint→eval 打通**（核心）：
+- 训练产出 `.pth` 存 `results/training/checkpoints/{model}__q{q}__{ts}.pth`；命名前缀 = model_id。
+- `evaluation.py /models` 的 DL 模型带 `checkpoint` 字段 = `_trained_checkpoints_for(model_id)` 扫出的 trained 列表（自动发现新训练产出）。
+- `EvalRun` 选 DL 模型(kind==='dl')时，出现 checkpoint 选择器（选 trained checkpoint；不选=pretrained）+ quality 选择器。
+- POST `/evaluation/run` 带 `checkpoint_id` → 解析 trained checkpoint 路径 + 返回 image-benchmark CLI 提示（`python -m benchmark --learned <model> --checkpoint <path>`）。
+- `benchmark/learned.py:_load_model(checkpoint_path=...)` + `elic_model.py:load_elic_model(checkpoint_path=...)` 加了 override：传 checkpoint_path 则 `torch.load` trained state_dict 覆盖 pretrained（同一 model 类，键名匹配）。
+
+**训练模块上下游关系**：共享脚手架（5 视图 + api/training.js + training.py 通用契约 + 数据目录）在 ProjFlow 上游（commit `2db0b82`）。infraredComp 经 `git checkout upstream/main -- web/src/views/training/ web/src/api/training.js` 取回（保留血缘）；后端 `training.py` + `scripts/train_model.py` + `learned.py`/`elic_model.py` checkpoint override 是 infraredComp 定制，未进上游。
 
 ### 评测模块的上下游关系（见 upstream-sync skill）
 共享脚手架（EvalRun/ModelManage/DatasetManage/ConfigManage 视图 + api/evaluation.js + evaluation.py 通用契约 + /outputs 视频端点）在 **ProjFlow 上游**（commit `c41bb78`）。infraredComp 经 `git checkout upstream/main -- web/src/views/evaluation/ web/src/api/evaluation.js` 取回（保留 git 血缘）；**后端 `evaluation.py` 是 infraredComp 定制**（接 contour-video 数据源:models=codecs、datasets=序列、results=results.json+output_video、outputs=bitstreams/recon、run=run_osu_baseline）——不直接取上游通用版。**EvalResults 合并页**（三合一 + 常驻播放框 + 方法选择器）是 infraredComp 独有定制，未进上游；上游的 EvalOutputs/EvalMethodCompare/VideoModal 在 infraredComp 已删（合并后不用）。

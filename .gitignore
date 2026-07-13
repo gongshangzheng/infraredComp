@@ -52,3 +52,8 @@ papers-with-previews.png
 # OS
 .DS_Store
 Thumbs.db
+
+# Training run outputs (checkpoints/logs/metrics; reproducible, not committed)
+results/training/checkpoints/*.pth
+results/training/logs/*.log
+results/training/metrics.json
