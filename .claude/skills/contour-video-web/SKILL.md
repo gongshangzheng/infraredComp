@@ -24,7 +24,7 @@ infraredComp/
 │   │   ├── management.py        # /api/management/* (16 GET,只读)
 │   │   ├── papers.py            # /api/papers/* (10 端点)
 │   │   ├── benchmark.py         # /api/benchmark/* (读 results.json + /runs 列 contour)
-│   │   ├── evaluation.py        # /api/evaluation/* (contour-video 适配:codecs+DL 模型/results+output_video/outputs 按需视频/run; DL 模型带 checkpoint 字段)
+│   │   ├── evaluation.py        # /api/evaluation/* (contour-video 适配:codecs + DL image 模型 + 学习式视频 codec(ssf2020/dcvc_rt, kind=learned-video, 带 checkpoint 字段)/results+output_video/outputs 按需视频/run; checkpoint→eval 打通)
 │   │   └── training.py          # /api/training/* (CompressAI/ELIC 可训练模型/FLIR+OSU 数据集/runs+loss_series/checkpoints/outputs; POST /run 触发 scripts/train_model.py)
 │   └── utils/file_utils.py      # safe_resolve/scan_directory/read_file
 ├── web/                         # Vue3 + Naive UI + vue-echarts(:3001)

@@ -1,0 +1,75 @@
+{
+  "dataset": "OSU Color-Thermal (OTCBVS Dataset 03)",
+  "source": "https://vcipl-okstate.org/pbvs/bench/Data/03/download.html",
+  "license": "Educational and research purposes only; must be acknowledged.",
+  "citation": "Davis, J. W., & Sharma, V. (2007). Background-subtraction using contour-based fusion of thermal and visible imagery. OTCBVS Dataset 03, OSU Color-Thermal Database. https://vcipl-okstate.org/pbvs/bench/",
+  "thermal_only": true,
+  "sequences": [
+    {
+      "id": "seq1",
+      "file": "datasets/raw/osu_color_thermal/seq1.mp4",
+      "source_kind": "frames",
+      "source_name": "1054 images",
+      "fps": 25.0,
+      "frame_count": 1054,
+      "width": 320,
+      "height": 240,
+      "size_bytes": 19289978
+    },
+    {
+      "id": "seq2",
+      "file": "datasets/raw/osu_color_thermal/seq2.mp4",
+      "source_kind": "frames",
+      "source_name": "601 images",
+      "fps": 25.0,
+      "frame_count": 601,
+      "width": 320,
+      "height": 240,
+      "size_bytes": 11061669
+    },
+    {
+      "id": "seq3",
+      "file": "datasets/raw/osu_color_thermal/seq3.mp4",
+      "source_kind": "frames",
+      "source_name": "1700 images",
+      "fps": 25.0,
+      "frame_count": 1700,
+      "width": 320,
+      "height": 240,
+      "size_bytes": 25663781
+    },
+    {
+      "id": "seq4",
+      "file": "datasets/raw/osu_color_thermal/seq4.mp4",
+      "source_kind": "frames",
+      "source_name": "1506 images",
+      "fps": 25.0,
+      "frame_count": 1506,
+      "width": 320,
+      "height": 240,
+      "size_bytes": 38852195
+    },
+    {
+      "id": "seq5",
+      "file": "datasets/raw/osu_color_thermal/seq5.mp4",
+      "source_kind": "frames",
+      "source_name": "2031 images",
+      "fps": 25.0,
+      "frame_count": 2031,
+      "width": 320,
+      "height": 240,
+      "size_bytes": 52287019
+    },
+    {
+      "id": "seq6",
+      "file": "datasets/raw/osu_color_thermal/seq6.mp4",
+      "source_kind": "frames",
+      "source_name": "1652 images",
+      "fps": 25.0,
+      "frame_count": 1652,
+      "width": 320,
+      "height": 240,
+      "size_bytes": 42641351
+    }
+  ]
+}

@@ -20,6 +20,7 @@ datasets/**/*.jpeg
 datasets/**/*.tif
 datasets/**/*.tiff
 datasets/**/*.bmp
+datasets/**/*.zip
 datasets/contour/*/_raw_frames/
 # datasets/README.md、datasets/manifest.json、datasets/contour/*/manifest.json 等小文件默认被追踪
 

@@ -48,13 +48,23 @@ class CodecConfig:
 
 
 class VideoCodec:
-    """Base video codec. Subclasses set encoder / default_preset / extra args."""
+    """Base video codec. Subclasses set encoder / default_preset / extra args.
+
+    Two execution paths:
+    - **ffmpeg** (default, ``is_neural=False``): subclass overrides ``encode_args``/``decode_args``
+      to return ffmpeg argv; the harness shells out via ``run_ffmpeg``.
+    - **neural in-process** (``is_neural=True``): subclass overrides ``encode_inprocess``/``decode_inprocess``
+      to encode/decode a frame sequence in-process (loads a .pth, no ffmpeg). Used by learned
+      video codecs (ssf2020 / dcvc-rt). The harness writes returned bytes to the bitstream file
+      (for size accounting) and decoded frames to recon_dir as PNGs so the metrics pipeline is shared.
+    """
 
     name: str = "base"
     family: str = "base"
     encoder: str = ""           # ffmpeg encoder name, e.g. libx264
     default_preset: str | None = None
     ext: str = "mp4"            # output container
+    is_neural: bool = False     # True → harness uses encode_inprocess/decode_inprocess (no ffmpeg)
 
     def __init__(self, crf: int, preset: str | None = None):
         self.cfg = CodecConfig(
@@ -95,3 +105,20 @@ class VideoCodec:
             "-pix_fmt", config.DECODE_PIX_FMT,
             _os.path.join(out_dir, "frame_%06d.png"),
         ]
+
+    # ----- neural in-process path (learned video codecs override these) -----
+
+    def encode_inprocess(self, frames: list, fps: float) -> bytes:
+        """Encode a frame sequence in-process (no ffmpeg). frames = list[np.ndarray HxW or HxWxC uint8].
+
+        Subclasses (ssf2020 / dcvc-rt) override: load model, run model.encode_keyframe/encode_inter,
+        serialize strings+shapes to bytes. Default raises — only neural codecs (is_neural=True) implement.
+        """
+        raise NotImplementedError(f"{self.name} is not a neural codec (is_neural={self.is_neural})")
+
+    def decode_inprocess(self, bitstream_bytes: bytes, n_frames: int, hw: tuple[int, int]) -> list:
+        """Decode bitstream bytes back to a list of np.ndarray frames (HxW uint8).
+
+        Subclasses override: deserialize, model.decode_keyframe/decode_inter, return frames.
+        """
+        raise NotImplementedError(f"{self.name} is not a neural codec (is_neural={self.is_neural})")
