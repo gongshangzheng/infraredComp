@@ -53,6 +53,14 @@ _DL_MODELS = [
     {"id": "ELIC", "name": "ELIC", "type": "ELIC", "kind": "dl", "qualities": [1, 4, 5]},
 ]
 
+# 学习式视频 codec（in-process 神经，is_neural；走 stage2 神经分支）。
+# ssf2020 = CompressAI（可训练，trained checkpoint 在 results/training/checkpoints/ssf2020__*.pth）；
+# dcvc_rt = microsoft/DCVC-RT（推理专用，无训练代码；用 pretrained OneDrive checkpoint，需 DCVC_REPO_ROOT + rans C++ ext）。
+_LEARNED_VIDEO_CODECS = [
+    {"id": "ssf2020", "name": "ssf2020 (Scale-Space Flow)", "type": "CompressAI-video", "kind": "learned-video", "qualities": [1, 3, 5, 7, 9], "trainable": True, "description": "CompressAI 视频模型 CVPR2020；可 fine-tune"},
+    {"id": "dcvc_rt", "name": "DCVC-RT (real-time NVC)", "type": "DCVC", "kind": "learned-video", "qualities": [20, 30, 40], "trainable": False, "description": "microsoft/DCVC CVPR2025；推理专用，需 DCVC_REPO_ROOT + rans ext + OneDrive checkpoint"},
+]
+
 
 def _trained_checkpoints_for(model_id: str) -> list[str]:
     """扫 results/training/checkpoints 找该 DL 模型的 trained .pth（命名约定 {model_id}__...）。"""
@@ -147,10 +155,12 @@ async def get_methods():
 
 @router.get("/models")
 async def get_models():
-    """列出可用模型：codec（视频压缩）+ DL 模型（image learned，可训练，带 trained checkpoint）。"""
+    """列出可用模型：codec（ffmpeg）+ DL image 模型 + 学习式视频 codec（learned-video，带 trained checkpoint）。"""
     out = list(DEFAULT_CODECS)
     for m in _DL_MODELS:
         out.append({**m, "checkpoint": _trained_checkpoints_for(m["id"])})
+    for m in _LEARNED_VIDEO_CODECS:
+        out.append({**m, "checkpoint": _trained_checkpoints_for(m["id"]) if m.get("trainable") else []})
     return out
 
 
@@ -249,7 +259,36 @@ async def run_evaluation(data: dict = Body(...)):
     """
     model_id = data.get("model_id") or data.get("codec")
     checkpoint_id = data.get("checkpoint_id")
-    # 是 DL 模型？
+    # 是学习式视频 codec（ssf2020/dcvc_rt）？
+    lv = next((m for m in _LEARNED_VIDEO_CODECS if m["id"] == model_id), None)
+    if lv:
+        if model_id == "dcvc_rt":
+            # DCVC-RT 需 DCVC_REPO_ROOT + rans ext + OneDrive checkpoint（不可脚本化），评测走 stage2 CLI
+            repo = os.environ.get("DCVC_REPO_ROOT")
+            return {
+                "status": "needs_setup" if not repo else "ready",
+                "config": data, "output_video": None, "metrics": None,
+                "note": (f"DCVC-RT 评测走 stage2 神经分支: uv run python -m benchmark.video "
+                         f"--codecs dcvc_rt --crfs {data.get('quality', 30)} ...。"
+                         + (f"（DCVC_REPO_ROOT={repo}）" if repo else " 需先设 DCVC_REPO_ROOT + 建 rans ext + 放 OneDrive checkpoint（见 dcvc-rt-usage skill）")),
+            }
+        # ssf2020: 解析 trained checkpoint（若给）；否则 pretrained
+        if checkpoint_id:
+            from server.config import CHECKPOINTS_DIR
+            cand = checkpoint_id
+            if not cand.endswith(".pth") and not cand.startswith("checkpoints/"):
+                cand = f"checkpoints/{cand}.pth"
+            rel = cand[len("checkpoints/"):] if cand.startswith("checkpoints/") else cand
+            full = os.path.join(CHECKPOINTS_DIR, rel)
+            if not os.path.isfile(full):
+                return {"status": "error", "config": data, "output_video": None, "metrics": None,
+                        "note": f"trained checkpoint 未找到: {cand}"}
+            return {"status": "checkpoint_resolved", "config": data, "output_video": None, "metrics": None,
+                    "checkpoint": cand, "checkpoint_path": full,
+                    "note": f"ssf2020 用 trained checkpoint {cand} 评测: uv run python -m benchmark.video --codecs ssf2020 --crfs {data.get('quality', 5)} --checkpoint {full}"}
+        return {"status": "ready", "config": data, "output_video": None, "metrics": None,
+                "note": f"ssf2020 用 pretrained 评测: uv run python -m benchmark.video --codecs ssf2020 --crfs {data.get('quality', 5)} ..."}
+    # 是 DL image 模型？
     dl = next((m for m in _DL_MODELS if m["id"] == model_id), None)
     if dl and checkpoint_id:
         # 解析 checkpoint 路径（checkpoint_id 可能是 "checkpoints/foo.pth" 或 stem）

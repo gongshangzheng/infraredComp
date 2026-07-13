@@ -134,10 +134,10 @@ pretrained 缓存路径：`~/.cache/torch/hub/checkpoints/{fname}`（CompressAI 
 |------|------|------|
 | image 学习压缩评测 | `benchmark/learned.py` | `_load_model(name, quality, device, checkpoint_path=…)` + `compress_learned()` |
 | image 训练 | `scripts/train_model.py`（image 路径） | CompressAI `image_models[name](pretrained=False)` + RD loss |
-| **video 学习压缩评测** | `benchmark/video/codecs/ssf2020.py`（新） | `video_models["ssf2020"]` + `encode_keyframe/encode_inter` 序列化 |
-| **video 训练** | `scripts/train_model.py`（video 路径） | `model.forward(frames)` + 聚合 RD loss + warm-start |
-| checkpoint 下载 | `scripts/download_learned_checkpoints.py`（新） | 拉 ssf2020 q1-9 + DCVC-RT pretrained |
-| external 时序 codec | `benchmark/video/codecs/dcvc_rt.py`（新） | 非 CompressAI，自有 model 类 + checkpoint，同 LearnedVideoCodec 接口 |
+| **video 学习压缩评测** | `benchmark/video/codecs/ssf2020.py`（已建，已注册） | `video_models["ssf2020"]` + `encode_keyframe/encode_inter` 序列化（pickle strings+shapes），`is_neural=True` 走 stage2 神经分支 |
+| **video 训练** | `scripts/train_model.py`（`--model ssf2020` 视频路径，已建） | `model.forward(frames)` + `video_rd_loss` 聚合 RD + warm-start（`--warm-start`/`--seq-len`） |
+| checkpoint 下载 | `scripts/download_learned_checkpoints.py`（已建） | 拉 ssf2020 q1-9（`compressai.zoo.video.model_urls`，S3）；DCVC-RT 占位 stub（OneDrive 不可脚本化） |
+| external 时序 codec | `benchmark/video/codecs/dcvc_rt.py`（已建，已注册）+ `.claude/skills/dcvc-rt-usage` | microsoft/DCVC DMCI+DMC，`compress(x,qp)->bit_stream bytes`，rans C++ ext，OneDrive checkpoint；非 CompressAI |
 
 ## 关键约定
 

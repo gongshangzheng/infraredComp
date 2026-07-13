@@ -6,11 +6,11 @@
           <n-form-item label="选择模型" required>
             <n-select v-model:value="form.model_id" :options="modelOptions" placeholder="请选择模型" />
           </n-form-item>
-          <n-form-item v-if="selectedModel?.kind === 'dl'" label="checkpoint">
-            <n-select v-model:value="form.checkpoint_id" :options="checkpointOptions" :placeholder="checkpointOptions.length ? '选择 trained checkpoint（不选=pretrained）' : '暂无 trained checkpoint（将用 pretrained）'" clearable />
-            <span class="hint">该 DL 模型选 trained checkpoint → 用训练产出评测；不选=pretrained。</span>
+          <n-form-item v-if="selectedModel?.kind === 'dl' || selectedModel?.kind === 'learned-video'" label="checkpoint">
+            <n-select v-model:value="form.checkpoint_id" :options="checkpointOptions" :placeholder="checkpointOptions.length ? '选择 trained checkpoint（不选=pretrained）' : '暂无 trained checkpoint（将用 pretrained）'" clearable :disabled="!selectedModel?.trainable" />
+            <span class="hint">{{ selectedModel?.trainable === false ? '该模型推理专用（无训练），用 pretrained；如 ssf2020 可训练则可选 trained。' : '选 trained checkpoint → 用训练产出评测；不选=pretrained。' }}</span>
           </n-form-item>
-          <n-form-item v-if="selectedModel?.kind === 'dl'" label="quality" required>
+          <n-form-item v-if="selectedModel?.kind === 'dl' || selectedModel?.kind === 'learned-video'" label="quality" required>
             <n-select v-model:value="form.quality" :options="qualityOptions" placeholder="quality 级" />
           </n-form-item>
           <n-form-item label="提取方法" required>
@@ -75,7 +75,7 @@ const runResult = ref(null)
 const form = ref({ model_id: null, method: 'canny', dataset_id: null, config_id: null, batch_size: 8, device: 'cuda', extra_args: '', checkpoint_id: null, quality: null })
 
 const selectedModel = computed(() => models.value.find(m => m.id === form.value.model_id) || null)
-const modelOptions = computed(() => models.value.map(m => ({ label: `${m.name} (${m.type}${m.kind === 'dl' ? ' · DL' : ''})`, value: m.id })))
+const modelOptions = computed(() => models.value.map(m => ({ label: `${m.name} (${m.type}${m.kind === 'dl' ? ' · DL' : m.kind === 'learned-video' ? ' · 学习视频' : ''})`, value: m.id })))
 const checkpointOptions = computed(() => (selectedModel.value?.checkpoint || []).map(p => ({ label: p, value: p })))
 const qualityOptions = computed(() => (selectedModel.value?.qualities || []).map(q => ({ label: `q${q}`, value: q })))
 const methodOptions = computed(() => methods.value.map(m => ({ label: m, value: m })))
