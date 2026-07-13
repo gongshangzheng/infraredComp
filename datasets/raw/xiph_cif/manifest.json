@@ -1,0 +1,63 @@
+{
+  "dataset": "Xiph-CIF-natural",
+  "source": "https://media.xiph.org/video/derf/y4m/",
+  "license": "Xiph.org derf test media (public test use)",
+  "citation": "Xiph.org derf collection - standard video test sequences. https://media.xiph.org/video/derf/",
+  "format": "y4m (raw YUV4MPEG2)",
+  "sequences": [
+    {
+      "id": "akiyo_cif",
+      "file": "datasets\\raw\\xiph_cif\\akiyo_cif.y4m",
+      "fps": 29.97002997002997,
+      "frame_count": 0,
+      "width": 352,
+      "height": 288,
+      "size_bytes": 45621044
+    },
+    {
+      "id": "bus_cif",
+      "file": "datasets\\raw\\xiph_cif\\bus_cif.y4m",
+      "fps": 30.0,
+      "frame_count": 0,
+      "width": 352,
+      "height": 288,
+      "size_bytes": 22810538
+    },
+    {
+      "id": "city_cif",
+      "file": "datasets\\raw\\xiph_cif\\city_cif.y4m",
+      "fps": 30.0,
+      "frame_count": 0,
+      "width": 352,
+      "height": 288,
+      "size_bytes": 45621038
+    },
+    {
+      "id": "flower_cif",
+      "file": "datasets\\raw\\xiph_cif\\flower_cif.y4m",
+      "fps": 29.97002997002997,
+      "frame_count": 0,
+      "width": 352,
+      "height": 288,
+      "size_bytes": 38017544
+    },
+    {
+      "id": "foreman_cif",
+      "file": "datasets\\raw\\xiph_cif\\foreman_cif.y4m",
+      "fps": 29.97002997002997,
+      "frame_count": 0,
+      "width": 352,
+      "height": 288,
+      "size_bytes": 45621044
+    },
+    {
+      "id": "mobile_cif",
+      "file": "datasets\\raw\\xiph_cif\\mobile_cif.y4m",
+      "fps": 29.97002997002997,
+      "frame_count": 0,
+      "width": 352,
+      "height": 288,
+      "size_bytes": 45621054
+    }
+  ]
+}

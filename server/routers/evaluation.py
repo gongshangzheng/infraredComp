@@ -14,6 +14,7 @@
 import os
 import json
 import subprocess
+from pathlib import Path
 
 from fastapi import APIRouter, Body
 from fastapi.responses import FileResponse
@@ -42,18 +43,43 @@ DEFAULT_CODECS = [
 ]
 
 
+def _dataset_from_filename(name: str) -> str:
+    """results.json -> 'default';其他 <dataset>.json -> 文件名 stem。"""
+    stem = name[:-5] if name.endswith(".json") else name
+    return "default" if stem == "results" else stem
+
+
 def _load_results() -> dict:
-    """读 results/video/results.json。返回 {generated_at, runs: []}。"""
-    content = read_file(RESULTS_VIDEO_JSON)
-    if not content:
-        return {"generated_at": None, "runs": []}
-    try:
-        data = json.loads(content)
-        if isinstance(data, dict) and "runs" in data:
-            return data
-        return {"generated_at": None, "runs": data if isinstance(data, list) else []}
-    except json.JSONDecodeError:
-        return {"generated_at": None, "runs": []}
+    """读 results/video/ 下所有 *.json(多数据集共存),聚合 runs。
+    每条 run 带 dataset 字段(envelope dataset 优先,否则从文件名推断)。"""
+    all_runs: list = []
+    latest_gen = None
+    if os.path.isdir(RESULTS_VIDEO_DIR):
+        for jf in sorted(Path(RESULTS_VIDEO_DIR).glob("*.json")):
+            content = read_file(str(jf))
+            if not content:
+                continue
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(data, dict):
+                runs = data.get("runs") or []
+                ds = data.get("dataset") or _dataset_from_filename(jf.name)
+                gen = data.get("generated_at")
+            elif isinstance(data, list):
+                runs = data
+                ds = _dataset_from_filename(jf.name)
+                gen = None
+            else:
+                continue
+            if gen and (latest_gen is None or gen > latest_gen):
+                latest_gen = gen
+            for r in runs:
+                if isinstance(r, dict):
+                    r.setdefault("dataset", ds)
+                    all_runs.append(r)
+    return {"generated_at": latest_gen, "runs": all_runs}
 
 
 def _bitstream_for(run: dict) -> str | None:
@@ -228,7 +254,7 @@ async def get_results(model: str = None, dataset: str = None, metric: str = None
         row["output_video"] = vid
         # 兼容上游契约：model_name / dataset_name / metrics
         row["model_name"] = r.get("codec")
-        row["dataset_name"] = r.get("sequence_name")
+        row["dataset_name"] = r.get("dataset") or r.get("sequence_name")
         row["metrics"] = {
             "psnr": r.get("psnr"), "ssim": r.get("ssim"),
             "bitrate_kbps": r.get("bitrate_kbps"), "bpp": r.get("bpp"),

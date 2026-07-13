@@ -195,6 +195,8 @@ const today = computed(() => {
   border-bottom: 1px solid var(--color-border);
   color: #fff;
   font-weight: 700;
+  cursor: default;
+  user-select: none;
 
   .logo-text {
     font-size: 16px;
@@ -234,5 +236,10 @@ const today = computed(() => {
   height: calc(100vh - 56px);
   padding: 0;
   background: var(--color-bg);
+}
+
+/* 侧边栏是导航区,不可选文本/不显示文本光标;菜单项保持 pointer */
+:deep(.n-layout-sider) {
+  user-select: none;
 }
 </style>

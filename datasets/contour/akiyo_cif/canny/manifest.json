@@ -1,0 +1,10 @@
+{
+  "source_name": "akiyo_cif",
+  "method": "canny",
+  "frame_count": 300,
+  "fps": 29.97002997002997,
+  "width": 352,
+  "height": 288,
+  "frames_dir": "D:\\code\\infraredComp\\datasets\\contour\\akiyo_cif\\canny",
+  "duration_s": 10.01
+}

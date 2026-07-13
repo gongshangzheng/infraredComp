@@ -1,0 +1,10 @@
+{
+  "source_name": "city_cif",
+  "method": "canny",
+  "frame_count": 300,
+  "fps": 30.0,
+  "width": 352,
+  "height": 288,
+  "frames_dir": "D:\\code\\infraredComp\\datasets\\contour\\city_cif\\canny",
+  "duration_s": 10.0
+}

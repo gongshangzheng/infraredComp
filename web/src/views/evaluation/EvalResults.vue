@@ -3,6 +3,8 @@
     <!-- 筛选：方法 / 序列 / codec -->
     <n-card size="small">
       <n-space align="center" size="small" wrap>
+        <span class="lbl">数据集</span>
+        <n-select v-model:value="filters.dataset" :options="datasetOptions" placeholder="全部" clearable size="small" style="width: 150px" />
         <span class="lbl">提取方法</span>
         <n-select v-model:value="filters.method" :options="methodOptions" placeholder="全部方法" clearable size="small" style="width: 130px" />
         <span class="lbl">序列</span>
@@ -93,7 +95,7 @@ const outputsLoading = ref(false)
 const results = ref([])
 const methods = ref([])
 const outputs = ref([])
-const filters = ref({ method: null, sequence: null, codec: null })
+const filters = ref({ dataset: null, method: null, sequence: null, codec: null })
 
 // 常驻播放器状态
 const playerSrc = ref('')
@@ -103,9 +105,11 @@ const currentRun = ref(null)
 const methodOptions = computed(() => methods.value.map(m => ({ label: m, value: m })))
 const sequenceOptions = computed(() => [...new Set(results.value.map(r => r.sequence_name))].map(s => ({ label: s, value: s })))
 const codecOptions = computed(() => [...new Set(results.value.map(r => r.codec))].map(c => ({ label: c, value: c })))
+const datasetOptions = computed(() => [...new Set(results.value.map(r => r.dataset_name).filter(Boolean))].map(d => ({ label: d, value: d })))
 
 const filteredResults = computed(() => {
   let list = results.value
+  if (filters.value.dataset) list = list.filter(r => r.dataset_name === filters.value.dataset)
   if (filters.value.method) list = list.filter(r => r.method === filters.value.method)
   if (filters.value.sequence) list = list.filter(r => r.sequence_name === filters.value.sequence)
   if (filters.value.codec) list = list.filter(r => r.codec === filters.value.codec)
@@ -115,6 +119,7 @@ const filteredResults = computed(() => {
 // 方法对比矩阵：行 = (sequence, codec, crf) 操作点，列 = 方法
 const matrixRows = computed(() => {
   let list = results.value
+  if (filters.value.dataset) list = list.filter(r => r.dataset_name === filters.value.dataset)
   if (filters.value.sequence) list = list.filter(r => r.sequence_name === filters.value.sequence)
   if (filters.value.codec) list = list.filter(r => r.codec === filters.value.codec)
   const map = new Map()

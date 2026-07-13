@@ -1,0 +1,10 @@
+{
+  "source_name": "bus_cif",
+  "method": "canny",
+  "frame_count": 150,
+  "fps": 30.0,
+  "width": 352,
+  "height": 288,
+  "frames_dir": "D:\\code\\infraredComp\\datasets\\contour\\bus_cif\\canny",
+  "duration_s": 5.0
+}

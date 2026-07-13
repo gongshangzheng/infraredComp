@@ -107,7 +107,7 @@ def _run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
 def _download(zip_name: str, dest: Path) -> None:
     url = f"{BASE_URL}/{zip_name}"
     print(f"  ↓ {url}")
-    _run(["curl", "-fsSL", "--max-time", "180", "-o", str(dest), url])
+    _run(["curl", "--ssl-no-revoke", "-fsSL", "--max-time", "180", "-o", str(dest), url])
 
 
 def _find_videos(root: Path) -> list[Path]:
@@ -247,11 +247,11 @@ def fetch_all(force: bool, dry_run: bool) -> list[SeqInfo]:
         for idx, zip_name in enumerate(THERMAL_ZIPS, start=1):
             out = OUT_DIR / f"seq{idx}.mp4"
             if out.exists() and not force:
-                print(f"• seq{idx}.mp4 exists ({out.stat().st_size // 1024} KB), skip (--force to re-fetch)")
+                print(f"* seq{idx}.mp4 exists ({out.stat().st_size // 1024} KB), skip (--force to re-fetch)")
                 w, h, fps, nbf = _probe(out)
                 infos.append(SeqInfo(idx, out, "cached", out.name, fps, nbf, w, h, out.stat().st_size))
                 continue
-            print(f"• seq{idx} <- {zip_name}")
+            print(f"* seq{idx} <- {zip_name}")
             zip_path = tmp_path / zip_name
             _download(zip_name, zip_path)
             infos.append(normalize_sequence(zip_path, idx, tmp_path))

@@ -18,7 +18,7 @@ from .data import ContourArtifact
 from .extractors import build_extractor, list_extractors
 from .ffmpeg_util import get_duration_seconds, get_stream_info, run_ffmpeg
 
-VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".m4v", ".webm"}
+VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".m4v", ".webm", ".y4m"}
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
 
 # Default fps assumed when the input is a frame directory (no real container).

@@ -49,6 +49,7 @@ def benchmark_codec(
     codec_name: str,
     crf: int,
     preset: str | None = None,
+    dataset: str = "",
 ) -> VideoCompressionResult:
     """Run one codec @ one CRF on the contour video; return a result row."""
     config.ensure_dirs()
@@ -138,6 +139,7 @@ def benchmark_codec(
         dec_fps=dec_fps,
         temporal_metric=temporal,
         decoded_sample=decoded_sample,
+        dataset=dataset,
     )
 
 
@@ -147,6 +149,7 @@ def run_benchmark(
     crfs: list[int] | None = None,
     preset: str | None = None,
     save: bool = True,
+    dataset: str = "",
 ) -> list[VideoCompressionResult]:
     """Run a (codecs × crfs) grid on one contour video.
 
@@ -165,7 +168,7 @@ def run_benchmark(
     for codec_name in codecs:
         for crf in crfs:
             try:
-                r = benchmark_codec(artifact, codec_name, crf, preset)
+                r = benchmark_codec(artifact, codec_name, crf, preset, dataset)
                 results.append(r)
             except Exception as e:  # noqa: BLE001
                 print(f"  ERROR [{codec_name} crf{crf}] on {artifact.source_name}: {e}")

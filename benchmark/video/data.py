@@ -58,6 +58,7 @@ class VideoCompressionResult:
     dec_fps: float = 0.0
     temporal_metric: float = 0.0  # std of per-frame PSNR (lower = more stable)
     decoded_sample: str = ""       # path to one reconstructed frame, for the demo
+    dataset: str = ""              # dataset this run belongs to (e.g. "Xiph-CIF-natural")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
