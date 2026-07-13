@@ -562,33 +562,36 @@ class ELICModel(CompressionModel):
 # Loading utilities
 # ---------------------------------------------------------------------------
 
-def load_elic_model(quality: int, device: str = "cpu") -> ELICModel:
-    """Load a pretrained ELIC model for the given quality level.
+def load_elic_model(quality: int, device: str = "cpu", checkpoint_path: str | None = None) -> ELICModel:
+    """Load an ELIC model for the given quality level.
 
-    Parameters
-    ----------
-    quality : int
-        Quality level (1-6). Only levels with downloaded checkpoints work.
-    device : str
-        Target device.
+    If ``checkpoint_path`` is given, load that trained state_dict instead of the
+    pretrained Google-Drive checkpoint (checkpoint→eval hook: use a model trained
+    via scripts/train_model.py). Otherwise load the pretrained checkpoint.
 
     Returns
     -------
     ELICModel in eval mode with updated entropy model.
     """
-    if quality not in ELIC_CHECKPOINTS:
-        raise ValueError(f"ELIC quality {quality} not in registry. "
-                         f"Available: {sorted(ELIC_CHECKPOINTS.keys())}")
+    if checkpoint_path:
+        from pathlib import Path
+        cp = Path(checkpoint_path)
+        if not cp.is_file():
+            raise RuntimeError(f"Trained ELIC checkpoint not found: {cp}")
+        state_dict = torch.load(cp, map_location="cpu", weights_only=False)
+    else:
+        if quality not in ELIC_CHECKPOINTS:
+            raise ValueError(f"ELIC quality {quality} not in registry. "
+                             f"Available: {sorted(ELIC_CHECKPOINTS.keys())}")
+        fname, _ = ELIC_CHECKPOINTS[quality]
+        ckpt_path = ELIC_CKPT_DIR / fname
+        if not ckpt_path.is_file():
+            raise RuntimeError(
+                f"ELIC checkpoint not found: {ckpt_path}\n"
+                f"Download from Google Drive ID: {ELIC_CHECKPOINTS[quality][1]}"
+            )
+        state_dict = torch.load(ckpt_path, map_location="cpu", weights_only=False)
 
-    fname, _ = ELIC_CHECKPOINTS[quality]
-    ckpt_path = ELIC_CKPT_DIR / fname
-    if not ckpt_path.is_file():
-        raise RuntimeError(
-            f"ELIC checkpoint not found: {ckpt_path}\n"
-            f"Download from Google Drive ID: {ELIC_CHECKPOINTS[quality][1]}"
-        )
-
-    state_dict = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     model = ELICModel(N=192, M=320, num_slices=5)
     model.load_state_dict(state_dict)
     model = model.to(device)

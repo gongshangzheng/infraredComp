@@ -36,11 +36,36 @@ RECON_DIR = os.path.join(RESULTS_VIDEO_DIR, "recon")
 
 # contour-video 的"模型"= 视频 codec（阶段2 压缩评测用）
 DEFAULT_CODECS = [
-    {"id": "x264", "name": "x264 (H.264/AVC)", "type": "h264", "params": {"encoder": "libx264", "ext": ".mp4"}, "description": "最通用基线 codec"},
-    {"id": "x265", "name": "x265 (HEVC)", "type": "hevc", "params": {"encoder": "libx265", "ext": ".mp4"}, "description": "高压缩比现代 codec"},
-    {"id": "svtav1", "name": "SVT-AV1", "type": "av1", "params": {"encoder": "libsvtav1", "ext": ".mp4"}, "description": "新一代 royalty-free，较慢"},
-    {"id": "vp9", "name": "VP9", "type": "vp9", "params": {"encoder": "libvpx-vp9", "ext": ".webm"}, "description": "Google 开源 codec"},
+    {"id": "x264", "name": "x264 (H.264/AVC)", "type": "h264", "kind": "codec", "params": {"encoder": "libx264", "ext": ".mp4"}, "description": "最通用基线 codec"},
+    {"id": "x265", "name": "x265 (HEVC)", "type": "hevc", "kind": "codec", "params": {"encoder": "libx265", "ext": ".mp4"}, "description": "高压缩比现代 codec"},
+    {"id": "svtav1", "name": "SVT-AV1", "type": "av1", "kind": "codec", "params": {"encoder": "libsvtav1", "ext": ".mp4"}, "description": "新一代 royalty-free，较慢"},
+    {"id": "vp9", "name": "VP9", "type": "vp9", "kind": "codec", "params": {"encoder": "libvpx-vp9", "ext": ".webm"}, "description": "Google 开源 codec"},
 ]
+
+# 基于深度学习的可训练模型（image benchmark；checkpoint→eval 打通：训练产出 .pth 可在评测引用）
+_DL_MODELS = [
+    {"id": "bmshj2018-factorized", "name": "Factorized Prior", "type": "CompressAI", "kind": "dl", "qualities": [1, 4, 8]},
+    {"id": "bmshj2018-hyperprior", "name": "Hyperprior", "type": "CompressAI", "kind": "dl", "qualities": [1, 4, 8]},
+    {"id": "mbt2018-mean", "name": "Mean Scale Hyperprior", "type": "CompressAI", "kind": "dl", "qualities": [1, 4, 8]},
+    {"id": "mbt2018", "name": "Scale Hyperprior", "type": "CompressAI", "kind": "dl", "qualities": [1, 4, 8]},
+    {"id": "cheng2020-anchor", "name": "Channel Autoregressive", "type": "CompressAI", "kind": "dl", "qualities": [1, 4, 6]},
+    {"id": "cheng2020-attn", "name": "Attention-guided", "type": "CompressAI", "kind": "dl", "qualities": [1, 4, 6]},
+    {"id": "ELIC", "name": "ELIC", "type": "ELIC", "kind": "dl", "qualities": [1, 4, 5]},
+]
+
+
+def _trained_checkpoints_for(model_id: str) -> list[str]:
+    """扫 results/training/checkpoints 找该 DL 模型的 trained .pth（命名约定 {model_id}__...）。"""
+    from server.config import CHECKPOINTS_DIR
+    if not os.path.isdir(CHECKPOINTS_DIR):
+        return []
+    out = []
+    for fn in os.listdir(CHECKPOINTS_DIR):
+        if fn.startswith('.') or not fn.endswith('.pth'):
+            continue
+        if fn.startswith(model_id + "__"):
+            out.append(f"checkpoints/{fn}")
+    return sorted(out)
 
 
 def _dataset_from_filename(name: str) -> str:
@@ -122,8 +147,11 @@ async def get_methods():
 
 @router.get("/models")
 async def get_models():
-    """列出可用 codec（contour-video 的"模型"= 阶段2 压缩 codec）。"""
-    return DEFAULT_CODECS
+    """列出可用模型：codec（视频压缩）+ DL 模型（image learned，可训练，带 trained checkpoint）。"""
+    out = list(DEFAULT_CODECS)
+    for m in _DL_MODELS:
+        out.append({**m, "checkpoint": _trained_checkpoints_for(m["id"])})
+    return out
 
 
 @router.get("/models/{model_id}")
@@ -213,11 +241,40 @@ async def get_config_detail(config_id: str):
 
 @router.post("/run")
 async def run_evaluation(data: dict = Body(...)):
-    """异步触发 scripts/run_osu_baseline.py，立即返回 started。
+    """触发评测。
 
-    结果不在此返回——写入 results/video/results.json 后由 /results 读取，
-    输出码流在 /outputs，前端按需播放。
+    - DL 模型 + checkpoint_id：解析 trained checkpoint 路径（checkpoint→eval 打通），
+      返回可被 image benchmark CLI 使用的路径（learned.py/elic_model.py 支持 checkpoint_path override）。
+    - codec（视频）：异步触发 scripts/run_osu_baseline.py，结果写 results/video/results.json。
     """
+    model_id = data.get("model_id") or data.get("codec")
+    checkpoint_id = data.get("checkpoint_id")
+    # 是 DL 模型？
+    dl = next((m for m in _DL_MODELS if m["id"] == model_id), None)
+    if dl and checkpoint_id:
+        # 解析 checkpoint 路径（checkpoint_id 可能是 "checkpoints/foo.pth" 或 stem）
+        from server.config import CHECKPOINTS_DIR
+        cand = checkpoint_id
+        if not cand.endswith(".pth") and not cand.startswith("checkpoints/"):
+            cand = f"checkpoints/{cand}.pth"
+        rel = cand[len("checkpoints/"):] if cand.startswith("checkpoints/") else cand
+        full = os.path.join(CHECKPOINTS_DIR, rel)
+        if not os.path.isfile(full):
+            return {"status": "error", "config": data, "output_video": None, "metrics": None,
+                    "note": f"trained checkpoint 未找到: {cand}"}
+        return {
+            "status": "checkpoint_resolved",
+            "config": data,
+            "output_video": None,
+            "metrics": None,
+            "checkpoint": cand,
+            "checkpoint_path": full,
+            "note": (f"DL 模型 {model_id} 将使用 trained checkpoint {cand} 评测。"
+                     f"image benchmark CLI: python -m benchmark --learned {model_id} "
+                     f"--quality {data.get('quality', dl['qualities'][0])} --checkpoint {full}"),
+        }
+
+    # codec（视频 baseline）
     script = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts", "run_osu_baseline.py")
     try:
         proc = subprocess.Popen(["python3", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

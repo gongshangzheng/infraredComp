@@ -17,6 +17,13 @@ RESULTS_VIDEO_JSON = os.path.join(RESULTS_VIDEO_DIR, "results.json")
 # 评测输出根目录（压缩码流 bitstreams/ + 重建视频 recon/），供 /api/evaluation/outputs 按需服务
 OUTPUTS_DIR = RESULTS_VIDEO_DIR
 
+# 训练模块路径（镜像 results/video/）
+TRAINING_DIR = os.path.join(BASE_DIR, "results", "training")
+TRAINING_METRICS_JSON = os.path.join(TRAINING_DIR, "metrics.json")
+CHECKPOINTS_DIR = os.path.join(TRAINING_DIR, "checkpoints")
+TRAINING_LOGS_DIR = os.path.join(TRAINING_DIR, "logs")
+TRAINING_OUTPUTS_DIR = TRAINING_DIR
+
 # 论文数据库路径(本地 SQLite)
 PAPERS_DB = os.path.join(BASE_DIR, "data", "papers.db")
 
