@@ -3,6 +3,12 @@
     <n-card title="评测配置与运行" size="small">
       <n-spin :show="loading">
         <n-form ref="formRef" :model="form" label-placement="left" :label-width="100" style="max-width: 600px">
+          <n-form-item label="评测模式">
+            <n-radio-group v-model:value="form.mode">
+              <n-radio value="speed">speed run(少量视频,看主观)</n-radio>
+              <n-radio value="formal">formal test(全量,看平均指标)</n-radio>
+            </n-radio-group>
+          </n-form-item>
           <n-form-item label="选择模型" required>
             <n-select v-model:value="form.model_id" :options="modelOptions" placeholder="请选择模型" />
           </n-form-item>
@@ -15,6 +21,15 @@
           </n-form-item>
           <n-form-item label="提取方法" required>
             <n-select v-model:value="form.method" :options="methodOptions" placeholder="选择轮廓提取方法 (canny/sobel)" />
+          </n-form-item>
+          <n-form-item label="codecs">
+            <n-select v-model:value="form.codecs" :options="codecOptions" multiple placeholder="默认全部(x264/x265/svtav1/vp9)" />
+          </n-form-item>
+          <n-form-item label="CRFs">
+            <n-select v-model:value="form.crfs" :options="crfOptions" multiple placeholder="默认 18,23,28,33" />
+          </n-form-item>
+          <n-form-item v-if="form.mode === 'speed'" label="序列子集">
+            <n-input v-model:value="form.sequences" placeholder="逗号分隔 stem,如 akiyo_cif,bus_cif(空=全量)" />
           </n-form-item>
           <n-form-item label="选择数据集" required>
             <n-select v-model:value="form.dataset_id" :options="datasetOptions" placeholder="请选择数据集" />
@@ -61,10 +76,12 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { NCard, NSpin, NForm, NFormItem, NSelect, NInputNumber, NRadioGroup, NRadio, NInput, NButton, NAlert, NDescriptions, NDescriptionsItem, useMessage } from 'naive-ui'
 import { getModels, getDatasets, getEvalConfigs, getMethods, runEvaluation, getOutputUrl } from '../../api/evaluation'
 
 const message = useMessage()
+const router = useRouter()
 const loading = ref(false)
 const running = ref(false)
 const models = ref([])
@@ -72,7 +89,7 @@ const datasets = ref([])
 const configs = ref([])
 const methods = ref([])
 const runResult = ref(null)
-const form = ref({ model_id: null, method: 'canny', dataset_id: null, config_id: null, batch_size: 8, device: 'cuda', extra_args: '', checkpoint_id: null, quality: null })
+const form = ref({ mode: 'speed', model_id: null, method: 'canny', codecs: [], crfs: [], sequences: '', dataset_id: null, config_id: null, batch_size: 8, device: 'cuda', extra_args: '', checkpoint_id: null, quality: null })
 
 const selectedModel = computed(() => models.value.find(m => m.id === form.value.model_id) || null)
 const modelOptions = computed(() => models.value.map(m => ({ label: `${m.name} (${m.type}${m.kind === 'dl' ? ' · DL' : ''})`, value: m.id })))
@@ -81,6 +98,8 @@ const qualityOptions = computed(() => (selectedModel.value?.qualities || []).map
 const methodOptions = computed(() => methods.value.map(m => ({ label: m, value: m })))
 const datasetOptions = computed(() => datasets.value.map(d => ({ label: d.name, value: d.id })))
 const configOptions = computed(() => configs.value.map(c => ({ label: c.name || c.id, value: c.id })))
+const codecOptions = computed(() => models.value.filter(m => m.kind === 'codec').map(m => ({ label: m.id, value: m.id })))
+const crfOptions = [18, 23, 28, 33].map(c => ({ label: 'crf' + c, value: c }))
 
 async function handleRun() {
   if (!form.value.model_id || !form.value.dataset_id) {
@@ -103,7 +122,8 @@ async function handleRun() {
       videoSrc: vid,
       metrics: res?.metrics || null,
     }
-    message.success('评测已完成')
+    message.success('评测已启动,跳转结果页')
+    router.push(form.value.mode === 'speed' ? '/evaluation/speed' : '/evaluation/formal')
   } catch (e) {
     runResult.value = { success: false, output: e.message || '评测执行失败' }
     message.error('评测执行失败')

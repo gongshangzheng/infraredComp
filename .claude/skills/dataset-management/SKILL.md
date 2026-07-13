@@ -66,7 +66,7 @@ export INFRACOMP_DATASETS_DIR=/data/infrared   # 把大数据集放到仓库外(
 - **Per-run dataset 字段**:`VideoCompressionResult.dataset`(data.py),由 `benchmark_codec(..., dataset=...)` 填,`run_benchmark` 透传
 - **Evaluation 聚合**:`server/routers/evaluation.py::_load_results` 扫 `results/video/*.json`,每 run `setdefault("dataset", envelope 或文件名)`
 - **API 过滤**:`GET /api/evaluation/results?dataset=Xiph-CIF-natural` 按 `run.dataset` 过滤(而非 `sequence_name` 别名)
-- **前端选择器**:`EvalResults.vue` 顶部 filter bar 有"数据集" `<n-select>`,选项从 runs distinct `dataset_name` 构建
+- **前端两结果页**:`/evaluation/speed`(SpeedResults,视频网格,filter 含数据集/方法/序列/codec/crf)+ `/evaluation/formal`(FormalResults,2-3 演示视频 + per-(codec,crf) 16 行平均表)。旧 `/evaluation/results`(EvalResults per-run 表)废弃,重定向到 `/evaluation/formal`。两页均有"数据集"选择器(从 runs distinct `dataset_name` 构建)。
 - **回退兼容**:无 `dataset` 的旧 results 文件(`results.json`)被赋 `"default"`
 
 ## 接入新数据集跑 baseline
@@ -86,7 +86,15 @@ uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/raw/xiph_cif 
 
 # 仅阶段 2(复用已有 contour 产物,按方法分子目录)
 uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/contour/demo/canny --skip-extract
+
+# speed run(少量视频子集,--sequences 选 stem 子集;跑完跳 /evaluation/speed 视频网格)
+uv run python scripts/run_natural_baseline.py --sequences akiyo_cif,bus_cif --codecs x264 --crfs 23
+
+# formal test(全量,平均指标;跑完跳 /evaluation/formal)
+uv run python scripts/run_natural_baseline.py --codecs x264,x265,vp9
 ```
+
+两模式评测逻辑统一(一套 stage1+stage2),差异只在 `--sequences` 子集 + 展示页(speed 网格 / formal 平均)。详见 `.claude/skills/contour-video-evaluation/SKILL.md` §3。
 
 ## ffmpeg 来源
 

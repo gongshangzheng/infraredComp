@@ -63,6 +63,8 @@ def main() -> int:
                     help="cap frame count per sequence (useful for slow AV1)")
     ap.add_argument("--skip-download", action="store_true",
                     help="don't invoke the downloader; skip missing y4m")
+    ap.add_argument("--sequences", default=None,
+                    help="comma-separated seq stem subset (e.g. akiyo_cif,bus_cif); default=all")
     args = ap.parse_args()
 
     crfs = [int(c) for c in args.crfs.split(",") if c.strip()]
@@ -75,6 +77,9 @@ def main() -> int:
 
     # ----- Stage 1 per sequence (fault-isolated) -----
     seqs = sorted(XIPH_DIR.glob("*.y4m")) if XIPH_DIR.is_dir() else []
+    if args.sequences:
+        wanted = {s.strip() for s in args.sequences.split(",") if s.strip()}
+        seqs = [s for s in seqs if s.stem in wanted]
     artifacts, used = [], []
     for y4m in seqs:
         try:

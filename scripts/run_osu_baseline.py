@@ -66,6 +66,8 @@ def main() -> int:
                     help="cap frame count per sequence (useful for slow AV1)")
     ap.add_argument("--skip-download", action="store_true",
                     help="don't invoke the downloader; skip missing seqN.mp4")
+    ap.add_argument("--sequences", default=None,
+                    help="comma-separated seq stem subset (e.g. seq1,seq3); default=all")
     args = ap.parse_args()
 
     crfs = [int(c) for c in args.crfs.split(",") if c.strip()]
@@ -77,8 +79,12 @@ def main() -> int:
     config.ensure_dirs()
 
     # ----- Stage 1 per sequence (fault-isolated) -----
+    seq_indices = list(SEQ_RANGE)
+    if args.sequences:
+        wanted = {s.strip() for s in args.sequences.split(",") if s.strip()}
+        seq_indices = [i for i in seq_indices if f"seq{i}" in wanted]
     artifacts, used = [], []
-    for idx in SEQ_RANGE:
+    for idx in seq_indices:
         mp4 = OSU_DIR / f"seq{idx}.mp4"
         if not mp4.exists():
             print(f"  WARN: seq{idx}.mp4 missing, skipping")

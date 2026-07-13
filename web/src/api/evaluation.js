@@ -22,6 +22,7 @@ export const runEvaluation = (data) => request.post('/evaluation/run', data)
 export const getEvalResults = (params) => request.get('/evaluation/results', { params })
 export const getEvalResultDetail = (id) => request.get(`/evaluation/results/${id}`)
 export const compareResults = (params) => request.get('/evaluation/results/compare', { params })
+export const getAggregatedResults = (params) => request.get('/evaluation/results/aggregate', { params })
 
 // 输出视频/码流（按需服务）
 export const listOutputs = () => request.get('/evaluation/outputs')

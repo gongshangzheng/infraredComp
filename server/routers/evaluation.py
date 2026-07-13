@@ -14,6 +14,7 @@
 import os
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Body
@@ -274,17 +275,42 @@ async def run_evaluation(data: dict = Body(...)):
                      f"--quality {data.get('quality', dl['qualities'][0])} --checkpoint {full}"),
         }
 
-    # codec（视频 baseline）
-    script = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts", "run_osu_baseline.py")
+    # codec（视频 baseline）— 评测逻辑统一(stage1+stage2),按 dataset 选脚本,
+    # 传 codec/crf/method/sequences 子集;mode(speed/formal)只影响 seq 子集 + 展示页,不在跑代码分叉。
+    dataset_id = data.get("dataset_id") or ""
+    scripts_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts")
+    if "xiph_cif" in dataset_id:
+        script = os.path.join(scripts_dir, "run_natural_baseline.py")
+    elif "osu_color_thermal" in dataset_id:
+        script = os.path.join(scripts_dir, "run_osu_baseline.py")
+    else:
+        # 通用 fallback:默认走自然视频 baseline
+        script = os.path.join(scripts_dir, "run_natural_baseline.py")
+
+    def _join_list(v):
+        return ",".join(str(x) for x in v) if isinstance(v, list) else str(v)
+
+    cmd = [sys.executable, script]
+    if data.get("codecs"):
+        cmd += ["--codecs", _join_list(data["codecs"])]
+    if data.get("crfs"):
+        cmd += ["--crfs", _join_list(data["crfs"])]
+    if data.get("method"):
+        cmd += ["--method", data["method"]]
+    if data.get("sequences"):
+        cmd += ["--sequences", _join_list(data["sequences"])]
+
     try:
-        proc = subprocess.Popen(["python3", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return {
             "status": "started",
             "pid": proc.pid,
             "config": data,
             "output_video": None,
             "metrics": None,
-            "note": "baseline 后台运行中；完成后结果见 /evaluation/results，输出码流见 /evaluation/outputs。",
+            "cmd": " ".join(cmd),
+            "note": f"baseline 后台运行中({os.path.basename(script)});完成后结果见 /evaluation/results,输出码流见 /evaluation/outputs。",
         }
     except FileNotFoundError:
         return {
@@ -340,6 +366,23 @@ async def compare_results(models: str = None, datasets: str = None):
     for r in runs:
         grouped.setdefault(r.get("model_name", "?"), []).append(r)
     return {"codecs": grouped}
+
+
+@router.get("/results/aggregate")
+async def aggregate_results(dataset: str = None, method: str = None):
+    """per-(codec,crf) 平均(跨所有 seq),formal test 视图用。复用 aggregate_by_codec_crf。"""
+    from types import SimpleNamespace
+    from benchmark.video.aggregate import aggregate_by_codec_crf
+    data = _load_results()
+    runs = data.get("runs", [])
+    if dataset:
+        runs = [r for r in runs if (r.get("dataset") or r.get("sequence_name")) == dataset]
+    if method:
+        runs = [r for r in runs if r.get("method") == method]
+    fields = ["codec", "codec_family", "crf", "psnr", "ssim", "bitrate_kbps", "bpp",
+              "compression_ratio", "enc_fps", "dec_fps", "temporal_metric", "compressed_bytes"]
+    objs = [SimpleNamespace(**{k: r.get(k) for k in fields}) for r in runs]
+    return aggregate_by_codec_crf(objs)
 
 
 @router.get("/results/{result_id}")

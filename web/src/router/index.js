@@ -112,9 +112,9 @@ const routes = [
         meta: { title: '数据源配置', module: 'papers' },
       },
 
-      // ===== evaluation 评测子页（取代原单页 /benchmark）=====
-      { path: 'benchmark', redirect: '/evaluation/results' },  // 旧链兼容
-      { path: 'evaluation', redirect: '/evaluation/results' },
+      // ===== evaluation 评测子页(两模式:speed 视频网格 / formal 平均指标)=====
+      { path: 'benchmark', redirect: '/evaluation/formal' },  // 旧链兼容
+      { path: 'evaluation', redirect: '/evaluation/formal' },
       {
         path: 'evaluation/run',
         name: 'EvalRun',
@@ -122,14 +122,21 @@ const routes = [
         meta: { title: '评测运行', module: 'evaluation' },
       },
       {
-        path: 'evaluation/results',
-        name: 'EvalResults',
-        component: () => import('../views/evaluation/EvalResults.vue'),
-        meta: { title: '评测结果', module: 'evaluation' },
+        path: 'evaluation/speed',
+        name: 'SpeedResults',
+        component: () => import('../views/evaluation/SpeedResults.vue'),
+        meta: { title: '快速评测', module: 'evaluation' },
       },
-      // 评测结果页已合并「方法对比 + 查看输出」，旧链 redirect 回结果页
-      { path: 'evaluation/compare', redirect: '/evaluation/results' },
-      { path: 'evaluation/outputs', redirect: '/evaluation/results' },
+      {
+        path: 'evaluation/formal',
+        name: 'FormalResults',
+        component: () => import('../views/evaluation/FormalResults.vue'),
+        meta: { title: '正式评测', module: 'evaluation' },
+      },
+      // 旧 /results/compare/outputs 链 redirect 到 formal
+      { path: 'evaluation/results', redirect: '/evaluation/formal' },
+      { path: 'evaluation/compare', redirect: '/evaluation/formal' },
+      { path: 'evaluation/outputs', redirect: '/evaluation/formal' },
       {
         path: 'evaluation/models',
         name: 'ModelManage',

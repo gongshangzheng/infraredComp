@@ -50,15 +50,27 @@ export INFRACOMP_DATASETS_DIR=/data/infrared   # 把大数据集放到仓库外(
 ## 接入新数据集
 
 ```bash
-# 视频
+# 视频(含 .y4m,自然视频如 Xiph)
 uv run python -m benchmark.video --input /path/to/video.mp4 --method canny
+uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/raw/xiph_cif/akiyo_cif.y4m --method canny
 
 # 帧目录(如 FLIR 的 thermal_8_bit)
 uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/FLIR_ADAS_1_3/video/thermal_8_bit --method canny --extract-only
 
-# 仅阶段2(复用已有 contour 产物)
-uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/contour/demo --skip-extract
+# 整个 Xiph 目录(自动 glob *.y4m,多序列累积)
+uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/raw/xiph_cif --method canny
+
+# 仅阶段2(复用已有 contour 产物,按方法分子目录)
+uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/contour/demo/canny --skip-extract
 ```
+
+## 评测两模式(speed run / formal test)
+
+评测逻辑统一(stage1+stage2),差异只在数据集子集 + 展示页:
+- **speed run**:`run_natural_baseline.py --sequences akiyo_cif,bus_cif --codecs x264 --crfs 23`(少量 seq 子集)→ `/evaluation/speed` 视频网格。
+- **formal test**:`run_natural_baseline.py --codecs x264,x265,vp9`(全量)→ `/evaluation/formal` per-(codec,crf) 平均表。
+
+详见 `.claude/skills/contour-video-evaluation/SKILL.md`。
 
 `--input` 接受视频文件或帧目录(`benchmark/video/stage1_extract.py::resolve_input`)。
 

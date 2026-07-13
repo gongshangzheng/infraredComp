@@ -1,163 +1,146 @@
 ---
 name: contour-video-evaluation
 description: |
-  Contour-Video 轮廓视频压缩评测库(benchmark/video/)使用指南。用于两阶段轮廓视频压缩评测:阶段1提取轮廓帧、阶段2用标准视频 codec 压缩并评测。
-  触发场景：(1) 从原始视频提取轮廓视频(阶段1) (2) 跑视频 codec 压缩评测(阶段2) (3) 跑 verify 端到端自检 (4) 查看/调整 results.json 结果格式 (5) 增删 codec 或提取器/调整 CRF
+  Contour-Video 轮廓视频压缩评测库(benchmark/video/)使用指南,含两模式评测(speed run 视频网格 / formal test 平均指标)。用于两阶段轮廓视频压缩评测:阶段1提取轮廓帧、阶段2用标准视频 codec 压缩并评测。
+  触发场景:(1) 从原始视频提取轮廓视频(阶段1) (2) 跑视频 codec 压缩评测(阶段2,支持 --sequences 子集) (3) speed run(少量视频,视频网格看主观) (4) formal test(全量,per-(codec,crf) 平均指标) (5) 跑 verify 端到端自检 (6) 查看/调整 results 结果格式 / aggregate 端点
 ---
 
 # Contour-Video 轮廓视频压缩评测库
 
-本 skill 提供 `benchmark/video/` 库的完整使用与基准测试指南。库位于**仓库根**下的 `benchmark/video/`(infraredComp 项目)。所有路径相对仓库根;先 `cd` 到含 `pyproject.toml` 的仓库根再运行命令,或用 `$(git rev-parse --show-toplevel)` 定位。
+本 skill 提供 `benchmark/video/` 库 + 评测前端两模式的完整使用指南。库位于仓库根 `benchmark/video/`。所有路径相对仓库根;先 `cd` 到含 `pyproject.toml` 的仓库根再运行命令。
 
 ## 项目结构
 
 ```text
 infraredComp/benchmark/video/
 ├── config.py            # 路径常量(datasets/raw|contour, results/video)
-├── ffmpeg_util.py       # ffmpeg/ffprobe 发现 + run_ffmpeg + probe
-├── data.py              # ContourArtifact / VideoCompressionResult 数据类
-├── extractors/          # 阶段1 可插拔提取器
-│   ├── base.py          # ContourExtractor ABC + EXTRACTOR_REGISTRY + register/build_extractor
-│   ├── canny.py         # @register("canny")
-│   └── sobel.py         # @register("sobel")
-├── stage1_extract.py    # resolve_input/demux_to_frames/extract_contour_video/load_contour_frames
-├── codecs/              # 阶段2 视频 codec
-│   ├── base.py          # VideoCodec ABC + CODEC_REGISTRY + build_codec
-│   ├── x264.py x265.py svtav1.py vp9.py   # 各 @register_codec
-├── stage2_benchmark.py  # benchmark_codec / run_benchmark / save_results_json
-├── metrics.py           # 复用 benchmark.metrics + per_frame_quality/temporal_consistency/fps_from_timed
-├── aggregate.py         # 唯一共享聚合器(snake_case) + aggregate_rd_curve + bests
-├── visualize.py         # 图表 + CSV/Markdown
-├── html_report.py       # report.html(模板 video_report_template.html)
+├── ffmpeg_util.py       # ffmpeg/ffprobe 发现(INFRACOMP_FFMPEG_BIN → PATH → static_ffmpeg fallback)
+├── data.py              # ContourArtifact / VideoCompressionResult(含 dataset 字段)
+├── extractors/          # 阶段1 可插拔提取器(canny/sobel,@register)
+├── stage1_extract.py    # resolve_input/expand_inputs(支持 .y4m + 目录 glob)/extract_contour_video
+├── codecs/              # 阶段2 视频 codec(x264/x265/svtav1/vp9,@register)
+├── stage2_benchmark.py  # benchmark_codec/run_benchmark/save_results_json(支持 save= + path= + metadata=)
+├── metrics.py           # PSNR/SSIM/时序一致性
+├── aggregate.py         # aggregate_by_codec + aggregate_by_codec_crf(per-(codec,crf) 平均)+ aggregate_rd_curve + bests
+├── repro.py             # build_metadata(git_sha/codecs/crfs/dataset envelope)
+├── visualize.py / html_report.py  # 图表 + report.html
 ├── artifact_io.py      # load_artifact(从 manifest 重建 ContourArtifact)
-├── __main__.py          # CLI
+├── __main__.py          # CLI(--input 可重复 + 目录 glob,多序列累积)
 └── verify.py            # 端到端自检(合成小视频)
 ```
 
 ## 安装
 
 ```bash
-cd <repo-root>                          # 含 pyproject.toml 的仓库根
+cd <repo-root>
 uv sync                                   # 安装依赖(含 torch/compressai/opencv)
-ffmpeg -version                           # 需带 libx264/libx265/libsvtav1/libvpx
+# ffmpeg:无需系统安装,`uv add static-ffmpeg` 内置 ffmpeg+ffprobe(static_ffmpeg fallback);
+#         或设 INFRACOMP_FFMPEG_BIN 指向 ffmpeg.exe。static-ffmpeg win32 不含 libsvtav1。
 ```
 
-数据目录约定:`datasets/raw/`(用户原始视频)、`datasets/contour/<source>/`(阶段1 产物)、`results/video/`(阶段2 产物)。`datasets/` 整目录在 `.gitignore` 内(大数据本地存),不入库。
+数据目录:`datasets/raw/`(原始视频)、`datasets/contour/<source>/<method>/`(阶段1 产物,按方法分目录)、`results/video/`(阶段2 产物,每数据集独立 .json)。`datasets/` 大数据 + `results/video/` 运行产物均不入 git(见 `.gitignore`)。
 
 ## 0. 数据集准备
 
-`datasets/raw/` 里的视频由下载脚本准备(脚本本身入库,产物不入库):
-
 | 脚本 | 数据集 | 产出 |
 |------|--------|------|
-| `scripts/download_osu_color_thermal.py` | OTCBVS Dataset 03(OSU Color-Thermal)热红外 | `datasets/raw/osu_color_thermal/seq{1..6}.mp4` + `manifest.json` |
+| `scripts/download_xiph_natural.py` | **Xiph derf CIF**(自然视频,6 段 352×288 y4m,可达) | `datasets/raw/xiph_cif/<name>_cif.y4m` + `manifest.json` |
+| `scripts/download_osu_color_thermal.py` | OTCBVS Dataset 03(OSU Color-Thermal)热红外(**vcipl-okstate.org 对部分网络 403**) | `datasets/raw/osu_color_thermal/seq{1..6}.mp4` + `manifest.json` |
 | `scripts/download_dataset.py` | FLIR ADAS(红外,via kagglehub) | `datasets/FLIR_ADAS_1_3/` |
 
 ```bash
-# OSU Color-Thermal:6 段热红外序列(320×240,h264/yuv420p/25fps)
-python3 scripts/download_osu_color_thermal.py            # 幂等;--force 重下;--dry-run 预览
-# 跑评测:每段单独喂 stage1
-uv run python -m benchmark.video --input datasets/raw/osu_color_thermal/seq1.mp4 \
-  --method canny --crfs 18,23,28,33
+# Xiph CIF(推荐,自然视频,公开可达):
+uv run python scripts/download_xiph_natural.py            # 6 段 CIF y4m(akiyo/bus/city/flower/foreman/mobile);--force 重下;--dry-run 预览
 ```
-
-baseline 选型与样本量说明见博客 `infrared-compression-datasets-survey`:OSU Color-Thermal 6 段够做方向性 baseline,正式结论建议扩到 ~12-16 段(补 BU-TIV / FLIR ADAS)。
 
 ## 1. 阶段1 提取轮廓视频
 
 ```bash
-# 从 mp4 提取 canny 轮廓,限 30 帧
-uv run python -m benchmark.video --input datasets/raw/xxx.mp4 --method canny --frames 30 --extract-only
+# 从 mp4/y4m 提取 canny 轮廓,限 30 帧
+uv run python -m benchmark.video --input datasets/raw/xiph_cif/akiyo_cif.y4m --method canny --frames 30 --extract-only
 
-# 从帧目录提取 sobel 轮廓
-uv run python -m benchmark.video --input datasets/raw/frames_dir --method sobel --extract-only
+# 整个 xiph_cif 目录(自动 glob *.y4m,多序列累积)
+uv run python -m benchmark.video --input datasets/raw/xiph_cif --method canny --extract-only
 ```
 
-产出:`datasets/contour/<source_name>/frame_%06d.png`(无损灰度)+ `manifest.json`。
-
-| manifest 字段 | 类型 | 说明 |
-|------|------|------|
-| source_name | str | 原始视频名(stem) |
-| method | str | 提取器名(canny/sobel) |
-| frame_count | int | 帧数 |
-| fps | float | 视频帧率(帧目录默认 25,可用 `--fps` 覆盖) |
-| width/height | int | 轮廓帧尺寸 |
-| duration_s | float | 时长 |
-
-新增提取器:在 `extractors/` 加一个 `@register("name")` 的 `ContourExtractor` 子类,实现 `extract(frame_gray)->uint8`。
+产出:`datasets/contour/<source>/<method>/frame_%06d.png` + `manifest.json`。新增提取器:`extractors/` 加 `@register("name")` 的 `ContourExtractor` 子类,实现 `extract(frame_gray)->uint8`。
 
 ## 2. 阶段2 压缩评测
 
 ```bash
-# 全流程:提取 + 压缩评测(4 codec × 4 CRF)
-uv run python -m benchmark.video --input datasets/raw/xxx.mp4 \
+# 全流程:提取 + 压缩评测(--input 可重复/目录 glob,多序列累积到一个 results.json)
+uv run python -m benchmark.video --input datasets/raw/xiph_cif \
   --method canny --crfs 18,23,28,33 --codecs x264,x265,svtav1,vp9
 
-# 仅阶段2:复用已有轮廓视频(--skip-extract 指向 contour 目录)
-uv run python -m benchmark.video --input datasets/contour/demo --skip-extract \
+# 仅阶段2(复用 contour,按方法分子目录)
+uv run python -m benchmark.video --input datasets/contour/akiyo_cif/canny --skip-extract \
   --crfs 23,28 --codecs x264,vp9
 ```
 
-支持的 codec:`x264`(h264/libx264)、`x265`(hevc/libx265)、`svtav1`(av1/libsvtav1)、`vp9`(vp9/libvpx-vp9)。
-CRF 范围 0-63(数值越大质量越低、码率越低);AV1 较慢,用 `--frames` 限帧。
+codec:`x264`(h264)、`x265`(hevc)、`svtav1`(av1,static-ffmpeg 缺则自动跳过)、`vp9`。CRF 0-63(越大质量越低/码率越低);AV1 慢用 `--frames` 限帧。
 
-## 3. 结果格式(results/video/results.json)
+## 3. 评测两模式(speed run / formal test)
 
-```json
-{ "generated_at": "2026-07-11T...", "runs": [ VideoCompressionResult, ... ] }
+**评测逻辑统一**(一套 stage1+stage2),差异只在数据集子集 + 展示页。两模式都调同一 baseline 脚本(`run_natural_baseline.py` / `run_osu_baseline.py`),通过 CLI 参数控制:
+
+- **speed run**:少量视频,视频网格看主观。传 `--sequences <stem1,stem2>`(seq 子集)+ 少量 codec/crf。跑完跳 `/evaluation/speed`(视频按 codec 分排,每格 `<video preload=none>` 默认黑屏点击加载,filter 缩范围)。
+- **formal test**:全量,平均指标。不传 `--sequences`(全量 seq)+ 全 codec/crf。跑完跳 `/evaluation/formal`(2-3 演示视频小窗口 + per-(codec,crf) 16 行平均表)。
+
+```bash
+# speed run(2 段 × 1 codec × 1 crf,少量视频)
+PYTHONUTF8=1 uv run python scripts/run_natural_baseline.py \
+  --sequences akiyo_cif,bus_cif --codecs x264 --crfs 23
+
+# formal test(全量 6 段 × 3 codec × 4 crf = 72 runs,写 xiph_cif.json)
+PYTHONUTF8=1 uv run python scripts/run_natural_baseline.py \
+  --codecs x264,x265,vp9
 ```
 
-| VideoCompressionResult 字段 | 类型 | 说明 |
-|------|------|------|
-| id | str | `{sequence}|{codec}|crf{crf}` |
-| codec / codec_family / crf | str/str/int | codec 名/族/CRF |
-| sequence_name / method | str/str | 轮廓视频名/提取器 |
-| frame_count / fps / width / height | int/float/int/int | 序列信息 |
-| psnr / ssim | float/float | 全序列逐帧均值(dB / [0,1]) |
-| per_frame_psnr / per_frame_ssim | list[float] | 逐帧指标 |
-| bitrate_kbps / bpp / compression_ratio | float | 码率 / 每像素比特 / 压缩比 |
-| compressed_bytes / duration_s | int/float | 码流字节 / 时长 |
-| encode_time_ms / decode_time_ms | float | 编解码耗时(ms,wall-clock) |
-| enc_fps / dec_fps | float | 编解码帧率 |
-| temporal_metric | float | 逐帧 PSNR 标准差(越小越稳) |
-| decoded_sample | str | 一帧重建图路径 |
+`run_*_baseline.py` 支持 `--method`/`--crfs`/`--codecs`/`--frames`/`--sequences`/`--skip-download`;写独立 results 文件(`run_natural`→`results/video/xiph_cif.json`,`run_osu`→`results/video/results.json`),多数据集共存。
 
-## 4. 端到端自检
+**前端**:`/evaluation/run`(EvalRun)顶部 mode 选择器(speed/formal),mode 只影响"数据集子集(--sequences)+ 跳哪个展示页",不在跑代码分叉。`/evaluation/speed`(SpeedResults,视频网格)+ `/evaluation/formal`(FormalResults,平均+演示)。旧 `/evaluation/results`(per-run EvalResults)废弃,重定向到 `/evaluation/formal`。
+
+**后端**:`POST /api/evaluation/run` 接 `dataset_id`/`codecs`/`crfs`/`method`/`sequences`/`mode`,按 dataset 选脚本(xiph_cif→run_natural,osu→run_osu),Popen 传 CLI 参数。
+
+## 4. 结果格式 + 聚合端点
+
+每数据集独立 `results/video/<dataset>.json`:
+```json
+{ "generated_at": "...", "dataset": "Xiph-CIF-natural", "codecs": [...], "crfs": [...], "git_sha": "...", "runs": [ VideoCompressionResult, ... ] }
+```
+每 run 携带 `dataset` 字段(envelope dataset 优先,否则文件名 stem:results.json→"default",xiph_cif.json→"xiph_cif" 兜底;但 run_natural 写 envelope "Xiph-CIF-natural")。
+
+**聚合端点**(formal 用):`GET /api/evaluation/results/aggregate?dataset=&method=` → per-(codec,crf) 16 行平均(复用 `aggregate_by_codec_crf`,跨所有 seq 的 PSNR/SSIM/码率/bpp/fps/压缩比/count)。前端 `getAggregatedResults()` 调用。
+
+`/api/evaluation/results`(聚合 `results/video/*.json`,per-run dataset_name)/`/results/compare`(分组)/`/outputs`(按需视频流)。
+
+## 5. 端到端自检
 
 ```bash
 uv run python -m benchmark.video.verify
 # 合成 even(64×64)+ odd(65×63)视频 → canny → x264/vp9@crf23 → 校验指标/产物 → ALL PASS
 ```
 
-## 5. 增删 codec / 提取器
+## 6. 增删 codec / 提取器
 
-- 新 codec:在 `codecs/` 加 `@register_codec("name")` 的 `VideoCodec` 子类,设 `encoder`(ffmpeg 编码器名)/`family`/`default_preset`/`ext`,按需重写 `encode_args`/`decode_args`。基类已统一 `-pix_fmt yuv420p` + 奇数尺寸 `pad`。
+- 新 codec:`codecs/` 加 `@register_codec("name")` 的 `VideoCodec` 子类,设 `encoder`/`family`/`ext`。基类统一 `-pix_fmt yuv420p` + 奇数尺寸 pad。
 - 新提取器:`extractors/` 加 `@register("name")` 子类,实现 `extract(frame_gray)->uint8`。
 - 均通过注册表自动发现,无需改 CLI。
 
 ## 关键约定
 
-- **统一 `-pix_fmt yuv420p`**:所有 codec 编码统一像素格式(chroma 一致、PSNR 可比),decode 用 `gray` 出单通道 PNG。绝不让各 codec pix_fmt 不同。
-- **奇数尺寸**:`encode_args` 自动加 `pad=ceil(iw/2)*2:ceil(ih/2)*2:color=black`,重建帧裁回原 W×H 再算指标。
-- **ground truth 单一读取路径**:`stage1_extract.load_contour_frames(artifact)` 用 `cv2.imread(IMREAD_GRAYSCALE)`。
-- **两阶段解耦**:阶段1 产物(无损 PNG)既是阶段2 输入也是质量基准;`--extract-only`/`--skip-extract` 可独立运行各阶段。
+- **统一 `-pix_fmt yuv420p`**:编码统一像素格式(chroma 一致、PSNR 可比),decode 用 `gray` 出单通道 PNG。
+- **奇数尺寸**:`encode_args` 自动 pad 到偶,重建裁回原 W×H 再算指标。
+- **per-run dataset**:每 run 携带所属数据集名;evaluation 聚合多数据集 results 文件,按 dataset 过滤。
+- **两阶段解耦**:阶段1 产物(无损 PNG + manifest)既是阶段2 输入也是质量基准;`--extract-only`/`--skip-extract` 独立运行。
+- **评测逻辑统一**:speed/formal 不在跑代码分叉,只通过 `--sequences` 子集 + 展示页区分。
 
 ## 常用命令
 
 ```bash
-# 自检
-uv run python -m benchmark.video.verify
-
-# 全流程评测
-uv run python -m benchmark.video --input datasets/raw/xxx.mp4 --method canny --crfs 18,23,28,33
-
-# 仅阶段1
-uv run python -m benchmark.video --input datasets/raw/xxx.mp4 --method sobel --extract-only
-
-# 仅阶段2(复用 contour)
-uv run python -m benchmark.video --input datasets/contour/demo --skip-extract --codecs x264,vp9
-
-# 查看结果
-cat results/video/results.json | python3 -m json.tool | head -40
-ls results/video/charts/
+uv run python -m benchmark.video.verify                          # 自检
+uv run python -m benchmark.video --input datasets/raw/xiph_cif --method canny  # 全流程(目录 glob 多序列)
+uv run python scripts/run_natural_baseline.py --codecs x264,x265,vp9           # formal 全量 baseline
+uv run python scripts/run_natural_baseline.py --sequences akiyo_cif --codecs x264 --crfs 23  # speed 少量
+# 前端:访问 /evaluation/speed(视频网格)+ /evaluation/formal(平均指标)
 ```
