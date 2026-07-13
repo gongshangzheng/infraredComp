@@ -42,11 +42,15 @@ frontend.log
 data/*.db
 papers/cache/
 
-# Benchmark runtime outputs (regenerate by running baselines; ignore large binary dirs)
+# Benchmark runtime outputs (regenerate by running baselines; ignore ALL of them)
 results/video/*.json
+results/video/*.csv
+results/video/*.md
+results/video/*.html
 results/video/bitstreams/
 results/video/recon/
 results/video/_raw_frames/
+results/video/charts/
 
 # Debug screenshots
 papers-with-previews.png
