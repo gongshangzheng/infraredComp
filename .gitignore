@@ -13,6 +13,7 @@ datasets/**/*.mov
 datasets/**/*.mkv
 datasets/**/*.m4v
 datasets/**/*.webm
+datasets/**/*.y4m
 datasets/**/*.png
 datasets/**/*.jpg
 datasets/**/*.jpeg
@@ -41,7 +42,8 @@ frontend.log
 data/*.db
 papers/cache/
 
-# Benchmark runtime outputs (keep results.json + charts + report; ignore large binary dirs)
+# Benchmark runtime outputs (regenerate by running baselines; ignore large binary dirs)
+results/video/*.json
 results/video/bitstreams/
 results/video/recon/
 results/video/_raw_frames/
