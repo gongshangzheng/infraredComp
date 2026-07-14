@@ -15,6 +15,7 @@ models 契约的 checkpoint 字段 + learned.py/elic_model.py 的 checkpoint_pat
 """
 import os
 import json
+import sys
 import time
 import subprocess
 
@@ -37,13 +38,15 @@ _COMPRESSAI_MODELS = [
     {"id": "cheng2020-anchor", "name": "Channel Autoregressive", "架构": "CompressAI", "qualities": [1, 4, 6]},
     {"id": "cheng2020-attn", "name": "Attention-guided", "架构": "CompressAI", "qualities": [1, 4, 6]},
     {"id": "ELIC", "name": "ELIC", "架构": "ELIC (CVPR2022)", "qualities": [1, 4, 5]},
+    {"id": "ssf2020", "name": "SSF2020 (video)", "架构": "CompressAI video", "qualities": [1, 3, 5, 7, 9]},
 ]
 
-# 训练数据集（FLIR thermal splits + OSU 帧）
+# 训练数据集（imagenet train 在线提边缘；FLIR thermal 离线提取轮廓）
+# imagenet 三 split 分工：train→训练（此处），val→评测 speed run，test→评测 formal。
 _DEFAULT_DATASETS = [
-    {"id": "flir/train", "name": "FLIR thermal train", "split": "train", "num_samples": "?", "modalities": ["thermal_16bit"], "description": "FLIR ADAS thermal_16_bit 训练 split"},
-    {"id": "flir/val", "name": "FLIR thermal val", "split": "val", "num_samples": "?", "modalities": ["thermal_16bit"], "description": "FLIR ADAS thermal_16_bit 验证 split"},
-    {"id": "osu_frames", "name": "OSU Color-Thermal 帧", "split": "train", "num_samples": "?", "modalities": ["thermal_8bit"], "description": "datasets/raw/osu_color_thermal 抽帧"},
+    {"id": "imagenet-train", "name": "ImageNet train（在线提边缘）", "split": "train", "num_samples": "1.28M", "modalities": ["rgb"], "description": "ImageNet-1k train parquet，训练时在线提边缘轮廓（不落地），按 --shards/--max-images 采样一部分图"},
+    {"id": "flir/train", "name": "FLIR thermal train", "split": "train", "num_samples": "?", "modalities": ["thermal_16bit"], "description": "FLIR ADAS thermal_16_bit 训练 split（先离线提取轮廓再训）"},
+    {"id": "flir/val", "name": "FLIR thermal val", "split": "val", "num_samples": "?", "modalities": ["thermal_16bit"], "description": "FLIR ADAS thermal_16_bit 验证 split（先离线提取轮廓再训）"},
 ]
 
 _DEFAULT_CONFIGS = [
@@ -98,7 +101,7 @@ async def get_models():
         out.append({
             "id": m["id"], "name": m["name"], "架构": m["架构"],
             "qualities": m["qualities"],
-            "pretrained": "CompressAI zoo (~/.cache/torch/hub)" if m["架构"] == "CompressAI" else "ELIC Google Drive (~/.cache/.../elic)",
+            "pretrained": "CompressAI zoo (~/.cache/torch/hub)" if "CompressAI" in m["架构"] else "ELIC Google Drive (~/.cache/.../elic)",
             "trained_checkpoint": _trained_checkpoints_for(m["id"]),
         })
     return out
@@ -167,7 +170,7 @@ async def run_training(data: dict = Body(...)):
     """
     run_id = f"{data.get('model_id', 'model')}__q{data.get('quality', 0)}__{int(time.time())}"
     script = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts", "train_model.py")
-    args = ["python3", script,
+    args = [sys.executable, script,
             "--model", str(data.get("model_id", "")),
             "--quality", str(data.get("quality", 3)),
             "--dataset", str(data.get("dataset_id", "flir/train")),
@@ -176,7 +179,17 @@ async def run_training(data: dict = Body(...)):
             "--batch", str(data.get("batch_size", 16)),
             "--lambda", str(data.get("lamb", 0.01)),
             "--device", str(data.get("device", "cuda")),
+            "--method", str(data.get("method", "canny")),
+            "--shards", str(data.get("shards", 4)),
+            "--max-images", str(data.get("max_images", 0)),
+            "--size", str(data.get("size", 128)),
             "--run-id", run_id]
+    # 视频模型（ssf2020）专用参数：序列长度 / 最大序列数 / warm-start
+    if str(data.get("model_id")) == "ssf2020":
+        args += ["--seq-len", str(data.get("seq_len", 4)),
+                 "--max-sequences", str(data.get("max_sequences", 64))]
+        if not data.get("warm_start", True):
+            args.append("--no-warm-start")
     if data.get("extra_args"):
         args += data["extra_args"].split()
     try:

@@ -9,11 +9,26 @@
           <n-form-item label="选择数据集" required>
             <n-select v-model:value="form.dataset_id" :options="datasetOptions" placeholder="训练数据集" />
           </n-form-item>
+          <n-form-item label="提取方法" required>
+            <n-select v-model:value="form.method" :options="methodOptions" placeholder="边缘提取方法" />
+            <span class="hint" style="margin-left:8px">{{ isImagenet ? 'imagenet 在线提边缘（不落地）' : '离线提取轮廓（已提取则跳过）' }}</span>
+          </n-form-item>
+          <n-form-item v-if="isVideo" label="序列长度">
+            <n-input-number v-model:value="form.seq_len" :min="1" :max="32" />
+            <span class="hint" style="margin-left:8px">ssf2020 每个样本的连续帧数</span>
+          </n-form-item>
+          <n-form-item v-if="isVideo" label="最大序列数">
+            <n-input-number v-model:value="form.max_sequences" :min="1" :max="2048" :step="8" />
+          </n-form-item>
+          <n-form-item v-if="isVideo" label="Warm Start">
+            <n-switch v-model:value="form.warm_start" />
+            <span class="hint" style="margin-left:8px">用 pretrained 初始化再 fine-tune（关掉则从 scratch）</span>
+          </n-form-item>
           <n-form-item label="训练配置">
             <n-select v-model:value="form.config_id" :options="configOptions" placeholder="超参 preset（可选）" clearable />
           </n-form-item>
           <n-form-item label="Quality">
-            <n-input-number v-model:value="form.quality" :min="1" :max="8" />
+            <n-input-number v-model:value="form.quality" :min="1" :max="isVideo ? 9 : 8" />
           </n-form-item>
           <n-form-item label="Epochs">
             <n-input-number v-model:value="form.epochs" :min="1" :max="1000" />
@@ -57,8 +72,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
-import { NCard, NSpin, NForm, NFormItem, NSelect, NInputNumber, NRadioGroup, NRadio, NInput, NButton, NAlert, NCode, useMessage } from 'naive-ui'
+import { ref, onMounted, computed, watch } from 'vue'
+import { NCard, NSpin, NForm, NFormItem, NSelect, NInputNumber, NSwitch, NRadioGroup, NRadio, NInput, NButton, NAlert, NCode, useMessage } from 'naive-ui'
 import { getTrainModels, getTrainDatasets, getTrainConfigs, runTraining } from '../../api/training'
 
 const message = useMessage()
@@ -68,11 +83,44 @@ const models = ref([])
 const datasets = ref([])
 const configs = ref([])
 const runResult = ref(null)
-const form = ref({ model_id: null, dataset_id: null, config_id: null, quality: 3, epochs: 100, lr: 1e-4, batch_size: 16, lamb: 0.01, device: 'cuda', extra_args: '' })
+const form = ref({ model_id: null, dataset_id: null, config_id: null, quality: 3, epochs: 100, lr: 1e-4, batch_size: 16, lamb: 0.01, device: 'cuda', method: 'canny', size: 128, seq_len: 4, max_sequences: 64, warm_start: true, extra_args: '' })
+
+// 下拉框跨浏览器刷新(F5)持久化（不清空）
+const FORM_STORE_KEY = 'infracomp:train-run'
+const PERSIST_FIELDS = ['model_id', 'dataset_id', 'config_id', 'method']
+function persistForm() {
+  try {
+    const snap = {}
+    for (const k of PERSIST_FIELDS) snap[k] = form.value[k]
+    localStorage.setItem(FORM_STORE_KEY, JSON.stringify(snap))
+  } catch { /* localStorage 不可用静默 */ }
+}
+function restoreForm() {
+  try {
+    const snap = JSON.parse(localStorage.getItem(FORM_STORE_KEY) || '{}')
+    for (const k of PERSIST_FIELDS) if (snap[k] != null) form.value[k] = snap[k]
+  } catch { /* ignore */ }
+}
+watch(() => [form.value.model_id, form.value.dataset_id, form.value.config_id, form.value.method], persistForm)
+restoreForm()
 
 const modelOptions = computed(() => models.value.map(m => ({ label: `${m.name || m.id} (${m.架构 || m.type || '?'})`, value: m.id })))
 const datasetOptions = computed(() => datasets.value.map(d => ({ label: d.name || d.id, value: d.id })))
 const configOptions = computed(() => configs.value.map(c => ({ label: c.name || c.id, value: c.id })))
+const methodOptions = [{ label: 'canny', value: 'canny' }, { label: 'sobel', value: 'sobel' }, { label: 'hed', value: 'hed' }]
+const isImagenet = computed(() => String(form.value.dataset_id || '').startsWith('imagenet-'))
+const isVideo = computed(() => form.value.model_id === 'ssf2020')
+
+// 选中「训练配置」preset 时把其超参回填到表单（仅覆盖 preset 含的字段）。
+watch(() => form.value.config_id, (cfgId) => {
+  if (!cfgId) return
+  const cfg = configs.value.find(c => c.id === cfgId)
+  if (!cfg) return
+  const fields = { epochs: 'epochs', lr: 'lr', batch_size: 'batch_size', lambda: 'lamb', quality: 'quality' }
+  for (const [src, dst] of Object.entries(fields)) {
+    if (cfg[src] != null) form.value[dst] = cfg[src]
+  }
+})
 
 async function handleRun() {
   if (!form.value.model_id || !form.value.dataset_id) {

@@ -112,6 +112,86 @@ def _is_video_model(model_id: str) -> bool:
     return model_id == "ssf2020"
 
 
+# ---- 统一训练数据集解析（imagenet 在线 / 离线 contour 自动提取+skip）-------- #
+
+def _ensure_contour_dir(dataset_id: str, method: str) -> Path:
+    """对离线数据集（flir/osu/xiph/视频），若 contour 产物不存在则提取到
+    datasets/contour/<source>/<method>/（skip-if-exists），返回该 contour 目录。
+
+    imagenet/contour 路径直接传入的不触发提取。返回 contour 目录 Path。
+    """
+    from benchmark.video import config as vconfig
+    from benchmark.video.stage1_extract import extract_contour_video
+
+    # 已是 contour 目录路径或绝对目录：直接用
+    if dataset_id.startswith("contour/"):
+        return DATASETS_DIR / dataset_id
+    cand = Path(dataset_id)
+    if cand.is_absolute() and cand.is_dir():
+        return cand
+
+    # raw 数据集 → 定位 raw 输入，提取到 contour/<source>/<method>
+    if dataset_id.startswith("flir/"):
+        split = dataset_id.split("/", 1)[1]
+        raw = DATASETS_DIR / "FLIR_ADAS_1_3" / split / "thermal_16_bit"
+        source = f"flir_{split}"
+    elif dataset_id == "osu_frames":
+        raw = DATASETS_DIR / "raw" / "osu_color_thermal_frames"
+        source = "osu_frames"
+    elif dataset_id.startswith("xiph/"):
+        seq = dataset_id.split("/", 1)[1]
+        raw = DATASETS_DIR / "raw" / "xiph_cif" / f"{seq}.y4m"
+        source = seq
+    else:
+        # 当作字面路径（raw 视频文件或图像目录）
+        raw = Path(dataset_id)
+        source = raw.stem or raw.name
+
+    out_dir = vconfig.CONTOUR_DIR / source / method
+    if not (out_dir / "manifest.json").is_file():
+        log("extract", f"[extract] {dataset_id} -> contour/{source}/{method}（method={method}）")
+    artifact = extract_contour_video(raw, method=method, skip_if_exists=True)
+    return Path(artifact.frames_dir)
+
+
+def resolve_training_dataset(dataset_id: str, method: str, max_images: int, size: int,
+                             shards: int, *, is_video: bool, seq_len: int = 4,
+                             max_sequences: int = 64, num_workers: int = 0) -> Dataset:
+    """按 --dataset 前缀分发到合适的训练 Dataset。
+
+    - imagenet-<split>        → ImageNetContourDataset（parquet 流式在线提边缘，不落地）
+    - 其余（flir/osu/xiph/contour/视频/目录）→ 先确保 contour 目录，再读 PNG 帧
+    """
+    if dataset_id.startswith("imagenet-"):
+        from scripts.imagenet_contour_dataset import (
+            ImageNetContourDataset, ContourPNGDataset, split_from_dataset_id,
+            preextracted_contour_dir,
+        )
+        if is_video:
+            raise RuntimeError("imagenet 仅支持单帧图像压缩模型（非 ssf2020 视频模型）")
+        split = split_from_dataset_id(dataset_id)
+        # 优先走预提取 PNG（快、GPU 喂得满）；无则回退流式在线提取（慢，仅小批量/验证用）
+        png_dir = preextracted_contour_dir(split, method)
+        if (png_dir / "manifest.json").is_file():
+            return ContourPNGDataset(str(png_dir), size=size, max_images=max_images)
+        # 每个 worker 都会各自建一份 dataset 实例（Windows spawn）；按 worker 数缩 row-group
+        # 缓存 cap，把显式缓存总占用压在 ~16GB 内（每 group ~101MB）。
+        nw = max(1, num_workers or 1)
+        rg_cap = 128 if num_workers <= 0 else max(8, 160 // nw)
+        return ImageNetContourDataset(
+            split=split, method=method,
+            max_images=max_images, size=size, shards=shards, rg_cache_cap=rg_cap,
+        )
+
+    # 离线 contour 路径
+    contour_dir = _ensure_contour_dir(dataset_id, method)
+    if is_video:
+        return VideoFrameSequenceDataset(str(contour_dir), seq_len=seq_len,
+                                         max_sequences=max_sequences, size=size)
+    return ThermalFrameDataset(str(contour_dir), max_images=max_images, size=size)
+
+
+
 class VideoFrameSequenceDataset(Dataset):
     """contour 帧序列 -> list[[3,H,W] float [0,1]]（每帧 pad 到 ÷64）。
 
@@ -250,7 +330,10 @@ def load_metrics() -> dict:
 
 def save_metrics(data: dict) -> None:
     METRICS_JSON.parent.mkdir(parents=True, exist_ok=True)
-    METRICS_JSON.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    # 原子写：训练子进程每 epoch 写、server 读并发，避免读到半截 JSON
+    tmp = METRICS_JSON.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    os.replace(tmp, METRICS_JSON)
 
 
 # ---- 主循环 ------------------------------------------------------------- #
@@ -266,8 +349,11 @@ def main() -> int:
     ap.add_argument("--lambda", dest="lamb", type=float, default=0.01)
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--run-id", dest="run_id", required=True)
-    ap.add_argument("--max-images", type=int, default=64)
+    ap.add_argument("--max-images", type=int, default=0, help="<=0 = 不采样、全量参与（默认）；>0 则等间隔采样到该数")
     ap.add_argument("--size", type=int, default=128)
+    ap.add_argument("--method", default="canny", help="轮廓提取方法 canny/sobel/hed（离线提取与 imagenet 在线共用）")
+    ap.add_argument("--shards", type=int, default=0, help="imagenet parquet shard 数；<=0 = 全部 shard（默认，即全量）")
+    ap.add_argument("--num-workers", dest="num_workers", type=int, default=0, help="DataLoader 工作进程数（imagenet 全量推荐 4-8，0=主线程）")
     # video (ssf2020) 专用
     ap.add_argument("--seq-len", type=int, default=4, help="视频序列长度（ssf2020）")
     ap.add_argument("--max-sequences", type=int, default=64, help="最大序列数（ssf2020）")
@@ -290,25 +376,28 @@ def main() -> int:
                 f"epochs={args.epochs} device={device} warm_start={args.warm_start if is_video else 'n/a'}"
                 + (f" seq_len={args.seq_len}" if is_video else ""))
 
+    # 训练中可见：立即记一条 running（前端曲线页能看到该 run 正在跑）
+    _record_run(args, run_id, started, status="running", loss_series=[])
+
     # 1. 数据
     try:
-        if is_video:
-            ds = VideoFrameSequenceDataset(
-                args.dataset, seq_len=args.seq_len,
-                max_sequences=args.max_sequences, size=args.size,
-            )
-        else:
-            ds = ThermalFrameDataset(args.dataset, max_images=args.max_images, size=args.size)
-    except RuntimeError as e:
+        ds = resolve_training_dataset(
+            args.dataset, args.method, args.max_images, args.size, args.shards,
+            is_video=is_video, seq_len=args.seq_len, max_sequences=args.max_sequences,
+            num_workers=args.num_workers,
+        )
+    except (RuntimeError, KeyError, FileNotFoundError) as e:
         log(run_id, f"[train] dataset error: {e}")
         _record_run(args, run_id, started, status="failed", loss_series=[], error=str(e))
         return 1
+    nw = args.num_workers
+    kw = {} if nw <= 0 else {"num_workers": nw, "persistent_workers": True, "prefetch_factor": 4}
     if is_video:
         loader = DataLoader(ds, batch_size=args.batch, shuffle=True, num_workers=0, collate_fn=_seq_collate)
         log(run_id, f"[train] dataset: {len(ds)} sequences x {args.seq_len} frames, batch={args.batch}")
     else:
-        loader = DataLoader(ds, batch_size=args.batch, shuffle=True, num_workers=0)
-        log(run_id, f"[train] dataset: {len(ds)} images, batch={args.batch}")
+        loader = DataLoader(ds, batch_size=args.batch, shuffle=True, **kw)
+        log(run_id, f"[train] dataset: {len(ds)} images, batch={args.batch}, num_workers={nw}")
 
     # 2. 模型
     try:
@@ -348,6 +437,8 @@ def main() -> int:
             avg = {"epoch": epoch, "loss": ep_loss / max(n, 1), "psnr": ep_psnr / max(n, 1), "bpp": ep_bpp / max(n, 1)}
             loss_series.append(avg)
             log(run_id, f"[train] epoch {epoch}/{args.epochs} loss={avg['loss']:.4f} psnr={avg['psnr']:.2f} bpp={avg['bpp']:.3f}")
+            # 实时曲线：每 epoch 把当前 loss_series 落盘，前端轮询即可看到曲线增长
+            _record_run(args, run_id, started, status="running", loss_series=loss_series)
     except Exception as e:
         log(run_id, f"[train] training loop error: {e}")
         _record_run(args, run_id, started, status="failed", loss_series=loss_series, error=str(e))
@@ -383,7 +474,7 @@ def _record_run(args, run_id: str, started: float, *, status: str, loss_series, 
         "seq_len": getattr(args, "seq_len", None),
         "warm_start": getattr(args, "warm_start", None),
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(started)),
-        "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S") if status != "running" else None,
         "status": status,
         "loss_series": loss_series,
         "final_loss": kw.get("final_loss"),
