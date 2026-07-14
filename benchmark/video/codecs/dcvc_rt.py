@@ -38,6 +38,7 @@ import os
 import pickle
 import struct
 import sys
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -91,16 +92,17 @@ class DCVCRTCodec(VideoCodec):
     def _setup_error(reason: str) -> RuntimeError:
         msg = (
             f"DCVC-RT setup incomplete ({reason}). Required setup:\n"
-            "  1. Clone microsoft/DCVC (CVPR 2025 top-level, MIT license).\n"
-            "  2. export DCVC_REPO_ROOT=/path/to/DCVC\n"
-            "  3. Build the rans C++ ext (NO fallback): "
-            "cd $DCVC_REPO_ROOT/src/cpp && pip install .  "
+            "  1. DCVC repo (MIT, microsoft/DCVC) is a git submodule at third_party/DCVC.\n"
+            "     Fetch it: `git submodule update --init third_party/DCVC`\n"
+            "     (or set DCVC_REPO_ROOT=/path/to/DCVC to override).\n"
+            "  2. Build the rans C++ ext (NO fallback): "
+            "cd third_party/DCVC/src/cpp && pip install .  "
             "(needs cmake/g++/ninja + pybind11; installs MLCodec_extensions_cpp)\n"
-            "  4. (optional, CUDA only) fused ext: "
-            "cd $DCVC_REPO_ROOT/src/layers/extensions/inference && pip install .  "
+            "  3. (optional, CUDA only) fused ext: "
+            "cd third_party/DCVC/src/layers/extensions/inference && pip install .  "
             "(installs inference_extensions_cuda; auto-falls-back to pytorch if absent)\n"
-            "  5. Download CVPR-2025 checkpoints from OneDrive (manual, NOT scriptable) "
-            "into $DCVC_REPO_ROOT/checkpoints/:\n"
+            "  4. Download CVPR-2025 checkpoints from OneDrive (manual, NOT scriptable) "
+            "into third_party/DCVC/checkpoints/:\n"
             "       cvpr2025_image.pth.tar  (DMCI, I-frame)\n"
             "       cvpr2025_video.pth.tar  (DMC,  P-frame)\n"
             "See .claude/skills/dcvc-rt-usage for full instructions.\n"
@@ -112,9 +114,15 @@ class DCVCRTCodec(VideoCodec):
         if key in DCVCRTCodec._CACHE:
             return DCVCRTCodec._CACHE[key]
 
-        repo = os.environ.get("DCVC_REPO_ROOT")
-        if not repo or not os.path.isdir(repo):
-            raise self._setup_error("DCVC_REPO_ROOT env var not set or path missing")
+        # DCVC repo root: env override OR the pinned git submodule at third_party/DCVC.
+        # (dcvc_rt.py is at benchmark/video/codecs/ → parents[3] = infraredComp repo root)
+        _REPO_ROOT = Path(__file__).resolve().parents[3]
+        repo = os.environ.get("DCVC_REPO_ROOT") or str(_REPO_ROOT / "third_party" / "DCVC")
+        if not os.path.isdir(repo):
+            raise self._setup_error(
+                "DCVC repo not found. Run `git submodule update --init third_party/DCVC` "
+                "(or set DCVC_REPO_ROOT=/path/to/DCVC)"
+            )
 
         # rans C++ ext — required (real arithmetic-coded bitstreams), no fallback.
         try:
