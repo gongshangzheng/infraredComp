@@ -1,7 +1,7 @@
 {
   "source_name": "akiyo_cif",
   "method": "canny",
-  "frame_count": 300,
+  "frame_count": 10,
   "fps": 29.97002997002997,
   "width": 352,
   "height": 288,

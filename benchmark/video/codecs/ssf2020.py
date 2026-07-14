@@ -35,7 +35,9 @@ class SSF2020Codec(VideoCodec):
 
     def __init__(self, crf: int, preset: str | None = None, checkpoint_path: str | None = None):
         super().__init__(crf=crf, preset=preset)
-        self.quality = crf            # ssf2020 quality 1-9
+        # ssf2020 quality 1-9;若传入 CRF(>9,来自 --crfs 统一接口),反向映射
+        # (CRF 高=质量低 -> quality 低;CRF 低=质量高 -> quality 高)
+        self.quality = crf if 1 <= crf <= 9 else max(1, min(9, 10 - crf // 4))
         self.checkpoint_path = checkpoint_path
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self._model = None            # lazy-load on first encode/decode
