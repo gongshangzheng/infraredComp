@@ -92,6 +92,20 @@ def benchmark_codec(
                     fr = fr[:, :, 0]
                 cv2.imwrite(str(recon_dir / f"frame_{i:06d}.png"), fr)
         _, decode_ms = timed(_decode)
+
+        # 神经 codec 的 bitstream 是 .bin（pickle/struct，非可播放媒体）。
+        # 为让前端能「看效果」，把 recon PNG 组装成可播放 mp4（与 ffmpeg codec 的
+        # 可播放 bitstream 对齐）。.bin 仍用于 compressed_bytes 统计；.mp4 仅供查看。
+        recon_mp4 = str(Path(config.BITSTREAMS_DIR) / f"{tag}.mp4")
+        try:
+            from .ffmpeg_util import run_ffmpeg
+            run_ffmpeg([
+                "-y", "-framerate", str(artifact.fps or 12),
+                "-i", str(recon_dir / "frame_%06d.png"),
+                "-pix_fmt", config.ENCODE_PIX_FMT, recon_mp4,
+            ])
+        except Exception:
+            pass  # mp4 组装失败不影响指标（output_video 会为 None，但 PSNR/码率照常）
     else:
         # ---- ffmpeg path (legacy: x264/x265/svtav1/vp9) ----
         # 1. Encode (timed wall-clock around the ffmpeg subprocess)
