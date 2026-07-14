@@ -12,7 +12,7 @@ DCVC-RT = microsoft/DCVC 顶层（CVPR 2025 实时神经视频 codec），MIT li
 ## 库总览
 
 ```
-DCVC/                         # clone 到任意路径，由 DCVC_REPO_ROOT 指向
+third_party/DCVC/                # git submodule (git submodule update --init)
 ├── src/
 │   ├── models/
 │   │   ├── image_model.py    # DMCI（I 帧，intra）
@@ -110,23 +110,26 @@ DCVC-RT 用 `DMCI.get_padding_size(h, w, 16)` + `replicate_pad(x, pad_b, pad_r)`
 
 ## 安装（必须，且不自动）
 
-`_load` 在 `DCVC_REPO_ROOT` 未设 / rans ext 未 build / checkpoint 缺失时抛 **清晰 RuntimeError**（带步骤），**不在 import 时崩**。完整步骤：
+`_load` 默认用项目内 **git submodule** `third_party/DCVC`（pin 版本，不靠外部 env）；rans ext 未 build / checkpoint 缺失时抛 **清晰 RuntimeError**（带步骤），**不在 import 时崩**。完整步骤：
 
-1. **clone microsoft/DCVC**（CVPR 2025 顶层，MIT）。
-2. **`export DCVC_REPO_ROOT=/path/to/DCVC`**（codec 用此找 `src.models.*` + checkpoints）。
-3. **build rans C++ ext（必须，无 fallback）**：
+1. **fetch DCVC submodule**（microsoft/DCVC，CVPR 2025 顶层，MIT）：
    ```bash
-   cd $DCVC_REPO_ROOT/src/cpp && pip install .
+   git submodule update --init third_party/DCVC
+   ```
+   （也可 `export DCVC_REPO_ROOT=/path/to/DCVC` 覆盖指向自建 clone。）
+2. **build rans C++ ext（必须，无 fallback）**：
+   ```bash
+   cd third_party/DCVC/src/cpp && pip install .
    # 装 MLCodec_extensions_cpp；需 cmake/g++/ninja + pybind11
    ```
-4. **(可选, 仅 CUDA) fused ext**：
+3. **(可选, 仅 CUDA) fused ext**：
    ```bash
-   cd $DCVC_REPO_ROOT/src/layers/extensions/inference && pip install .
+   cd third_party/DCVC/src/layers/extensions/inference && pip install .
    # 装 inference_extensions_cuda；不装则 CUSTOMIZED_CUDA_INFERENCE=False，自动 fallback 到 pytorch 算子（慢一点但能跑）
    ```
-5. **下 CVPR-2025 checkpoint（手动，不可脚本化）**：
+4. **下 CVPR-2025 checkpoint（手动，不可脚本化）**：
    - OneDrive 链接见 DCVC repo `README.md`（`*Download our pretrained models*`）。
-   - 放到 `$DCVC_REPO_ROOT/checkpoints/`：
+   - 放到 `third_party/DCVC/checkpoints/`：
      - `cvpr2025_image.pth.tar`（DMCI, I 帧）
      - `cvpr2025_video.pth.tar`（DMC, P 帧）
 

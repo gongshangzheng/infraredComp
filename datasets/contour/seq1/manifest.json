@@ -1,0 +1,10 @@
+{
+  "source_name": "seq1",
+  "method": "canny",
+  "frame_count": 30,
+  "fps": 25.0,
+  "width": 320,
+  "height": 240,
+  "frames_dir": "/Users/zhengxinyu/infraredComp/datasets/contour/seq1",
+  "duration_s": 42.16
+}
