@@ -44,6 +44,31 @@ def _read_recon_frames(recon_dir: Path) -> np.ndarray:
     return np.stack(frames, axis=0)
 
 
+def synthesize_recon_video(recon_dir: Path, fps: float, mp4_path: str) -> str:
+    """Encode the decoded recon PNG sequence into a viewable mp4.
+
+    Neural codecs (ssf2020 / img-* / dcvc_rt) emit a ``.bin`` bitstream that no
+    browser can play, but their decoded recon frames are written as PNGs. This
+    lossless-ish x264 pass turns those PNGs into a playable mp4 cached next to
+    the bitstream (``bitstreams/{tag}.mp4``), so the backend's ``_bitstream_for``
+    finds it and the speed/formal pages can show the reconstruction. Best-effort:
+    callers log failures rather than failing the whole run.
+    """
+    from .ffmpeg_util import run_ffmpeg
+    Path(mp4_path).parent.mkdir(parents=True, exist_ok=True)
+    args = [
+        "-y",
+        "-framerate", str(fps if fps and fps > 0 else 25.0),
+        "-i", str(Path(recon_dir) / "frame_%06d.png"),
+        # pad odd dims to even (yuv420p requirement); no-op for even dims
+        "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2:color=black",
+        "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
+        mp4_path,
+    ]
+    run_ffmpeg(args)
+    return mp4_path
+
+
 def benchmark_codec(
     artifact: ContourArtifact,
     codec_name: str,
@@ -56,7 +81,9 @@ def benchmark_codec(
     codec = build_codec(codec_name, crf=crf, preset=preset)
 
     frames_dir = artifact.frames_dir
-    tag = f"{artifact.source_name}_{codec_name}_crf{crf}"
+    # tag 含 method: canny/sobel/hed 同 seq×codec×crf 的输出文件互不覆盖。
+    method = artifact.method or "canny"
+    tag = f"{artifact.source_name}_{method}_{codec_name}_crf{crf}"
     bitstream = str(Path(config.BITSTREAMS_DIR) / f"{tag}.{codec.ext}")
     recon_dir = Path(config.RECON_DIR) / tag
     if recon_dir.exists():
@@ -75,7 +102,9 @@ def benchmark_codec(
             return bs
         _, encode_ms = timed(_encode)
 
-        compressed_bytes = os.path.getsize(bitstream) if os.path.exists(bitstream) else 0
+        # estimate 模式(learned_image):用 codec 报的估计字节数,非文件大小(bitstream 仅元数据)。
+        compressed_bytes = getattr(codec, '_estimated_bytes', None) or (
+            os.path.getsize(bitstream) if os.path.exists(bitstream) else 0)
         duration_s = (
             artifact.frame_count / artifact.fps
             if artifact.fps > 0 and artifact.frame_count > 0
@@ -92,6 +121,14 @@ def benchmark_codec(
                     fr = fr[:, :, 0]
                 cv2.imwrite(str(recon_dir / f"frame_{i:06d}.png"), fr)
         _, decode_ms = timed(_decode)
+
+        # Neural bitstreams are .bin (not browser-playable): synthesize a
+        # viewable mp4 from the decoded recon PNGs so the pages can show it.
+        mp4_path = str(Path(config.BITSTREAMS_DIR) / f"{tag}.mp4")
+        try:
+            synthesize_recon_video(recon_dir, artifact.fps, mp4_path)
+        except Exception as e:  # noqa: BLE001
+            print(f"  WARN: recon-video synth failed for {tag}: {e}")
     else:
         # ---- ffmpeg path (legacy: x264/x265/svtav1/vp9) ----
         # 1. Encode (timed wall-clock around the ffmpeg subprocess)
@@ -145,7 +182,7 @@ def benchmark_codec(
         decoded_sample = str(samples[0])
 
     return VideoCompressionResult(
-        id=f"{artifact.source_name}|{codec_name}|crf{crf}",
+        id=f"{artifact.source_name}|{method}|{codec_name}|crf{crf}",
         codec=codec_name,
         codec_family=codec.family,
         crf=crf,
@@ -193,22 +230,49 @@ def run_benchmark(
     if crfs is None:
         crfs = [18, 23, 28, 33]
 
+    # Video-based artifact (PNGs deleted): materialize transient frames ONCE
+    # from the lossless contour video — cropped back to the original (possibly
+    # odd) dims — and reuse across the whole (codecs x crfs) grid. The temp dir
+    # is cleaned up after the run; the persistent contour dir keeps no PNGs.
+    work_artifact = artifact
+    tmp_frames_dir: Path | None = None
+    if artifact.video_path and not artifact.frame_paths:
+        import tempfile
+        from .ffmpeg_util import run_ffmpeg as _rf
+        tmp_frames_dir = Path(tempfile.mkdtemp(prefix="cvframes_"))
+        _rf(["-y", "-i", artifact.video_path, "-vsync", "0",
+             "-vf", f"crop={artifact.width}:{artifact.height}:0:0",
+             "-pix_fmt", "gray", str(tmp_frames_dir / "frame_%06d.png")])
+        frame_paths = [str(p) for p in sorted(tmp_frames_dir.glob("frame_*.png"))]
+        work_artifact = _replace_artifact(artifact, frames_dir=str(tmp_frames_dir),
+                                          frame_paths=frame_paths)
+
     results: list[VideoCompressionResult] = []
     total = len(codecs) * len(crfs)
     done = 0
-    for codec_name in codecs:
-        for crf in crfs:
-            try:
-                r = benchmark_codec(artifact, codec_name, crf, preset, dataset)
-                results.append(r)
-            except Exception as e:  # noqa: BLE001
-                print(f"  ERROR [{codec_name} crf{crf}] on {artifact.source_name}: {e}")
-            done += 1
-            print(f"  [{codec_name} crf{crf}] done ({done}/{total})")
+    try:
+        for codec_name in codecs:
+            for crf in crfs:
+                try:
+                    r = benchmark_codec(work_artifact, codec_name, crf, preset, dataset)
+                    results.append(r)
+                except Exception as e:  # noqa: BLE001
+                    print(f"  ERROR [{codec_name} crf{crf}] on {artifact.source_name}: {e}")
+                done += 1
+                print(f"  [{codec_name} crf{crf}] done ({done}/{total})")
+    finally:
+        if tmp_frames_dir:
+            shutil.rmtree(tmp_frames_dir, ignore_errors=True)
 
     if save:
         save_results_json(results)
     return results
+
+
+def _replace_artifact(artifact: ContourArtifact, **changes) -> ContourArtifact:
+    """dataclasses.replace for ContourArtifact (keep all fields, override a few)."""
+    from dataclasses import replace
+    return replace(artifact, **changes)
 
 
 def save_results_json(

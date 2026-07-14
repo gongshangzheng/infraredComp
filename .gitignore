@@ -7,6 +7,7 @@ __pycache__/
 # Datasets — 大体积媒体文件不进 git,保留 README / manifest 作为索引
 # (输入位置可经 INFRACOMP_DATASETS_DIR 配置、不固定,故按扩展名忽略而非目录名)
 datasets/FLIR_ADAS_1_3/
+datasets/imagenet/
 datasets/**/*.mp4
 datasets/**/*.avi
 datasets/**/*.mov
@@ -64,3 +65,6 @@ Thumbs.db
 results/training/checkpoints/*.pth
 results/training/logs/*.log
 results/training/metrics.json
+
+# Vendored HED model binary (56 MB; deploy.prototxt is tracked, the caffemodel is not)
+third_party/hed/*.caffemodel

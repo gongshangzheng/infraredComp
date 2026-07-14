@@ -11,6 +11,7 @@ from .base import (  # noqa: F401
 # Importing these modules triggers @register(...) on the classes.
 from . import canny as _canny  # noqa: F401
 from . import sobel as _sobel  # noqa: F401
+from . import hed as _hed  # noqa: F401
 
 __all__ = [
     "ContourExtractor",
