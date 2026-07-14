@@ -99,6 +99,6 @@ for _name, _quals in _IMG_MODELS:
     _cls = type(
         f"LearnedImageVideoCodec_{_name.replace('-', '_')}",
         (_LearnedImageVideoCodec,),
-        {"model_name": _name, "qualities": _quals},
+        {"model_name": _name, "qualities": _quals, "name": f"img-{_name}"},
     )
     register_codec(f"img-{_name}")(_cls)
