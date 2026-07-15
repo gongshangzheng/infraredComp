@@ -408,3 +408,159 @@ def append_to_section(lines: list[str], header: str, bullets: list[str]) -> list
     block = bullets + [""]
     return lines[:insert_at] + block + lines[insert_at:]
 
+
+# --------------------------------------------------------------------------- #
+# JSON task-tree IO (single source: projects/{slug}/tasks.json)              #
+# --------------------------------------------------------------------------- #
+# 任务数据的唯一来源是 per-project tasks.json（层级树，与项目树页同源）。
+# tasks.md 已废弃删除；看板是其派生视图。
+
+import json
+import re as _re
+
+_PROJECTS_DIR = MGMT_DIR / "docs" / "projects"
+_SLUG_RE = _re.compile(r"^[A-Za-z0-9_-]+$")
+
+# canonical task statuses + 看板桶映射
+TASK_STATUSES = ("completed", "active", "planned", "paused", "blocked")
+STATUS_BUCKET = {
+    "completed": "completed",
+    "active": "in_progress",
+    "planned": "pending",
+    "paused": "pending",
+    "blocked": "pending",
+}
+
+
+def _validate_slug(slug: str) -> str:
+    if not slug or not _SLUG_RE.match(slug):
+        sys.exit(f"error: invalid project slug {slug!r} (allowed: letters, digits, _, -)")
+    return slug
+
+
+def projects_dir() -> Path:
+    return _PROJECTS_DIR
+
+
+def tasks_json_path(slug: str) -> Path:
+    """per-project tasks.json 路径。slug 非法则报错。"""
+    _validate_slug(slug)
+    return _PROJECTS_DIR / slug / "tasks.json"
+
+
+def list_project_slugs() -> list[str]:
+    """列出所有有 tasks.json 的项目 slug。"""
+    if not _PROJECTS_DIR.is_dir():
+        return []
+    out = []
+    for slug in os.listdir(_PROJECTS_DIR):
+        if _SLUG_RE.match(slug) and tasks_json_path(slug).is_file():
+            out.append(slug)
+    return sorted(out)
+
+
+def read_tasks(slug: str) -> dict:
+    """读 projects/{slug}/tasks.json，返回 {project, tasks: [...]} 树。"""
+    path = tasks_json_path(slug)
+    if not path.is_file():
+        sys.exit(f"error: {rel(path)} not found (项目 {slug!r} 无 tasks.json)")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        sys.exit(f"error: {rel(path)} invalid JSON: {e}")
+    if not isinstance(data, dict) or "tasks" not in data:
+        sys.exit(f"error: {rel(path)} 顶层需为 {{'project':..., 'tasks':[...]}}")
+    return data
+
+
+def write_tasks(slug: str, tree: dict) -> None:
+    """原子写 projects/{slug}/tasks.json（tmp + os.replace，缩进 2 空格）。"""
+    path = tasks_json_path(slug)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(tree, ensure_ascii=False, indent=2) + "\n"
+    write_text(path, text)
+
+
+def find_task_by_id(tasks: list, task_id: str):
+    """递归查找 id == task_id 的节点。
+
+    返回 (parent_list, index, task) 以便就地增删改；找不到返回 (None, -1, None)。
+    """
+    for i, t in enumerate(tasks):
+        if t.get("id") == task_id:
+            return tasks, i, t
+        children = t.get("children") or []
+        if children:
+            pl, idx, found = find_task_by_id(children, task_id)
+            if found is not None:
+                return pl, idx, found
+    return None, -1, None
+
+
+def flatten_tasks(tasks: list, acc=None) -> list[dict]:
+    """递归展平任务树为看板卡列表（每个节点一张卡，含父子）。"""
+    if acc is None:
+        acc = []
+    for t in tasks or []:
+        acc.append({
+            "id": t.get("id", ""),
+            "name": t.get("title", ""),
+            "owner": t.get("assignee", ""),
+            "start_date": t.get("startDate", ""),
+            "end_date": t.get("endDate", ""),
+            "status": t.get("status", "planned"),
+            "note": t.get("description", ""),
+            "priority": t.get("priority"),
+        })
+        if t.get("children"):
+            flatten_tasks(t["children"], acc)
+    return acc
+
+
+def next_task_id(tasks: list, parent_id: str | None) -> str:
+    """生成下一个不重复的 id。
+
+    无 parent：t{N}（N = 现有根级 tN 的最大 N + 1）。
+    有 parent：{parent}-{N}（N = 该 parent 现有 children 的最大尾号 + 1）。
+    """
+    existing = _collect_ids(tasks)
+
+    def used(i: str) -> bool:
+        return i in existing
+
+    if not parent_id:
+        n = 1
+        while used(f"t{n}"):
+            n += 1
+        return f"t{n}"
+
+    # 在 parent 下追加 child
+    parent = find_task_by_id(tasks, parent_id)[2]
+    if parent is None:
+        sys.exit(f"error: parent task {parent_id!r} not found")
+    children = parent.get("children") or []
+    child_nums = []
+    for c in children:
+        cid = c.get("id", "")
+        m = _re.match(r"^-?(\d+)$", cid.rsplit("-", 1)[-1] if "-" in cid else cid)
+        if m:
+            child_nums.append(int(m.group(1)))
+    n = (max(child_nums) + 1) if child_nums else 1
+    candidate = f"{parent_id}-{n}"
+    while used(candidate):
+        n += 1
+        candidate = f"{parent_id}-{n}"
+    return candidate
+
+
+def _collect_ids(tasks: list, acc=None) -> set[str]:
+    if acc is None:
+        acc = set()
+    for t in tasks or []:
+        if t.get("id"):
+            acc.add(t["id"])
+        if t.get("children"):
+            _collect_ids(t["children"], acc)
+    return acc
+
+

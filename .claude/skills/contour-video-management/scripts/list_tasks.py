@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
-"""List tasks in management/docs/tasks.md (one or all sections).
+"""List tasks in management/docs/projects/{slug}/tasks.json (tree or flat).
+
+Single source of truth is the per-project tasks.json (hierarchical tree, shared
+with the project-tree page). The kanban board is a derived flatten-view.
+
+Self-locating: run from anywhere; resolves the repo root from its own path.
+Mirrors the same file in ~/infraredComp (identical tasks.json schema).
 
 Usage:
-    uv run python list_tasks.py                  # all sections
-    uv run python list_tasks.py --section 进行中   # one section
+    uv run python list_tasks.py --slug projflow                 # tree view
+    uv run python list_tasks.py --slug projflow --flat          # flat (kanban buckets)
+    uv run python list_tasks.py --slug projflow --status active # filter by status
 """
 from __future__ import annotations
 
@@ -17,31 +24,70 @@ import mgmt_io
 import task_schema
 
 
-def print_section(lines, section: str) -> int:
-    rows = mgmt_io.list_rows(lines, section)
-    cols = task_schema.SECTION_COLS[section]
-    print(f"\n## {section}  ({len(rows)} task{'s' if len(rows) != 1 else ''})")
-    if not rows:
-        print("  (empty)")
-        return 0
-    print("  " + " | ".join(cols))
-    for r in rows:
-        print("  " + " | ".join(r.get(c, "") for c in cols))
-    return len(rows)
+def print_tree(tasks: list, depth: int = 0) -> int:
+    prefix = "  " * depth
+    total = 0
+    for t in tasks:
+        total += 1
+        children = t.get("children") or []
+        bullet = "▾" if children else "•"
+        line = f"{prefix}{bullet} [{t.get('id','')}] {t.get('title','')}  ({t.get('status','')})"
+        assignee = t.get("assignee")
+        if assignee:
+            line += f"  @{assignee}"
+        dates = t.get("startDate") or t.get("endDate")
+        if dates:
+            line += f"  {t.get('startDate','')}~{t.get('endDate','')}"
+        print(line)
+        if children:
+            total += print_tree(children, depth + 1)
+    return total
+
+
+def print_flat(tasks: list, status_filter: str | None) -> int:
+    cards = mgmt_io.flatten_tasks(tasks)
+    if status_filter:
+        cards = [c for c in cards if c["status"] == status_filter]
+    buckets = {"in_progress": [], "pending": [], "completed": []}
+    for c in cards:
+        buckets[mgmt_io.STATUS_BUCKET.get(c["status"], "pending")].append(c)
+    total = 0
+    for bucket, label in (("pending", "待开始"), ("in_progress", "进行中"), ("completed", "已完成")):
+        rows = buckets[bucket]
+        print(f"\n## {label}  ({len(rows)})")
+        if not rows:
+            print("  (empty)")
+        for c in rows:
+            extra = []
+            if c["owner"]:
+                extra.append(f"@{c['owner']}")
+            if c["end_date"]:
+                extra.append(c["end_date"])
+            if c["note"]:
+                extra.append(c["note"])
+            tail = "  " + " ".join(extra) if extra else ""
+            print(f"  [{c['id']}] {c['name']}  ({c['status']}){tail}")
+        total += len(rows)
+    return total
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--section", default=None, help="only list this section (default: all)")
+    ap.add_argument("--slug", required=True, help="project slug (projects/{slug}/tasks.json)")
+    ap.add_argument("--flat", action="store_true", help="flat kanban-bucket view (default: tree)")
+    ap.add_argument("--status", default=None, help="filter by status (completed/active/planned/paused/blocked)")
     args = ap.parse_args()
 
-    path = mgmt_io.tasks_md()
-    lines = mgmt_io.read_lines(path)
-    sections = [task_schema.resolve_section(args.section)] if args.section else task_schema.SECTION_ORDER
-    total = 0
-    for s in sections:
-        total += print_section(lines, s)
-    print(f"\n{total} task(s) total")
+    if args.status:
+        args.status = task_schema.resolve_status(args.status)
+
+    tree = mgmt_io.read_tasks(args.slug)
+    tasks = tree.get("tasks", [])
+    if args.flat or args.status:
+        total = print_flat(tasks, args.status)
+    else:
+        total = print_tree(tasks)
+    print(f"\n{total} task(s) total  ({mgmt_io.rel(mgmt_io.tasks_json_path(args.slug))})")
     return 0
 
 

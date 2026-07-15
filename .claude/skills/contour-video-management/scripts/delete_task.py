@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""Delete a task row from management/docs/tasks.md.
+"""Delete a task node from management/docs/projects/{slug}/tasks.json.
+
+Recursively locates the node by id and removes it (including its children).
+
+Self-locating: run from anywhere; resolves the repo root from its own path.
+Mirrors the same file in ~/infraredComp (identical tasks.json schema).
 
 Usage:
-    uv run python delete_task.py --section 进行中 --name "轮廓提取优化"
+    uv run python delete_task.py --slug projflow --id t2-3
 """
 from __future__ import annotations
 
@@ -13,21 +18,25 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import mgmt_io
-import task_schema
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--section", required=True, help="section the task is in (进行中/待开始/已完成)")
-    ap.add_argument("--name", required=True, help="task name (first cell, exact match)")
+    ap.add_argument("--slug", required=True, help="project slug")
+    ap.add_argument("--id", required=True, help="task id (exact match)")
     args = ap.parse_args()
 
-    section = task_schema.resolve_section(args.section)
-    path = mgmt_io.tasks_md()
-    lines = mgmt_io.read_lines(path)
-    new_lines = mgmt_io.delete_row(lines, section, args.name)
-    mgmt_io.write_lines(path, new_lines)
-    print(f"✓ deleted task {args.name!r} from {section}  ({mgmt_io.rel(path)})")
+    tree = mgmt_io.read_tasks(args.slug)
+    tasks = tree.get("tasks", [])
+    parent_list, idx, task = mgmt_io.find_task_by_id(tasks, args.id)
+    if task is None:
+        sys.exit(f"error: task {args.id!r} not found in project {args.slug!r}")
+
+    title = task.get("title", "")
+    del parent_list[idx]
+    mgmt_io.write_tasks(args.slug, tree)
+    path = mgmt_io.tasks_json_path(args.slug)
+    print(f"✓ deleted task {args.id!r} ({title!r})  ({mgmt_io.rel(path)})")
     return 0
 
 
