@@ -21,6 +21,35 @@ export INFRACOMP_DATASETS_DIR=/data/infrared   # 把大数据集放到仓库外(
 
 约定:路径常量**单一来源**,勿在业务代码硬编码。
 
+## 大数据集:D:/data + symlink(本机策略)
+
+大数据集(BSDS500、SA-Co-VEval 等,**数十 MB ~ 数十 GB**)的**真实数据物理存放在本机 `D:/data/<dataset>/`(仓库外、不进 git)**,再以**目录 junction**软链接到项目 `datasets/<dataset>/`,代码统一经 `datasets/<dataset>/...` 访问。好处:数据不占仓库体积、换盘/备份只动 `D:/data`、多项目可共享同一份 `D:/data`。
+
+- 存放:`D:/data/<dataset>/`(真实数据,git clone / modelscope 下载 / 手动均可)
+- 软链接:`datasets/<dataset>/` → `D:/data/<dataset>/.../<data-root>`(Windows 用 **junction**,**不需管理员**;symlink /D 需开发者模式)
+- git:`.gitignore` 忽略 `datasets/<dataset>/` 整个 junction 目录(git 不 traverse 真实数据),只在 `datasets/README.md` 记索引
+
+```bash
+# 1. 数据落到 D:/data(以 BSDS500 为例)
+git clone --depth 1 https://github.com/BIDS/BSDS500.git /d/data/BSDS500
+
+# 2. junction 到项目 datasets/(PowerShell,无需管理员)
+powershell -Command "New-Item -ItemType Junction -Path 'D:\code\infraredComp\datasets\BSDS500' -Target 'D:\data\BSDS500\BSDS500\data'"
+
+# 3. .gitignore 加 datasets/BSDS500/,datasets/README.md 记索引
+```
+
+**ModelScope 数据集**(如 SA-Co-VEval)用 modelscope python SDK 下到 `D:/data/`(库已装:`uv add modelscope`):
+```python
+from modelscope.msdatasets import MsDataset
+ds = MsDataset.load('facebook/SACo-VEval', cache_dir='D:/data/SACo-VEval/.cache')
+# 或 CLI: uv run modelscope download --dataset facebook/SACo-VEval
+```
+
+已落地:
+- `D:/data/BSDS500/`(BSDS500,389MB,images+groundTruth+ucm2)→ junction `datasets/BSDS500/` ✅
+- SA-Co-VEval(`facebook/SACo-VEval`,~32GB)待下,已记 task,计划同样落 `D:/data/SACo-VEval/` + junction
+
 ## 三个数据域(勿混为一谈)
 
 ### 1. FLIR ADAS 1.3(红外图像,legacy 图像 benchmark)

@@ -13,18 +13,21 @@
       </n-space>
     </n-card>
 
-    <!-- 常驻 loss 曲线区（选 run -> 显示其 loss_series） -->
+    <!-- 常驻 loss 曲线区：所有 run 叠加显示，可切指标 -->
     <n-card size="small" class="curve-card">
       <template #header>
         <div class="flex-between">
-          <h3>训练曲线</h3>
-          <span class="hint">{{ curveTitle || '选择下方一条 run 查看其 loss/指标曲线' }}</span>
+          <h3>训练曲线（所有 run 叠加）</h3>
+          <n-space size="small" align="center">
+            <span class="hint">指标</span>
+            <n-select v-model:value="curveMetric" :options="metricOptions" size="small" style="width: 110px" />
+          </n-space>
         </div>
       </template>
       <div v-if="curveOption" class="curve-wrap">
         <v-chart class="curve" :option="curveOption" autoresize />
       </div>
-      <div v-else class="curve-placeholder">选择下方任意一条训练 run，loss/PSNR/bpp 曲线将在此处显示</div>
+      <div v-else class="curve-placeholder">暂无 run（在「训练运行」页启动训练后曲线在此叠加显示）</div>
     </n-card>
 
     <!-- 训练 run 列表 -->
@@ -55,6 +58,9 @@ import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import EmptyState from '../../components/common/EmptyState.vue'
 import { getTrainRuns, listCheckpoints, getTrainOutputUrl } from '../../api/training'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent])
 
@@ -152,21 +158,33 @@ const curveTitle = computed(() => {
   return `${r.model} · ${r.dataset} · ${r.id}${tail}`
 })
 
+const curveMetric = ref('loss')
+const metricOptions = [
+  { label: 'loss', value: 'loss' },
+  { label: 'PSNR(dB)', value: 'psnr' },
+  { label: 'bpp', value: 'bpp' },
+]
+
+// 所有（筛选后）run 叠加显示同一指标；x=epoch（value 轴，不同 run 不同长度可对齐）
 const curveOption = computed(() => {
-  const r = currentRun.value
-  if (!r || !r.loss_series?.length) return null
-  const epochs = r.loss_series.map(p => p.epoch)
-  const build = (key) => r.loss_series.map(p => p[key])
-  const series = []
-  if (r.loss_series.some(p => p.loss != null)) series.push({ name: 'loss', type: 'line', data: build('loss'), smooth: true })
-  if (r.loss_series.some(p => p.psnr != null)) series.push({ name: 'PSNR(dB)', type: 'line', data: build('psnr'), smooth: true, yAxisIndex: 1 })
-  if (r.loss_series.some(p => p.bpp != null)) series.push({ name: 'bpp', type: 'line', data: build('bpp'), smooth: true, yAxisIndex: 1 })
+  const metric = curveMetric.value
+  const series = filteredRuns.value
+    .filter(r => r.loss_series?.some(p => p[metric] != null))
+    .map(r => ({
+      name: r.id,
+      type: 'line',
+      smooth: true,
+      showSymbol: false,
+      data: r.loss_series.filter(p => p[metric] != null).map(p => [p.epoch, p[metric]]),
+    }))
   if (!series.length) return null
+  const yname = metric === 'psnr' ? 'PSNR(dB)' : metric
   return {
     tooltip: { trigger: 'axis' },
-    legend: { data: series.map(s => s.name) },
-    xAxis: { type: 'category', data: epochs, name: 'epoch' },
-    yAxis: [{ type: 'value', name: 'loss' }, { type: 'value', name: 'PSNR/bpp' }],
+    legend: { data: series.map(s => s.name), type: 'scroll', top: 0 },
+    grid: { top: 40 },
+    xAxis: { type: 'value', name: 'epoch', minInterval: 1 },
+    yAxis: { type: 'value', name: yname, scale: true },
     series,
   }
 })
@@ -182,7 +200,7 @@ const runColumns = computed(() => [
   { title: '时间', key: 'started_at', render: (r) => r.started_at?.split('T')[0] || '-' },
   {
     title: '操作', key: 'actions', width: 110,
-    render: (r) => h(NButton, { size: 'small', type: 'primary', secondary: true, onClick: () => selectRun(r) }, { default: () => '看曲线' }),
+    render: (r) => h(NButton, { size: 'small', type: 'primary', secondary: true, onClick: () => router.push(`/training/results/runs/${r.id}`) }, { default: () => '详情' }),
   },
 ])
 

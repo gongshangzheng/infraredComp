@@ -42,6 +42,7 @@ sys.path.insert(0, str(REPO))
 
 import torch
 import torch.nn as nn
+import numpy as np
 from torch.utils.data import Dataset, DataLoader
 
 # infraredComp 训练产物路径（与 server.config 一致）
@@ -160,8 +161,21 @@ def resolve_training_dataset(dataset_id: str, method: str, max_images: int, size
     """按 --dataset 前缀分发到合适的训练 Dataset。
 
     - imagenet-<split>        → ImageNetContourDataset（parquet 流式在线提边缘，不落地）
+    - bsds-<split>            → ContourPNGDataset（BSDS500 GT 软边缘 PNG，见 convert_bsds_gt.py）
     - 其余（flir/osu/xiph/contour/视频/目录）→ 先确保 contour 目录，再读 PNG 帧
     """
+    if dataset_id.startswith("bsds-"):
+        from scripts.imagenet_contour_dataset import ContourPNGDataset
+        if is_video:
+            raise RuntimeError("BSDS GT 仅支持单帧图像压缩模型")
+        split = dataset_id.split("-", 1)[1]
+        png_dir = DATASETS_DIR / "contour" / f"bsds_{split}_gt"
+        if not (png_dir / "manifest.json").is_file():
+            raise RuntimeError(
+                f"BSDS GT 目录无 manifest：{png_dir}。先跑 python scripts/convert_bsds_gt.py --splits {split}"
+            )
+        return ContourPNGDataset(str(png_dir), size=size, max_images=max_images)
+
     if dataset_id.startswith("imagenet-"):
         from scripts.imagenet_contour_dataset import (
             ImageNetContourDataset, ContourPNGDataset, split_from_dataset_id,
@@ -317,6 +331,102 @@ def video_rd_loss(out, frames: list, lam: float) -> tuple[torch.Tensor, float, f
     return loss, loss.item(), psnr, bpp
 
 
+# ---- 训练中定期 eval + 可视化（held-out val）--------------------------- #
+
+VIZ_DIR = TRAINING_DIR / "viz"  # results/training/viz/<run_id>/epoch_XXX.png
+
+
+def _eval_png_dir(dataset_id: str, split: str, method: str) -> Path:
+    """数据集感知的 held-out PNG 目录：BSDS GT → bsds_<split>_gt；imagenet → imagenet_<split>_<method>。"""
+    if dataset_id.startswith("bsds-"):
+        return DATASETS_DIR / "contour" / f"bsds_{split}_gt"
+    from scripts.imagenet_contour_dataset import preextracted_contour_dir
+    return preextracted_contour_dir(split, method)
+
+
+def _load_split_sample(dataset_id: str, split: str, method: str, n_take: int, size: int, what: str):
+    """从某个 split 的 PNG 目录取前 n_take 张固定样本。"""
+    from scripts.imagenet_contour_dataset import ContourPNGDataset
+    d = _eval_png_dir(dataset_id, split, method)
+    if not (d / "manifest.json").is_file():
+        hint = (f"python scripts/convert_bsds_gt.py --splits {split}" if dataset_id.startswith("bsds-")
+                else f"python scripts/extract_imagenet_contour.py --split {split} --method {method}")
+        raise RuntimeError(f"{what} 目录无 manifest：{d}。先跑 {hint}")
+    ds = ContourPNGDataset(str(d), size=size, max_images=0)
+    if len(ds) == 0:
+        raise RuntimeError(f"{what} 数据集为空：{d}")
+    return [ds[i] for i in range(min(n_take, len(ds)))]
+
+
+def _load_eval_samples(dataset_id: str, method: str, eval_split: str, viz_split: str,
+                       eval_samples: int, viz_samples: int, size: int):
+    """加载 held-out eval（eval_split）+ 可视化（viz_split）两份固定样本 + 原图。
+    BSDS：eval=test、viz=val；imagenet：两者通常都 val（--viz-split 默认 = --eval-split）。
+    """
+    eval_sample = _load_split_sample(dataset_id, eval_split, method, eval_samples, size, "eval")
+    viz_sample = _load_split_sample(dataset_id, viz_split, method, viz_samples, size, "viz")
+    originals = _load_originals(dataset_id, viz_split, len(viz_sample), size)
+    return eval_sample, viz_sample, originals
+
+
+def _load_originals(dataset_id: str, split: str, n: int, size: int):
+    """可视化用的原始自然图（三图对照的左图）。BSDS → sorted images/<split>/*.jpg（与
+    bsds_<split>_gt/frame_<i> 同序同 ID 对齐）；非 BSDS 暂无来源 → None（回退两图）。"""
+    if not dataset_id.startswith("bsds-"):
+        return None
+    from PIL import Image
+    jpgs = sorted((DATASETS_DIR / "BSDS500" / "images" / split).glob("*.jpg"))
+    out = []
+    for j in jpgs[:n]:
+        arr = np.array(Image.open(j).convert("RGB").resize((size, size), Image.BILINEAR))
+        out.append(torch.from_numpy(arr).permute(2, 0, 1).float() / 255.0)  # (3,H,W) [0,1]
+    return out or None
+
+
+def _run_eval(model, eval_sample: list, device: str, lam: float, batch: int) -> dict:
+    """model.eval() + no_grad，在固定 val 样本上算 likelihood-bpp + psnr（rd_loss 逻辑）。"""
+    model.eval()
+    tot_loss = tot_psnr = tot_bpp = 0.0
+    n = 0
+    with torch.no_grad():
+        for s in range(0, len(eval_sample), batch):
+            chunk = eval_sample[s:s + batch]
+            x = torch.stack([t.to(device) for t in chunk], dim=0)  # (B,3,H,W)
+            out = model.forward(x)
+            loss, lv, psnr, bpp = rd_loss(out, x, lam)
+            tot_loss += lv; tot_psnr += psnr; tot_bpp += bpp; n += 1
+    model.train()
+    return {"loss": tot_loss / max(n, 1), "psnr": tot_psnr / max(n, 1), "bpp": tot_bpp / max(n, 1)}
+
+
+def _save_viz(model, viz_sample: list, originals, device: str, run_id: str, epoch: int) -> list:
+    """每个样本一张三图 RGB PNG（原图 | 输入边缘 | 重建），存 viz/<run>/epoch_XXX_sample_Y.png。
+    originals 缺则回退两图（输入 | 重建）。返回 6 条相对路径。"""
+    from PIL import Image
+    model.eval()
+    out_dir = VIZ_DIR / run_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    with torch.no_grad():
+        for k, t in enumerate(viz_sample):
+            x = t.unsqueeze(0).to(device)                  # (1,3,H,W)
+            out = model.forward(x)
+            xhat = out["x_hat"][0].clamp(0, 1)              # (3,H,W)
+            panels = []
+            if originals is not None and k < len(originals):
+                panels.append(originals[k].to(device).clamp(0, 1))  # 原图（彩色）
+            panels.append(x[0].clamp(0, 1))                # 输入边缘
+            panels.append(xhat)                            # 重建
+            row = torch.cat(panels, dim=2)                 # (3, H, len*W)
+            arr = (row.cpu().numpy() * 255.0).clip(0, 255).astype("uint8")  # (3,H,len*W)
+            arr = np.transpose(arr, (1, 2, 0))            # (H, len*W, 3) RGB
+            fname = f"epoch_{epoch:03d}_sample_{k}.png"
+            Image.fromarray(arr, mode="RGB").save(out_dir / fname)
+            paths.append({"epoch": epoch, "sample": k, "path": f"viz/{run_id}/{fname}"})
+    model.train()
+    return paths
+
+
 # ---- metrics.json 读写 ------------------------------------------------- #
 
 def load_metrics() -> dict:
@@ -326,6 +436,44 @@ def load_metrics() -> dict:
         except json.JSONDecodeError:
             pass
     return {"generated_at": None, "runs": []}
+
+
+def _resolve_ckpt_path(p: str) -> Path:
+    """checkpoint 路径解析：允许传 run_id 或相对 checkpoints/xxx 或绝对路径。"""
+    pp = Path(p)
+    if pp.is_file():
+        return pp
+    # 形如 checkpoints/ELIC__bsds__xxx.pth 或 ELIC__bsds__xxx.pth
+    cand = CHECKPOINTS_DIR / (pp.name if pp.name.endswith(".pth") else f"{pp.name}.pth")
+    if cand.is_file():
+        return cand
+    cand2 = CHECKPOINTS_DIR / str(p).replace("\\", "/").split("checkpoints/")[-1]
+    if cand2.is_file():
+        return cand2
+    raise FileNotFoundError(f"checkpoint 不存在：{p}（checked {pp}, {cand}）")
+
+
+def load_checkpoint(model, ckpt_path: str, *, strict: bool = False) -> None:
+    """加载 model.state_dict（eval 的 _load_model 同语义，strict=False 容错）。"""
+    p = _resolve_ckpt_path(ckpt_path)
+    sd = torch.load(p, map_location="cpu", weights_only=True)
+    model.load_state_dict(sd, strict=strict)
+
+
+def resume_from_run(prev_run_id: str) -> dict:
+    """从 metrics.json 找旧 run 记录，返回 {loss_series, test_metrics, viz, start_epoch} 供续训继承。"""
+    data = load_metrics()
+    for r in data.get("runs", []):
+        if r.get("id") == prev_run_id:
+            ls = r.get("loss_series", [])
+            last_ep = max((p["epoch"] for p in ls), default=0)
+            return {
+                "loss_series": list(ls),
+                "test_metrics": list(r.get("test_metrics", [])),
+                "viz": list(r.get("viz", [])),
+                "start_epoch": last_ep + 1,
+            }
+    raise RuntimeError(f"resume 找不到旧 run 记录：{prev_run_id}（在 metrics.json）")
 
 
 def save_metrics(data: dict) -> None:
@@ -354,6 +502,15 @@ def main() -> int:
     ap.add_argument("--method", default="canny", help="轮廓提取方法 canny/sobel/hed（离线提取与 imagenet 在线共用）")
     ap.add_argument("--shards", type=int, default=0, help="imagenet parquet shard 数；<=0 = 全部 shard（默认，即全量）")
     ap.add_argument("--num-workers", dest="num_workers", type=int, default=0, help="DataLoader 工作进程数（imagenet 全量推荐 4-8，0=主线程）")
+    # 从 checkpoint 续训（二选一，互斥；都建新 run_id）
+    ap.add_argument("--load", default=None, help="checkpoint 路径/run_id：加载权重 warm-start，fresh optimizer，epoch 1..N")
+    ap.add_argument("--resume", default=None, help="checkpoint 路径/run_id：加载权重+继承旧 run 曲线，epoch 从 last+1 续跑 N 个")
+    # 训练中定期 eval + 可视化（held-out val）
+    ap.add_argument("--eval-every", dest="eval_every", type=int, default=1, help="每 N epoch 跑一次 test eval+可视化（0=关）")
+    ap.add_argument("--eval-split", dest="eval_split", default="val", help="eval 用的 held-out split（imagenet:val；BSDS:test）")
+    ap.add_argument("--viz-split", dest="viz_split", default=None, help="可视化用的 split（默认 = --eval-split；BSDS 用 val）")
+    ap.add_argument("--eval-samples", dest="eval_samples", type=int, default=512, help="每次 eval 的固定 val 图数")
+    ap.add_argument("--viz-samples", dest="viz_samples", type=int, default=6, help="可视化固定图数（每 epoch 同一批，看重建演变）")
     # video (ssf2020) 专用
     ap.add_argument("--seq-len", type=int, default=4, help="视频序列长度（ssf2020）")
     ap.add_argument("--max-sequences", type=int, default=64, help="最大序列数（ssf2020）")
@@ -410,10 +567,45 @@ def main() -> int:
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     log(run_id, f"[train] model built, params={sum(p.numel() for p in model.parameters())}")
 
-    # 3. 训练循环
-    loss_series: list[dict] = []
+    # 2a. 从 checkpoint 加载（load=warm-start fresh / resume=续跑继承旧 run 曲线）；新 run_id
+    start_epoch = 1
+    resumed_ls, resumed_tm, resumed_viz = [], [], []
+    if args.load and args.resume:
+        raise RuntimeError("--load 与 --resume 互斥")
+    if args.load:
+        load_checkpoint(model, args.load)
+        log(run_id, f"[train] loaded weights from {args.load} (warm-start, fresh optimizer, epoch 1..{args.epochs})")
+    elif args.resume:
+        load_checkpoint(model, args.resume)
+        prev_id = Path(args.resume).stem if args.resume.endswith(".pth") else args.resume
+        info = resume_from_run(prev_id)
+        resumed_ls, resumed_tm, resumed_viz = info["loss_series"], info["test_metrics"], info["viz"]
+        start_epoch = info["start_epoch"]
+        log(run_id, f"[train] resumed from {prev_id}: continue epoch {start_epoch}..{start_epoch + args.epochs - 1}, "
+                    f"inherited {len(resumed_ls)} loss points / {len(resumed_tm)} test / {len(resumed_viz)} viz")
+
+    # 2b. held-out eval + 可视化样本（仅图像模型；每 epoch 末跑）
+    eval_sample, viz_sample, originals, test_metrics, viz = None, None, None, [], []
+    if args.resume:
+        test_metrics, viz = list(resumed_tm), list(resumed_viz)  # 继承旧 run 曲线（loss_series 见下）
+    eval_on = (not is_video) and args.eval_every and args.eval_every > 0
+    if eval_on:
+        try:
+            viz_split = args.viz_split or args.eval_split
+            eval_sample, viz_sample, originals = _load_eval_samples(
+                args.dataset, args.method, args.eval_split, viz_split,
+                args.eval_samples, args.viz_samples, args.size)
+            log(run_id, f"[train] eval on {args.dataset}/{args.eval_split} ({len(eval_sample)} imgs), "
+                        f"viz on {args.dataset}/{viz_split} ({len(viz_sample)} imgs), every {args.eval_every} epoch"
+                        + ("" if originals is None else f", with originals (3-panel)"))
+        except Exception as e:
+            log(run_id, f"[train] eval disabled: {e}")
+            eval_on = False
+
+    # 3. 训练循环（resume 时继承旧 loss_series + 从 start_epoch 续跑 args.epochs 个）
+    loss_series: list[dict] = list(resumed_ls) if args.resume else []
     try:
-        for epoch in range(1, args.epochs + 1):
+        for epoch in range(start_epoch, start_epoch + args.epochs):
             ep_loss, ep_psnr, ep_bpp, n = 0.0, 0.0, 0.0, 0
             if is_video:
                 for batch in loader:  # batch = list[sample], sample = list[[3,H,W]]
@@ -436,12 +628,27 @@ def main() -> int:
                     ep_loss += lv; ep_psnr += psnr; ep_bpp += bpp; n += 1
             avg = {"epoch": epoch, "loss": ep_loss / max(n, 1), "psnr": ep_psnr / max(n, 1), "bpp": ep_bpp / max(n, 1)}
             loss_series.append(avg)
-            log(run_id, f"[train] epoch {epoch}/{args.epochs} loss={avg['loss']:.4f} psnr={avg['psnr']:.2f} bpp={avg['bpp']:.3f}")
+            ep_i = epoch - start_epoch + 1
+            log(run_id, f"[train] epoch {epoch} ({ep_i}/{args.epochs}) loss={avg['loss']:.4f} psnr={avg['psnr']:.2f} bpp={avg['bpp']:.3f}")
+            # 训练中 eval + 可视化（每 eval_every epoch）
+            if eval_on and (epoch % args.eval_every == 0):
+                try:
+                    em = _run_eval(model, eval_sample, device, args.lamb, args.batch)
+                    em["epoch"] = epoch
+                    test_metrics.append(em)
+                    vpaths = _save_viz(model, viz_sample, originals, device, run_id, epoch)
+                    viz.extend(vpaths)  # 每 epoch 6 条 {epoch, sample, path}
+                    log(run_id, f"[train]   eval epoch {epoch}: test psnr={em['psnr']:.2f} bpp={em['bpp']:.3f} "
+                                f"loss={em['loss']:.4f} | viz {len(vpaths)} panels -> viz/{run_id}/")
+                except Exception as ee:
+                    log(run_id, f"[train]   eval/viz error epoch {epoch}: {ee}")
             # 实时曲线：每 epoch 把当前 loss_series 落盘，前端轮询即可看到曲线增长
-            _record_run(args, run_id, started, status="running", loss_series=loss_series)
+            _record_run(args, run_id, started, status="running", loss_series=loss_series,
+                        test_metrics=test_metrics, viz=viz)
     except Exception as e:
         log(run_id, f"[train] training loop error: {e}")
-        _record_run(args, run_id, started, status="failed", loss_series=loss_series, error=str(e))
+        _record_run(args, run_id, started, status="failed", loss_series=loss_series,
+                    test_metrics=test_metrics, viz=viz, error=str(e))
         return 1
 
     # 4. 存 checkpoint（state_dict，可被 _load_model/checkpoint_path 加载）
@@ -454,7 +661,8 @@ def main() -> int:
     best_metric = max((p["psnr"] for p in loss_series), default=None)
     _record_run(args, run_id, started, status="completed",
                 loss_series=loss_series, checkpoint_path=f"checkpoints/{run_id}.pth",
-                final_loss=final_loss, best_metric=best_metric)
+                final_loss=final_loss, best_metric=best_metric,
+                test_metrics=test_metrics, viz=viz)
     log(run_id, f"[train] done run_id={run_id}")
     return 0
 
@@ -477,6 +685,8 @@ def _record_run(args, run_id: str, started: float, *, status: str, loss_series, 
         "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S") if status != "running" else None,
         "status": status,
         "loss_series": loss_series,
+        "test_metrics": kw.get("test_metrics", []),
+        "viz": kw.get("viz", []),
         "final_loss": kw.get("final_loss"),
         "best_metric": kw.get("best_metric"),
         "checkpoint_path": kw.get("checkpoint_path"),

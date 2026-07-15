@@ -33,6 +33,21 @@ DATASETS_DIR = Path(os.environ.get("INFRACOMP_DATASETS_DIR", str(REPO / "dataset
 _SPLIT = {"train": "train", "val": "validation", "validation": "validation", "test": "test"}
 
 
+def _frame_path(out_dir: Path, i: int) -> Path:
+    """分桶存盘：<out_dir>/<i//5000:04d>/frame_<i:07d>.png（每子目录 ≤5000，避免 NTFS 单目录退化）。"""
+    bucket = out_dir / f"{i // 5000:04d}"
+    bucket.mkdir(parents=True, exist_ok=True)
+    return bucket / f"frame_{i:07d}.png"
+
+
+def _frame_exists(out_dir: Path, i: int) -> bool:
+    """已存在则跳过：查分桶路径 **或** 旧扁平路径（兼容历史扁平布局/未迁移完）。不 mkdir。"""
+    bucket = out_dir / f"{i // 5000:04d}"
+    if (bucket / f"frame_{i:07d}.png").exists():
+        return True
+    return (out_dir / f"frame_{i:07d}.png").exists()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--split", default="train")
@@ -68,7 +83,7 @@ def main() -> int:
             e = edges[k]
             if e.shape[0] != args.save_size:
                 e = np.array(Image.fromarray(e).resize((args.save_size, args.save_size), Image.BILINEAR))
-            Image.fromarray(e).save(out_dir / f"frame_{i:07d}.png")
+            Image.fromarray(e).save(_frame_path(out_dir, i))
             n += 1
         return n
 
@@ -84,7 +99,7 @@ def main() -> int:
             if args.limit and acc_rows + r >= args.limit:
                 break
             i = start_idx + r
-            if (out_dir / f"frame_{i:07d}.png").exists():
+            if _frame_exists(out_dir, i):
                 continue
             cell = col[r].as_py()
             b = cell["bytes"] if isinstance(cell, dict) else cell

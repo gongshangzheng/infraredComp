@@ -35,6 +35,15 @@ DATASETS_DIR = Path(os.environ.get("INFRACOMP_DATASETS_DIR", str(REPO / "dataset
 _SPLIT_PREFIX = {"train": "train", "val": "validation", "validation": "validation", "test": "test"}
 
 
+def _frame_path(out_dir: str, i: int) -> Path:
+    """分桶存盘：<out_dir>/<i//5000:04d>/frame_<i:07d>.png。
+    每子目录 ≤5000 文件，避免单目录百万文件导致 NTFS 写入/索引退化。
+    ContourPNGDataset 用 rglob 递归读，兼容分桶与扁平两种布局。"""
+    bucket = Path(out_dir) / f"{i // 5000:04d}"
+    bucket.mkdir(parents=True, exist_ok=True)
+    return bucket / f"frame_{i:07d}.png"
+
+
 def build_groups(split: str, shards: int) -> tuple[list[str], list[tuple[int, int, int, int]], int]:
     """返回 (file_paths, groups, total)。
     groups = [(start_idx, file_idx, row_group, num_rows), ...]，按 parquet 顺序连续编号。
@@ -85,7 +94,7 @@ def _one_group(task) -> int:
     new = 0
     for r in range(nrows):
         i = start_idx + r
-        out = Path(out_dir) / f"frame_{i:07d}.png"
+        out = _frame_path(out_dir, i)
         if out.exists():
             continue  # skip-if-exists（续跑）
         cell = col[r].as_py()

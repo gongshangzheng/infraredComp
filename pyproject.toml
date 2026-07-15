@@ -23,4 +23,5 @@ dependencies = [
     "uvicorn[standard]>=0.32.0",
     "static-ffmpeg>=3.0",
     "pyarrow>=25.0.0",
+    "modelscope>=1.38.1",
 ]

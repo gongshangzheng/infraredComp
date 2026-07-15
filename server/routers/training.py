@@ -45,6 +45,9 @@ _COMPRESSAI_MODELS = [
 # imagenet 三 split 分工：train→训练（此处），val→评测 speed run，test→评测 formal。
 _DEFAULT_DATASETS = [
     {"id": "imagenet-train", "name": "ImageNet train（在线提边缘）", "split": "train", "num_samples": "1.28M", "modalities": ["rgb"], "description": "ImageNet-1k train parquet，训练时在线提边缘轮廓（不落地），按 --shards/--max-images 采样一部分图"},
+    {"id": "bsds-train", "name": "BSDS500 train (GT 软边缘)", "split": "train", "num_samples": "200", "modalities": ["edge_gt"], "description": "BSDS500 train split GT（.mat Boundaries 多标注者平均→软边缘 PNG）；train→训练 / test→eval / val→可视化（先跑 convert_bsds_gt.py）"},
+    {"id": "bsds-val", "name": "BSDS500 val (GT)", "split": "val", "num_samples": "100", "modalities": ["edge_gt"], "description": "BSDS500 val split GT——用作训练可视化集"},
+    {"id": "bsds-test", "name": "BSDS500 test (GT)", "split": "test", "num_samples": "200", "modalities": ["edge_gt"], "description": "BSDS500 test split GT——用作训练 eval/test 集"},
     {"id": "flir/train", "name": "FLIR thermal train", "split": "train", "num_samples": "?", "modalities": ["thermal_16bit"], "description": "FLIR ADAS thermal_16_bit 训练 split（先离线提取轮廓再训）"},
     {"id": "flir/val", "name": "FLIR thermal val", "split": "val", "num_samples": "?", "modalities": ["thermal_16bit"], "description": "FLIR ADAS thermal_16_bit 验证 split（先离线提取轮廓再训）"},
 ]
@@ -168,7 +171,11 @@ async def run_training(data: dict = Body(...)):
 
     训练脚本写 results/training/metrics.json（loss_series）+ checkpoints/{run_id}.pth + logs/{run_id}.log。
     """
-    run_id = f"{data.get('model_id', 'model')}__q{data.get('quality', 0)}__{int(time.time())}"
+    # run_id 带数据集名 + 轮廓方法名（如 ELIC__bsds-train__gt__q1__<ts>、ELIC__imagenet-train__canny__q1__<ts>）
+    ds_tag = str(data.get("dataset_id", "dataset")).replace("/", "_")
+    # BSDS 用 GT（不是 canny/hed 提取），方法标签强制 gt；其余用所选方法
+    method_tag = "gt" if ds_tag.startswith("bsds") else str(data.get("method", "canny"))
+    run_id = f"{data.get('model_id', 'model')}__{ds_tag}__{method_tag}__q{data.get('quality', 0)}__{int(time.time())}"
     script = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts", "train_model.py")
     args = [sys.executable, script,
             "--model", str(data.get("model_id", "")),
@@ -179,11 +186,17 @@ async def run_training(data: dict = Body(...)):
             "--batch", str(data.get("batch_size", 16)),
             "--lambda", str(data.get("lamb", 0.01)),
             "--device", str(data.get("device", "cuda")),
-            "--method", str(data.get("method", "canny")),
+            "--method", method_tag,
             "--shards", str(data.get("shards", 4)),
             "--max-images", str(data.get("max_images", 0)),
             "--size", str(data.get("size", 128)),
             "--run-id", run_id]
+    # 从 checkpoint 续训（load=warm-start / resume=续跑；二选一，来自前端 ckpt_mode radio）
+    ckpt = data.get("checkpoint")
+    if ckpt and data.get("ckpt_mode") == "load":
+        args += ["--load", str(ckpt)]
+    elif ckpt and data.get("ckpt_mode") == "resume":
+        args += ["--resume", str(ckpt)]
     # 视频模型（ssf2020）专用参数：序列长度 / 最大序列数 / warm-start
     if str(data.get("model_id")) == "ssf2020":
         args += ["--seq-len", str(data.get("seq_len", 4)),
@@ -295,5 +308,8 @@ async def serve_output(file_path: str):
     if not safe or not os.path.isfile(safe):
         return {"detail": "Output not found"}, 404
     ext = os.path.splitext(safe)[1].lower()
-    media = {".pth": "application/octet-stream", ".log": "text/plain", ".json": "application/json"}.get(ext, "application/octet-stream")
+    media = {
+        ".pth": "application/octet-stream", ".log": "text/plain", ".json": "application/json",
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
+    }.get(ext, "application/octet-stream")
     return FileResponse(safe, media_type=media, filename=os.path.basename(safe))
