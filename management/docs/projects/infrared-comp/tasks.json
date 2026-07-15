@@ -251,23 +251,23 @@
       "status": "active",
       "startDate": "2026-07-15",
       "assignee": "郑鑫裕",
-      "description": "接入 bytedance/NEVC(ICME2021, arXiv:2105.03079)。注意:NEVC 不是端到端 codec,是 x264/x265 上的神经 post-filter(MFQEN)——base 码流是标准 H.264/265,nn 只增强解码帧。集成=混合 codec:codecs/nevc.py(is_neural=True, encode_inprocess=ffmpeg x264 编码 frames→H.264 mp4 bytes; decode_inprocess=ffmpeg 解码 bytes→decoded frames→torch MFQEN post-filter 前向增强)。rate control=x264 crf,qualities=[18,23,28,33]。需 clone 读真实 README/test 确认 MFQEN 模型 API + checkpoint URL + 输入格式(RGB/BGR/灰/padding)。",
+      "description": "接入 bytedance/NEVC。重要更正:NEVC-1.0 = EHVC(ACM MM 2025, arXiv:2509.04118),是 ByteDance 基于 microsoft/DCVC 的扩展(test.py 头部明示 modified from DCVC),用同 DCVC-DC 的 IntraNoAR(I帧)+DMC(P帧)+MLCodec_rans(C++ 熵编码 ext)——是端到端神经视频 codec,非 post-filter。利好:(1)MLCodec_rans ext 已为 DCVC-DC 构建为 cp312,可直接复用;(2)checkpoint 在 HuggingFace ByteDance/NEVC1.0(HF 可达,可自动下,不像 OneDrive/GDrive 被拦)。集成=仿 dcvc_dc wrapper(IntraNoAR+DMC+MLCodec_rans,DPB seeding,二进制容器),vendor NEVC-1.0-EHVC/src/,下 HF checkpoint,注册 catalog。",
       "notePath": "",
       "children": [
         {
           "id": "t12-1",
-          "title": "NEVC: clone + 确认 MFQEN API/权重 + vendor 模型",
+          "title": "NEVC: 下 HF checkpoint + 复用 rans ext + vendor src",
           "status": "planned",
           "assignee": "郑鑫裕",
-          "description": "git clone --depth 1 bytedance/NEVC → 读 README/test 脚本确认 MFQEN 模型类、post-filter forward 签名、checkpoint 文件名+下载 URL(Drive?)、输入格式、依赖(torch 版本)。vendor 模型源码到 third_party/nevc/(tracked) + 下 checkpoint(gitignore)+ scripts/download_nevc_weights.py。",
+          "description": "git clone --depth 1 bytedance/NEVC → vendor NEVC-1.0-EHVC/src/ 到 third_party/nevc/(tracked);下 HuggingFace ByteDance/NEVC1.0 checkpoint 到 third_party/nevc/(gitignore)+ scripts/download_nevc_weights.py(HF 可达)。MLCodec_rans ext 复用 DCVC-DC 已构建的 cp312 版(若 NEVC src/cpp 有差异则同法重建)。读 test.py 确认 q_indexes/rate 点 + I/P frame API(DCVC 同构)。",
           "children": []
         },
         {
           "id": "t12-2",
-          "title": "NEVC: 写混合 codec + 注册 + 验证 RD",
+          "title": "NEVC: 写 dcvc_dc 式 wrapper + 注册 + 验证 RD",
           "status": "planned",
           "assignee": "郑鑫裕",
-          "description": "写 codecs/nevc.py(@register_codec, is_neural, encode=x264 subprocess, decode=ffmpeg decode + torch MFQEN post-filter)。注册 catalog qualities=[18,23,28,33] kind=learned-video。跑 akiyo crf 扫 4 点出 RD 曲线;重启后端 /codecs 含 nevc。",
+          "description": "仿 dcvc_rt.py/dcvc_dc 计划写 codecs/nevc.py(@register_codec, is_neural=True, IntraNoAR I帧+DMC P帧+MLCodec_rans,DPB seeding,二进制容器)。注册 catalog qualities(NEVC 的 q_indexes)+ kind=learned-video。跑 akiyo 扫 q 出 RD 曲线;重启后端 /codecs 含 nevc。",
           "children": []
         }
       ]
