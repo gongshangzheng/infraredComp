@@ -90,7 +90,24 @@
       "assignee": "郑鑫裕",
       "description": "将 PiDiNet、yoloe26 接入 benchmark/video/extractors/(@register 新提取器),与现有 canny/hed/sobel 并列,扩展轮廓提取算子",
       "notePath": "",
-      "children": []
+      "children": [
+        {
+          "id": "t7-1",
+          "title": "PiDiNet 接入 extractors + BSDS500/SA-Co 提取验证",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "description": "PiDiNet 权重下 third_party/pidinet/,@register 注册为 stage1 提取器;BSDS500(图像边缘)+ SA-Co(视频)跑提取对比 canny/hed/sobel",
+          "children": []
+        },
+        {
+          "id": "t7-2",
+          "title": "yoloe26 接入 extractors + BSDS500/SA-Co 提取验证",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "description": "yoloe26 权重下 third_party/yoloe26/,@register 注册;BSDS500 + SA-Co 跑提取验证",
+          "children": []
+        }
+      ]
     },
     {
       "id": "t8",
@@ -98,9 +115,18 @@
       "status": "active",
       "startDate": "2026-07-15",
       "assignee": "郑鑫裕",
-      "description": "接入 InterDigitalInc/LosslessSegmentationMapCompression 作为 codec/方法,纳入 stage2 评测对比",
+      "description": "接入 InterDigitalInc/LosslessSegmentationMapCompression 作为 stage2 codec。注意它是纯 C++17 CLI 二进制(encoder/decoder,链码 MSC/3OT + 算术编码),非 torch;无权重/率点、无损→单 RD 点、PSNR=inf。集成=build C++ + subprocess 包装(is_neural,写临时 .yuv→跑 encoder→读 .bin;解码反之)。RD 图对 inf PSNR cap 到有限值。纳入 stage2 评测对比。",
       "notePath": "",
-      "children": []
+      "children": [
+        {
+          "id": "t8-1",
+          "title": "LosslessSeg 接入 stage2 codec + SA-Co 评测",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "description": "clone InterDigitalInc/LosslessSegmentationMapCompression → cmake+MSVC build 出 encoder/decoder.exe(vendor 到 third_party/lsmc/,gitignore 二进制) → 写 codecs/lsmc.py(@register_codec, is_neural=True, encode_inprocess=拼 temp .yuv→跑 encoder→读 .bin; decode_inprocess=写 .bin→跑 decoder→读 rec.yuv→parse frames;10MB buffer 限) → 注册 catalog qualities=[0](单无损点) → 跑 akiyo 出 1 个 RD 点(无损 rec==gt,PSNR=inf→前端 cap) → viewable mp4 合成。SA-Co-VEval 视频跑评测。",
+          "children": []
+        }
+      ]
     },
     {
       "id": "t9",
@@ -110,7 +136,32 @@
       "assignee": "郑鑫裕",
       "description": "基于自有 diffTok 框架(gongshangzheng/diffTok),参考已有 encoder/decoder,实现针对灰度图(红外轮廓帧)的 encoder/decoder",
       "notePath": "",
-      "children": []
+      "children": [
+        {
+          "id": "t9-1",
+          "title": "diffTok 灰度 encoder 实现 + BSDS500 训练",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "description": "参考 diffTok 现有 encoder 实现灰度图 encoder;BSDS500 作训练数据",
+          "children": []
+        },
+        {
+          "id": "t9-2",
+          "title": "diffTok 灰度 decoder 实现 + BSDS500 训练",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "description": "参考现有 decoder 实现灰度图 decoder;BSDS500 作训练数据",
+          "children": []
+        },
+        {
+          "id": "t9-3",
+          "title": "diffTok 接入 stage2 评测 codec + SA-Co 评测",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "description": "灰度 enc/dec 套为 stage2 codec;SA-Co-VEval 跑评测出 RD 点",
+          "children": []
+        }
+      ]
     },
     {
       "id": "t10",
@@ -173,6 +224,50 @@
           "startDate": "",
           "assignee": "郑鑫裕",
           "description": "下载放 EVC/checkpoints/(共9个 EVC_*.pth.tar + Scale_EVC_*.pth.tar,见 EVC/checkpoints/download.py),例：EVC_LL.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211227&authkey=AD8e586WrFlT6IE ；EVC_LS_MD.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211226&authkey=ADp_pN4gvxbHMrw 。构建 MLCodec_rans ext;套 wrapper 模板,注册,验证。",
+          "children": []
+        },
+        {
+          "id": "t10-7",
+          "title": "DCVC 系列 评测/训练数据集接入(SA-Co/BSDS500)",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "description": "t10-1~6 接入后用 SA-Co-VEval 统一跑评测 RD 点;训练侧 BSDS500(若 finetune)",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "t11",
+      "title": "接入 SA-Co-VEval 数据集(ModelScope)",
+      "status": "planned",
+      "assignee": "郑鑫裕",
+      "startDate": "2026-07-15",
+      "description": "ModelScope facebook/SACo-VEval(~32GB,视频分割评估,Meta AI);用 modelscope python SDK 下到 D:/data/SACo-VEval/ + junction 到 datasets/SACo-VEval/;详见 dataset-management skill D:/data+symlink 段",
+      "children": []
+    },
+    {
+      "id": "t12",
+      "title": "接入 NEVC(bytedance, x264/x265 + 神经 post-filter 混合 codec)",
+      "status": "active",
+      "startDate": "2026-07-15",
+      "assignee": "郑鑫裕",
+      "description": "接入 bytedance/NEVC(ICME2021, arXiv:2105.03079)。注意:NEVC 不是端到端 codec,是 x264/x265 上的神经 post-filter(MFQEN)——base 码流是标准 H.264/265,nn 只增强解码帧。集成=混合 codec:codecs/nevc.py(is_neural=True, encode_inprocess=ffmpeg x264 编码 frames→H.264 mp4 bytes; decode_inprocess=ffmpeg 解码 bytes→decoded frames→torch MFQEN post-filter 前向增强)。rate control=x264 crf,qualities=[18,23,28,33]。需 clone 读真实 README/test 确认 MFQEN 模型 API + checkpoint URL + 输入格式(RGB/BGR/灰/padding)。",
+      "notePath": "",
+      "children": [
+        {
+          "id": "t12-1",
+          "title": "NEVC: clone + 确认 MFQEN API/权重 + vendor 模型",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "description": "git clone --depth 1 bytedance/NEVC → 读 README/test 脚本确认 MFQEN 模型类、post-filter forward 签名、checkpoint 文件名+下载 URL(Drive?)、输入格式、依赖(torch 版本)。vendor 模型源码到 third_party/nevc/(tracked) + 下 checkpoint(gitignore)+ scripts/download_nevc_weights.py。",
+          "children": []
+        },
+        {
+          "id": "t12-2",
+          "title": "NEVC: 写混合 codec + 注册 + 验证 RD",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "description": "写 codecs/nevc.py(@register_codec, is_neural, encode=x264 subprocess, decode=ffmpeg decode + torch MFQEN post-filter)。注册 catalog qualities=[18,23,28,33] kind=learned-video。跑 akiyo crf 扫 4 点出 RD 曲线;重启后端 /codecs 含 nevc。",
           "children": []
         }
       ]
