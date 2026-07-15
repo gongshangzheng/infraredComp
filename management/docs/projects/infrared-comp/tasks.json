@@ -124,9 +124,9 @@
         {
           "id": "t8-1",
           "title": "LosslessSeg 接入 stage2 codec + SA-Co 评测",
-          "status": "planned",
+          "status": "active",
           "assignee": "郑鑫裕",
-          "description": "clone InterDigitalInc/LosslessSegmentationMapCompression → cmake+MSVC build 出 encoder/decoder.exe(vendor 到 third_party/lsmc/,gitignore 二进制) → 写 codecs/lsmc.py(@register_codec, is_neural=True, encode_inprocess=拼 temp .yuv→跑 encoder→读 .bin; decode_inprocess=写 .bin→跑 decoder→读 rec.yuv→parse frames;10MB buffer 限) → 注册 catalog qualities=[0](单无损点) → 跑 akiyo 出 1 个 RD 点(无损 rec==gt,PSNR=inf→前端 cap) → viewable mp4 合成。SA-Co-VEval 视频跑评测。",
+          "description": "clone InterDigitalInc/LosslessSegmentationMapCompression → cmake+MSVC build 出 encoder/decoder.exe(vendor 到 third_party/lsmc/,gitignore 二进制) → 写 codecs/lsmc.py(@register_codec, is_neural=True, encode_inprocess=拼 temp .yuv→跑 encoder→读 .bin; decode_inprocess=写 .bin→跑 decoder→读 rec.yuv→parse frames;10MB buffer 限) → 注册 catalog qualities=[0](单无损点) → 跑 akiyo 出 1 个 RD 点(无损 rec==gt,PSNR=inf→前端 cap) → viewable mp4 合成。SA-Co-VEval 视频跑评测。【进度@2026-07-15】wrapper+catalog 已就位(git 2249dd8)，但 encoder multi-label crash 未解(待调)，故本子任务仍 active。",
           "children": []
         }
       ]
@@ -172,7 +172,7 @@
       "status": "active",
       "startDate": "2026-07-15",
       "assignee": "郑鑫裕",
-      "description": "third_party/DCVC/DCVC-family/ 下 DCVC/DCVC-DC/DCVC-HEM/DCVC-FM/DCVC-TCM/EVC 六成员逐个接入:下 OneDrive checkpoint + 构建 MLCodec_rans C++ ext + 仿 dcvc_rt.py 写 wrapper(IntraNoAR I帧 + DMC P帧 + DPB seeding + 二进制容器),注册 catalog,跑通 RD 点,纳入训练流程。OneDrive 环境不通需手动下;ext 构建用本机 MSVC(VS2022)+cmake,需 -DPYTHON_EXECUTABLE 指向 conda compression(python 3.12)。",
+      "description": "DCVC 系列接入(训练+测试)。当前进度：(1) DCVC-RT: wrapper dcvc_rt.py 已写好(DMCI+DMC+MLCodec_extensions_cpp); checkpoints 已就位(third_party/DCVC/checkpoints/cvpr2025_*.pth.tar); rans ext MLCodec_extensions_cpp 待 build(pip install OOM, 待重试)。ext build 后即可跑通。(2) DCVC-DC(t10-1): MLCodec_rans ext 已 build(cp312); checkpoints 未下(OneDrive 被拦); wrapper 未写但 NEVC 已验证 IntraNoAR+DMC+MLCodec_rans 路径可行(DCVC-DC 同接口, wrapper=NEVC 改 src+ckpt 路径)。(3) DCVC-HEM/FM/TCM/EVC(t10-2~6): 全 planning。",
       "notePath": "",
       "children": [
         {
@@ -181,7 +181,7 @@
           "status": "active",
           "startDate": "2026-07-15",
           "assignee": "郑鑫裕",
-          "description": "下载放 third_party/DCVC/DCVC-family/DCVC-DC/checkpoints/：cvpr2023_image_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211259&authkey=AO_gFvTcYZUFd9U ；cvpr2023_video_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211256&authkey=ACzRzK3XgbQxEyk （另 ssim/yuv420 共6个见 download.py）。MLCodec_rans+MLCodec_CXX ext 已用 MSVC 构建为 cp312(放 src/models/,导入验证通过)。待 checkpoint 到位后仿 dcvc_rt.py 写 codecs/dcvc_dc.py(IntraNoAR+DMC+MLCodec_rans),注册 catalog,真跑 akiyo 验证 RD 点。",
+          "description": "下载放 third_party/DCVC/DCVC-family/DCVC-DC/checkpoints/：cvpr2023_image_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211259&authkey=AO_gFvTcYZUFd9U ；cvpr2023_video_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211256&authkey=ACzRzK3XgbQxEyk （另 ssim/yuv420 共6个见 download.py）。MLCodec_rans+MLCodec_CXX ext 已用 MSVC 构建为 cp312(放 src/models/,导入验证通过)。NEVC(t12)已验证 IntraNoAR+DMC+MLCodec_rans 的 encode_decode 路径跑通(bpp=0.31 psnr=33.08)。DCVC-DC 同接口, wrapper=nevc.py 改 src 路径(third_party/DCVC/DCVC-family/DCVC-DC/)+ ckpt 路径(cvpr2023_*)。待 checkpoint 到位后写 codecs/dcvc_dc.py,注册 catalog,真跑 akiyo 验证 RD 点。",
           "children": []
         },
         {
@@ -251,7 +251,7 @@
     {
       "id": "t12",
       "title": "接入 NEVC(bytedance, x264/x265 + 神经 post-filter 混合 codec)",
-      "status": "active",
+      "status": "completed",
       "startDate": "2026-07-15",
       "assignee": "郑鑫裕",
       "description": "接入 bytedance/NEVC。重要更正:NEVC-1.0 = EHVC(ACM MM 2025, arXiv:2509.04118),是 ByteDance 基于 microsoft/DCVC 的扩展(test.py 头部明示 modified from DCVC),用同 DCVC-DC 的 IntraNoAR(I帧)+DMC(P帧)+MLCodec_rans(C++ 熵编码 ext)——是端到端神经视频 codec,非 post-filter。利好:(1)MLCodec_rans ext 已为 DCVC-DC 构建为 cp312,可直接复用;(2)checkpoint 在 HuggingFace ByteDance/NEVC1.0(HF 可达,可自动下,不像 OneDrive/GDrive 被拦)。集成=仿 dcvc_dc wrapper(IntraNoAR+DMC+MLCodec_rans,DPB seeding,二进制容器),vendor NEVC-1.0-EHVC/src/,下 HF checkpoint,注册 catalog。",
@@ -260,20 +260,23 @@
         {
           "id": "t12-1",
           "title": "NEVC: 下 HF checkpoint + 复用 rans ext + vendor src",
-          "status": "planned",
+          "status": "completed",
           "assignee": "郑鑫裕",
           "description": "git clone --depth 1 bytedance/NEVC → vendor NEVC-1.0-EHVC/src/ 到 third_party/nevc/(tracked);下 HuggingFace ByteDance/NEVC1.0 checkpoint 到 third_party/nevc/(gitignore)+ scripts/download_nevc_weights.py(HF 可达)。MLCodec_rans ext 复用 DCVC-DC 已构建的 cp312 版(若 NEVC src/cpp 有差异则同法重建)。读 test.py 确认 q_indexes/rate 点 + I/P frame API(DCVC 同构)。",
-          "children": []
+          "children": [],
+          "endDate": "2026-07-15"
         },
         {
           "id": "t12-2",
           "title": "NEVC: 写 dcvc_dc 式 wrapper + 注册 + 验证 RD",
-          "status": "planned",
+          "status": "completed",
           "assignee": "郑鑫裕",
           "description": "仿 dcvc_rt.py/dcvc_dc 计划写 codecs/nevc.py(@register_codec, is_neural=True, IntraNoAR I帧+DMC P帧+MLCodec_rans,DPB seeding,二进制容器)。注册 catalog qualities(NEVC 的 q_indexes)+ kind=learned-video。跑 akiyo 扫 q 出 RD 曲线;重启后端 /codecs 含 nevc。",
-          "children": []
+          "children": [],
+          "endDate": "2026-07-15"
         }
-      ]
+      ],
+      "endDate": "2026-07-15"
     },
     {
       "id": "t13",
