@@ -1,25 +1,27 @@
 ---
 name: contour-video-management
 description: |
-  infraredComp 项目管理模块操作指南。用于团队成员管理、日报/周报/月报、任务看板、里程碑、会议纪要等 CRUD 操作（脚本直接改 markdown，后端只读）。
-  触发场景：(1) 添加/修改/删除团队成员，(2) 创建/更新/删除报表，(3) 管理任务看板(增删改查+跨段移动)，(4) 创建/更新/删除会议纪要，(5) 了解项目结构
+  infraredComp 项目管理模块操作指南。用于团队成员管理、日报/周报/月报、任务（看板+项目树）、里程碑、会议纪要等 CRUD 操作（脚本直接改文件，后端只读）。
+  触发场景：(1) 添加/修改/删除团队成员，(2) 创建/更新/删除报表，(3) 管理任务(增删改查+改状态跨段移动)，(4) 创建/更新/删除会议纪要，(5) 了解项目结构
 ---
 
 # infraredComp 项目管理模块
 
-本 skill 提供 infraredComp 项目管理模块（`management/`）的完整操作指南，以及一套**自定位**的 CRUD 脚本，直接读写 `management/` 下的 markdown 文件。
+本 skill 提供 infraredComp 项目管理模块（`management/`）的完整操作指南，以及一套**自定位**的 CRUD 脚本，直接读写 `management/` 下的数据文件。
 
-> **架构前提**：后端 `server/routers/management.py` 是**只读**的（16 个 GET 端点，解析 markdown 暴露给前端）。所有"增删改"由本 skill 的脚本直接修改 markdown 文件完成，再由只读 API 暴露。这与 ProjFlow 镜像。
+> **架构前提**：后端 `server/routers/management.py` 是**只读**的（16 个 GET 端点，解析数据文件暴露给前端）。所有"增删改"由本 skill 的脚本直接修改文件完成，再由只读 API 暴露。这与 ProjFlow 镜像。
+
+> **任务数据单源**：任务（看板 + 项目树）的唯一来源是 **per-project `management/docs/projects/{slug}/tasks.json`**（层级树）。看板（TaskBoard）是它的**派生视图**——按 status 展平成 3 桶，按项目切换。`tasks.md` 已废弃删除。成员/报表/会议/里程碑仍是 markdown。
 
 ## 脚本一览（`.claude/skills/contour-video-management/scripts/`）
 
-脚本 **self-locating**（用 `parents[4]` 解析仓库根），同一份文件在 infraredComp 与 ProjFlow 都能跑（两库 `tasks.md` schema 一致）。纯标准库，**推荐用 `uv run python` 运行**（项目是 uv 管理）。
+脚本 **self-locating**（用 `parents[4]` 解析仓库根），同一份文件在 infraredComp 与 ProjFlow 都能跑（两库 `tasks.json` schema 一致）。纯标准库，**推荐用 `uv run python` 运行**（项目是 uv 管理）。
 
-> **Windows 必看**：`python3` 在 Windows 上是 Microsoft Store 的占位 stub，非交互运行直接 exit 49、不可用；且脚本末尾 `print("✓ added ...")` 的 `✓`（U+2713）在 gbk stdout 下会 `UnicodeEncodeError`——崩溃发生在 `write_lines` **之后**，任务其实已写入文件，但 `&&` 链会断、后续命令不执行。Windows 下务必加前缀：`PYTHONUTF8=1 uv run python <script>`。多个脚本串行写同一个 `tasks.md`（每次读全文→写全文），只能 `&&` 串行，不能并行。
+> **Windows 必看**：`python3` 在 Windows 上是 Microsoft Store 的占位 stub，非交互运行直接 exit 49、不可用；且脚本末尾 `print("✓ added ...")` 的 `✓`（U+2713）在 gbk stdout 下会 `UnicodeEncodeError`——崩溃发生在 `write_tasks` **之后**，任务其实已写入文件，但 `&&` 链会断、后续命令不执行。Windows 下务必加前缀：`PYTHONUTF8=1 uv run python <script>`。多个脚本串行写同一个 `tasks.json`（每次读全文→写全文），只能 `&&` 串行，不能并行。
 
 | 实体 | 新增 | 修改 | 删除 | 查询 |
 |------|------|------|------|------|
-| 任务 task | `add_task.py` | `update_task.py`（含跨段 move） | `delete_task.py` | `list_tasks.py` |
+| 任务 task（tasks.json） | `add_task.py` | `update_task.py`（含改 status 跨段） | `delete_task.py` | `list_tasks.py` |
 | 成员 member | `add_member.py` | `update_member.py` | `delete_member.py` | — |
 | 会议 meeting | `create_meeting.py` | `update_meeting.py` | `delete_meeting.py` | — |
 | 报表 report | `create_report.py` | `update_report.py` | `delete_report.py` | — |
@@ -35,56 +37,59 @@ management/
 ├── weekly/         # 周报  YYYY/W{NN}-{author}.md
 ├── monthly/        # 月报  YYYY/{MM}-{author}.md
 └── docs/
-    ├── tasks.md    # 任务看板(三段: 进行中/待开始/已完成)
     ├── milestones.md # 里程碑
-    ├── projects/   # 项目树 {slug}/README.md + tasks.json + notes/
+    ├── projects/   # 项目树 {slug}/README.md + tasks.json（任务单源）+ notes/
     └── meetings/   # 会议纪要 YYYY-MM-DD.md
 ```
 
-只读 API（`GET /api/management/*`，端口 8091）：`team`、`daily`、`weekly`、`monthly`、`tasks`、`milestones`、`meetings`、`projects` 等，详见 `server/routers/management.py`。脚本改完 markdown，前端经 API 即可看到。
+只读 API（`GET /api/management/*`，端口 8091）：`team`、`daily`、`weekly`、`monthly`、`tasks`（`?slug=` 派生看板，缺省取首个项目）、`milestones`、`meetings`、`projects` 等，详见 `server/routers/management.py`。脚本改完文件，前端经 API 即可看到。
 
 ---
 
-## 1. 任务看板 CRUD
+## 1. 任务 CRUD（per-project tasks.json）
 
-`management/docs/tasks.md` 三段，**每段列不同**（后端 `tasks_parser` 按表顺序映射 in_progress/pending/completed）：
+任务数据**单源** = `management/docs/projects/{slug}/tasks.json`（层级树，与项目树页同源）。看板是派生视图：`server/parsers/tasks_parser.parse_tasks(slug)` 递归展平所有节点，按 status 映射进 3 桶：
 
-```markdown
-## 进行中
-| 任务 | 负责人 | 开始日期 | 截止日期 | 状态 | 备注 |
+- `completed` → completed
+- `active` → in_progress
+- `planned` / `paused` / `blocked` → pending
 
-## 待开始
-| 任务 | 负责人 | 预计开始 | 截止日期 | 优先级 | 备注 |
-
-## 已完成
-| 任务 | 负责人 | 完成日期 | 产出 | 备注 |
+任务节点 schema：
+```json
+{
+  "id": "t1-1", "title": "...", "status": "completed|active|planned|paused|blocked",
+  "startDate": "2026-07-08", "endDate": "2026-07-10", "assignee": "张三",
+  "description": "...", "notePath": "notes/01.md", "priority": "P1",
+  "children": [ ... ]
+}
 ```
 
 ```bash
 SD=.claude/skills/contour-video-management/scripts
 
-# 新增任务（进行中）
-uv run python $SD/add_task.py --section 进行中 --name "轮廓提取优化" \
-  --owner 张三 --start 2026-07-11 --end 2026-07-18 --status 🟢 --note "sobel 降噪"
-# 新增任务（待开始，带优先级）
-uv run python $SD/add_task.py --section 待开始 --name "AV1 baseline" --owner 李四 --priority P1
+# 新增根级任务（id 自动生成 tN）
+uv run python $SD/add_task.py --slug infrared-comp --title "轮廓提取优化" --status active \
+  --assignee 张三 --start 2026-07-11 --end 2026-07-18 --description "sobel 降噪" --note-path notes/contour.md
+# 新增子任务（挂到 t2 下，id 自动生成 t2-N）
+uv run python $SD/add_task.py --slug infrared-comp --parent t2 --title "AV1 baseline" --status planned --priority P1
 
-# 修改字段（只改传了的）
-uv run python $SD/update_task.py --section 进行中 --name "轮廓提取优化" --status 🔴 --owner 李四
-# 改名
-uv run python $SD/update_task.py --section 进行中 --name "轮廓提取优化" --new-name "轮廓提取 v2"
-# 完成（跨段 move 进行中 -> 已完成，完成日期默认今天，产出可指定）
-uv run python $SD/update_task.py --section 进行中 --name "轮廓提取优化" --move-to 已完成 --output "PR#12"
+# 修改字段（只改传了的；--status 即跨段移动，看板桶随之变）
+uv run python $SD/update_task.py --slug infrared-comp --id t2-3 --status active --assignee 李四
+# 改名 / 改日期
+uv run python $SD/update_task.py --slug infrared-comp --id t2-3 --title "轮廓提取 v2" --end 2026-07-20
+# 标记完成
+uv run python $SD/update_task.py --slug infrared-comp --id t2-3 --status completed
 
-# 删除
-uv run python $SD/delete_task.py --section 进行中 --name "轮廓提取优化"
+# 删除（递归删节点及其子树）
+uv run python $SD/delete_task.py --slug infrared-comp --id t2-3
 
-# 查询
-uv run python $SD/list_tasks.py                 # 全部
-uv run python $SD/list_tasks.py --section 待开始
+# 查询（树视图 / 展平看板桶 / 按 status 过滤）
+uv run python $SD/list_tasks.py --slug infrared-comp              # 树视图
+uv run python $SD/list_tasks.py --slug infrared-comp --flat       # 展平成 看板 三桶
+uv run python $SD/list_tasks.py --slug infrared-comp --status active
 ```
 
-`--section` 接受中文（进行中/待开始/已完成）或英文别名（in_progress/pending/completed、ongoing/todo/done）。状态 emoji：🟢 正常 / 🟡 风险 / 🔴 阻塞 / ✅ 完成。
+`--status` 接受 canonical（completed/active/planned/paused/blocked）或别名（done/in_progress/ongoing/todo/pending）。
 
 ---
 
@@ -150,21 +155,25 @@ uv run python $SD/delete_meeting.py --date 2026-07-11
 
 ## 5. 里程碑 / 项目树
 
-`milestones.md` 单表（名称|目标日期|状态|备注）；项目树 `docs/projects/{slug}/`（README.md + tasks.json + notes/）。这两块暂无专用 CRUD 脚本，直接编辑 markdown 即可，只读 API `GET /api/management/milestones`、`GET /api/management/projects[/{slug}[/tasks|/notes/{path}]]` 会自动解析。
+`milestones.md` 单表（名称|目标日期|状态|备注），暂无专用 CRUD 脚本，直接编辑 markdown 即可，只读 API `GET /api/management/milestones` 解析。
+
+项目树 `docs/projects/{slug}/`：`README.md`（项目元信息 + 正文）+ **`tasks.json`（任务单源，CRUD 见 §1）** + `notes/`（任务笔记 markdown，task 节点 `notePath` 引用）。只读 API `GET /api/management/projects[/{slug}[/tasks|/notes/{path}]]` 解析。项目树页与看板页读同一份 `tasks.json`。
 
 ## 关键约定
 
-- **只读后端**：management 后端只读 markdown；所有写操作走本 skill 脚本（直接改文件 + 原子写）。
-- **parser 兼容**：脚本的表格编辑器**保留表头**、按段实际列数生成行，与 `server/parsers/tasks_parser.py`（按表顺序 + 按表头名取列）兼容。
-- **空表保留**：`markdown_table.parse_markdown_tables` 已修——空表（header+separator 无数据行）也保留，保证 `tasks_parser` 的位置映射（in_progress/pending/completed）不因某段为空而错位。
-- **跨段 move**：`update_task --move-to` 自动按目标段列重映射（任务/负责人带过去；→已完成 完成日期默认今天、产出可来自 `--output` 或原备注）。
+- **只读后端**：management 后端只读数据文件；所有写操作走本 skill 脚本（直接改文件 + 原子写：tmp + os.replace）。
+- **任务单源 tasks.json**：任务（看板+项目树）唯一来源是 per-project `tasks.json`。看板（`tasks_parser.parse_tasks(slug)`）递归展平 + 按 status 映射成 3 桶；项目树页直接读同一份树。改一处，两处同步。
+- **跨段移动 = 改 status**：`update_task --status completed|active|planned|paused|blocked` 即把任务移到对应看板桶（无独立 move 概念）。
+- **id 自动生成**：`add_task` 根级生成 `tN`（现有根级最大号 +1），子任务生成 `{parent}-N`，保证项目内不重复。
+- **parser 兼容（markdown 实体）**：成员/会议/报表/里程碑仍是 markdown 表格；脚本的表格编辑器**保留表头**、按段实际列数生成行，与对应 parser（按表顺序 + 按表头名取列）兼容。空表保留（header+separator 无数据行也保留），保证位置映射不错位。
 - **自定位**：脚本用 `parents[4]` 解析仓库根，从任意 cwd 运行均可；同一份文件在 infraredComp 与 ProjFlow 通用。
 
 ## 常用命令
 
 ```bash
 SD=.claude/skills/contour-video-management/scripts
-uv run python $SD/list_tasks.py                      # 看任务看板
-uv run python $SD/add_task.py --section 进行中 --name "X" --owner Y --start 2026-07-11 --end 2026-07-18
-curl --noproxy '*' http://localhost:8091/api/management/tasks   # 前端所见
+uv run python $SD/list_tasks.py --slug infrared-comp          # 看任务树
+uv run python $SD/list_tasks.py --slug infrared-comp --flat  # 看展平看板桶
+uv run python $SD/add_task.py --slug infrared-comp --title "X" --status active --assignee Y --start 2026-07-11 --end 2026-07-18
+curl --noproxy '*' "http://localhost:8091/api/management/tasks?slug=infrared-comp"   # 前端所见看板
 ```
