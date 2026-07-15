@@ -183,7 +183,7 @@ def benchmark_codec(
 
     # 非 <video>-可播 codec (如 mpeg4 Part 2): 用重建帧合成 H.264 可播 mp4 覆盖展示路径。
     # 码流大小(compressed_bytes)与解码(读原 Part 2)已在上面完成, 指标不受影响。
-    if not getattr(codec, "browser_playable", True) and samples:
+    if not getattr(codec, "browser_playable", True) and not getattr(codec, "is_neural", False) and samples:
         try:
             synthesize_recon_video(recon_dir, artifact.fps, bitstream)
         except Exception as e:  # noqa: BLE001

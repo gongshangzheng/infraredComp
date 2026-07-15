@@ -26,8 +26,10 @@ from __future__ import annotations
 
 import os
 import pickle
+import shutil
 import struct
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -116,7 +118,12 @@ class NevcCodec(VideoCodec):
 
         from src.models.image_model import IntraNoAR
         from src.models.video_model import DMC
-        from src.utils.stream_helper import get_state_dict, get_padding_size  # NEVC: stream_helper, not common
+        from src.utils.stream_helper import (  # noqa: E402
+            get_state_dict,
+            get_padding_size,
+            decode_i,
+            decode_p,
+        )
 
         ckpt_i = self.checkpoint_i or DEFAULT_CKPT_I
         ckpt_p = self.checkpoint_p or DEFAULT_CKPT_P
@@ -143,7 +150,13 @@ class NevcCodec(VideoCodec):
         # NEVC's DMC flow_warp (grid_sample) does NOT support fp16 (Half/Float
         # mismatch in the flow grid) — stay fp32 on CUDA (slower than dcvc_rt's
         # fp16, but correct).
-        bundle = {"i_net": i_net, "p_net": p_net, "get_padding_size": get_padding_size}
+        bundle = {
+            "i_net": i_net,
+            "p_net": p_net,
+            "get_padding_size": get_padding_size,
+            "decode_i": decode_i,
+            "decode_p": decode_p,
+        }
         NevcCodec._CACHE[key] = bundle
         return bundle
 
@@ -156,7 +169,14 @@ class NevcCodec(VideoCodec):
     # ---- in-process encode/decode ----
 
     def encode_inprocess(self, frames: list, fps: float) -> bytes:
-        """frames = list[np.ndarray HxW uint8] -> bytes (binary container)."""
+        """frames = list[np.ndarray HxW uint8] -> bytes (binary container).
+
+        Uses ``encode_decode`` (compress+decompress combined, test.py's path) — the
+        decompress step POPULATES ``dpb["key_feature"]`` (``= feature``), which a
+        bare ``compress`` does NOT (it copies the input's key_feature=None). Without
+        encode_decode, the 2nd P-frame's ``multi_scale_key_feature_extractor`` hits
+        the else-branch with key_feature=None -> conv None -> crash.
+        """
         bundle = self.models
         i_net, p_net, get_padding_size = bundle["i_net"], bundle["p_net"], bundle["get_padding_size"]
         h0, w0 = frames[0].shape[:2]
@@ -164,58 +184,84 @@ class NevcCodec(VideoCodec):
 
         records: list[tuple[int, int, bytes]] = []   # (type, q_index, bit_stream)
         stats_list: list[dict] = []
-        with torch.no_grad():
-            # I-frame (frame 0).
-            x0, st0 = _img_to_tensor(frames[0])
-            x0 = x0.to(self.device)
-            x0_pad = torch.nn.functional.pad(x0, (pad_l, pad_r, pad_t, pad_b), mode="replicate")
-            enc = i_net.compress(x0_pad, True, self.q_index)
-            dpb = _seed_dpb(enc["x_hat"])
-            records.append((0, self.q_index, bytes(enc["bit_stream"])))
-            stats_list.append(st0)
+        tmp_dir = tempfile.mkdtemp(prefix="nevc_enc_")
+        try:
+            with torch.no_grad():
+                # I-frame (frame 0): encode_decode writes bin + returns x_hat.
+                x0, st0 = _img_to_tensor(frames[0])
+                x0 = x0.to(self.device)
+                x0_pad = torch.nn.functional.pad(x0, (pad_l, pad_r, pad_t, pad_b), mode="replicate")
+                bin_path = os.path.join(tmp_dir, "f000000.bin")
+                result = i_net.encode_decode(x0_pad, True, self.q_index, bin_path,
+                                            pic_height=h0, pic_width=w0)
+                dpb = _seed_dpb(result["x_hat"])
+                with open(bin_path, "rb") as f:
+                    records.append((0, self.q_index, f.read()))
+                stats_list.append(st0)
 
-            # P-frames 1..n-1 (look-ahead x_next; None for the last frame).
-            for i in range(1, len(frames)):
-                xi, sti = _img_to_tensor(frames[i])
-                xi = xi.to(self.device)
-                xi_pad = torch.nn.functional.pad(xi, (pad_l, pad_r, pad_t, pad_b), mode="replicate")
-                if i + 1 < len(frames):
-                    xn, _ = _img_to_tensor(frames[i + 1])
-                    xn = xn.to(self.device)
-                    x_next_pad = torch.nn.functional.pad(xn, (pad_l, pad_r, pad_t, pad_b), mode="replicate")
-                else:
-                    x_next_pad = None
-                enc = p_net.compress(xi_pad, x_next_pad, dpb, True, self.q_index, i % 4)
-                dpb = enc["dpb"]
-                records.append((1, self.q_index, bytes(enc["bit_stream"])))
-                stats_list.append(sti)
+                # P-frames 1..n-1 (look-ahead x_next; None for the last frame).
+                for i in range(1, len(frames)):
+                    xi, sti = _img_to_tensor(frames[i])
+                    xi = xi.to(self.device)
+                    xi_pad = torch.nn.functional.pad(xi, (pad_l, pad_r, pad_t, pad_b), mode="replicate")
+                    if i + 1 < len(frames):
+                        xn, _ = _img_to_tensor(frames[i + 1])
+                        xn = xn.to(self.device)
+                        x_next_pad = torch.nn.functional.pad(xn, (pad_l, pad_r, pad_t, pad_b), mode="replicate")
+                    else:
+                        x_next_pad = None
+                    bin_path = os.path.join(tmp_dir, f"f{i:06d}.bin")
+                    result = p_net.encode_decode(xi_pad, dpb, True, self.q_index,
+                                                x_next_pad, bin_path,
+                                                pic_height=h0, pic_width=w0, frame_idx=i % 4)
+                    dpb = result["dpb"]   # key_feature populated by the decompress step
+                    with open(bin_path, "rb") as f:
+                        records.append((1, self.q_index, f.read()))
+                    stats_list.append(sti)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
         return self._serialize(records, len(frames), h0, w0, stats_list)
 
     def decode_inprocess(self, bitstream_bytes: bytes, n_frames: int, hw: tuple[int, int]) -> list:
-        """bytes -> list[np.ndarray HxW uint8]."""
+        """bytes -> list[np.ndarray HxW uint8].
+
+        The container stores per-frame FILE bytes (encode_p/encode_i output, with
+        metadata header). decode_i/decode_p parse the header + extract the raw
+        bitstream string, then decompress -- mirroring encode_decode's internal
+        decode path. Passing file bytes directly to decompress would feed the rans
+        coder misaligned data -> segfault (exit 139)."""
         bundle = self.models
-        i_net, p_net, get_padding_size = bundle["i_net"], bundle["p_net"], bundle["get_padding_size"]
+        i_net, p_net = bundle["i_net"], bundle["p_net"]
+        decode_i, decode_p = bundle["decode_i"], bundle["decode_p"]
         records, (h0, w0), stats_list = self._deserialize(bitstream_bytes)
         if len(records) != n_frames:
             raise RuntimeError(
                 f"NEVC bitstream frame count {len(records)} != requested {n_frames}"
             )
-        pad_l, pad_r, pad_t, pad_b = get_padding_size(h0, w0, 16)
 
+        tmp_dir = tempfile.mkdtemp(prefix="nevc_dec_")
         recons: list[np.ndarray] = []
-        with torch.no_grad():
-            for idx, (ftype, q, bs) in enumerate(records):
-                if ftype == 0:  # I-frame
-                    dec = i_net.decompress(bs, h0, w0, True, q)
-                    x_hat = dec["x_hat"]
-                    dpb = _seed_dpb(x_hat)
-                else:           # P-frame
-                    dec = p_net.decompress(dpb, bs, h0, w0, True, q, idx % 4)
-                    x_hat = dec["x_hat"]
-                    dpb = dec.get("dpb", dpb)
-                x_hat = x_hat[:, :, :h0, :w0].float()
-                recons.append(_tensor_to_img(x_hat, stats_list[idx]))
+        try:
+            with torch.no_grad():
+                for idx, (ftype, _q, bs) in enumerate(records):
+                    bin_path = os.path.join(tmp_dir, f"f{idx:06d}.bin")
+                    with open(bin_path, "wb") as f:
+                        f.write(bs)
+                    if ftype == 0:  # I-frame
+                        h, w, q, q_idx, string = decode_i(bin_path)
+                        dec = i_net.decompress(string, h, w, q, q_idx)
+                        x_hat = dec["x_hat"]
+                        dpb = _seed_dpb(x_hat)
+                    else:           # P-frame
+                        q, q_idx, fidx, string = decode_p(bin_path)
+                        dec = p_net.decompress(dpb, string, h0, w0, q, q_idx, fidx)
+                        dpb = dec["dpb"]
+                        x_hat = dpb["ref_frame"]
+                    x_hat = x_hat[:, :, :h0, :w0].float()
+                    recons.append(_tensor_to_img(x_hat, stats_list[idx]))
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
         return recons
 
     # ---- (de)serialization ----
