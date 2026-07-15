@@ -13,16 +13,21 @@ Models
   * ssf2020  — CompressAI's Scale-Space Flow video model (qualities 1-9, mse).
                URLs come straight from the installed CompressAI package:
                ``compressai.zoo.video.model_urls["ssf2020"]["mse"]``.
+  * image    — CompressAI image models (bmshj2018/cheng2020/mbt2018, all mse
+               qualities) used by the per-frame video codecs ``img-<model>``.
+               URLs from ``compressai.zoo.image.model_urls``. (ELIC separate —
+               Google Drive, not in S3; not fetched here.)
   * dcvc-rt  — PLACEHOLDER. The repo / checkpoint source is not vendored yet.
                ``download_dcvc_rt()`` is a stub that raises NotImplementedError
                so the wiring is in place once DCVC-RT lands.
 
 Usage
 -----
-    python3 scripts/download_learned_checkpoints.py            # idempotent (ssf2020 q1-9)
-    python3 scripts/download_learned_checkpoints.py --force   # re-download
-    python3 scripts/download_learned_checkpoints.py --dry-run  # plan only
-    python3 scripts/download_learned_checkpoints.py --model ssf2020   # filter
+    uv run python scripts/download_learned_checkpoints.py            # idempotent (ssf2020 q1-9)
+    uv run python scripts/download_learned_checkpoints.py --model image   # all image checkpoints
+    uv run python scripts/download_learned_checkpoints.py --force        # re-download
+    uv run python scripts/download_learned_checkpoints.py --dry-run       # plan only
+    uv run python scripts/download_learned_checkpoints.py --model ssf2020  # filter
 """
 from __future__ import annotations
 
@@ -129,6 +134,73 @@ def download_ssf2020(force: bool, dry_run: bool) -> list[tuple[int, str, str, st
 
 
 # --------------------------------------------------------------------------- #
+# image models (per-frame, CompressAI zoo)                                     #
+# --------------------------------------------------------------------------- #
+IMAGE_MODELS = [
+    "bmshj2018-factorized", "bmshj2018-hyperprior",
+    "mbt2018-mean", "mbt2018",
+    "cheng2020-anchor", "cheng2020-attn",
+]
+
+
+def _image_urls() -> dict[str, dict[int, str]]:
+    """Pull each image model's mse URLs from compressai.zoo.image.model_urls.
+
+    Returns {model_name: {quality: url}}. ELIC is separate (Google Drive, not
+    in CompressAI S3) — not fetched here.
+    """
+    from compressai.zoo.image import model_urls
+    out: dict[str, dict[int, str]] = {}
+    for m in IMAGE_MODELS:
+        try:
+            mse = model_urls[m]["mse"]
+        except KeyError as exc:
+            raise RuntimeError(
+                f"CompressAI image mse URLs not found for {m!r} "
+                f"in compressai.zoo.image.model_urls"
+            ) from exc
+        out[m] = dict(mse)
+    return out
+
+
+def download_image_models(force: bool, dry_run: bool) -> list[tuple[str, str, str, str]]:
+    """Download CompressAI image pretrained checkpoints (bmshj2018/cheng2020/mbt2018,
+    all mse qualities) into the torch.hub cache — the same dir ``learned.py:_load_model``
+    reads from. Used by the per-frame video codecs (img-<model>).
+
+    Returns [(label, fname, url, status), ...] with label like "bmshj2018-factorized/q1".
+    """
+    urls = _image_urls()
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    results: list[tuple[str, str, str, str]] = []
+    for model in IMAGE_MODELS:
+        for q in sorted(urls[model]):
+            url = urls[model][q]
+            fname = url.rsplit("/", 1)[-1]
+            dest = CACHE_DIR / fname
+            label = f"{model}/q{q}"
+            if dry_run:
+                status = "would-download" if (force or not dest.exists()) else "cached"
+                results.append((label, fname, url, status))
+                continue
+            if dest.exists() and not force:
+                print(f"* {label} {fname} exists ({dest.stat().st_size // 1024} KB), skip")
+                results.append((label, fname, url, "skip"))
+                continue
+            print(f"* {label} <- {fname}")
+            try:
+                _download(url, dest)
+            except RuntimeError as exc:
+                print(f"  ! download failed: {exc}", file=sys.stderr)
+                if dest.exists():
+                    dest.unlink()
+                results.append((label, fname, url, "failed"))
+                continue
+            results.append((label, fname, url, "downloaded"))
+    return results
+
+
+# --------------------------------------------------------------------------- #
 # dcvc-rt (PLACEHOLDER)                                                        #
 # --------------------------------------------------------------------------- #
 def download_dcvc_rt(force: bool, dry_run: bool) -> list[tuple[int, str, str, str]]:
@@ -149,11 +221,12 @@ def download_dcvc_rt(force: bool, dry_run: bool) -> list[tuple[int, str, str, st
 # --------------------------------------------------------------------------- #
 DISPATCH = {
     "ssf2020": download_ssf2020,
+    "image": download_image_models,
     "dcvc-rt": download_dcvc_rt,
 }
 
 
-def _print_summary(results: list[tuple[int, str, str, str]]) -> None:
+def _print_summary(results: list) -> None:
     if not results:
         return
     cached = [r for r in results if r[3] in ("cached", "skip")]
@@ -162,20 +235,20 @@ def _print_summary(results: list[tuple[int, str, str, str]]) -> None:
     would = [r for r in results if r[3] == "would-download"]
     if cached:
         print("\nalready cached:")
-        for q, fname, _url, _st in cached:
-            print(f"  q{q}  {_rel_or_abs(CACHE_DIR / fname)}")
+        for r in cached:
+            print(f"  {r[0]}  {_rel_or_abs(CACHE_DIR / r[1])}")
     if downloaded:
         print("\ndownloaded:")
-        for q, fname, _url, _st in downloaded:
-            print(f"  q{q}  {_rel_or_abs(CACHE_DIR / fname)}")
+        for r in downloaded:
+            print(f"  {r[0]}  {_rel_or_abs(CACHE_DIR / r[1])}")
     if would:
         print("\nwould download:")
-        for q, fname, url, _st in would:
-            print(f"  q{q}  {url} -> {_rel_or_abs(CACHE_DIR / fname)}")
+        for r in would:
+            print(f"  {r[0]}  {r[2]} -> {_rel_or_abs(CACHE_DIR / r[1])}")
     if failed:
         print("\nfailed:")
-        for q, fname, url, _st in failed:
-            print(f"  q{q}  {url}")
+        for r in failed:
+            print(f"  {r[0]}  {r[2]}")
 
 
 def main() -> int:
