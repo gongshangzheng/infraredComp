@@ -142,8 +142,10 @@ class ImageNetContourDataset(Dataset):
         col = self._rg_cache.get((fi, rg), lambda k: self._load_col(*k))
         cell = col[r].as_py()
         b = cell["bytes"] if isinstance(cell, dict) else cell
-        img = Image.open(io.BytesIO(b)).convert("L")
-        arr = np.array(img, dtype=np.uint8)
+        # color BGR (extractors expect cv2 BGR; hed/pidinet/yoloe26 trained on
+        # color BSDS/COCO — pass color, let each extractor decide gray-vs-color)
+        img = Image.open(io.BytesIO(b)).convert("RGB")
+        arr = np.ascontiguousarray(np.array(img, dtype=np.uint8)[..., ::-1])
         edges = self._extractor.extract(arr)  # uint8 HxW
         if edges.dtype != np.uint8:
             edges = edges.astype(np.uint8)

@@ -131,3 +131,22 @@ def get_duration_seconds(path: str | Path) -> float:
         return float(fmt.get("duration", 0.0))
     except (TypeError, ValueError):
         return 0.0
+
+
+def demux_to_frames(video_path: Path, out_dir: Path, frames: int | None = None) -> list[Path]:
+    """Demux a video to **color** (bgr24) PNG frames via ffmpeg.
+
+    Decode to color so each extractor can decide gray-vs-color itself (HED/PiDiNet
+    were trained on color BSDS; yoloe26 needs color; canny/sobel cvtColor to gray).
+    Gray sources (infrared) decode to 3 identical channels, harmless. Lives here in
+    ffmpeg_util (a leaf module) so ``extractors/base.py``'s ``extract_video`` default
+    can import it without a circular base↔stage1 import.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pattern = str(out_dir / "frame_%06d.png")
+    args = ["-y", "-i", str(video_path), "-pix_fmt", "bgr24", "-vsync", "0"]
+    if frames is not None:
+        args += ["-vframes", str(frames)]
+    args += [pattern]
+    run_ffmpeg(args)
+    return sorted(out_dir.glob("frame_*.png"))

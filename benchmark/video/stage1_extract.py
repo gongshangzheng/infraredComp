@@ -16,7 +16,13 @@ import numpy as np
 from . import config
 from .data import ContourArtifact
 from .extractors import build_extractor, list_extractors
-from .ffmpeg_util import find_ffmpeg, get_duration_seconds, get_stream_info, run_ffmpeg
+from .ffmpeg_util import (
+    demux_to_frames,
+    find_ffmpeg,
+    get_duration_seconds,
+    get_stream_info,
+    run_ffmpeg,
+)
 
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".m4v", ".webm", ".y4m"}
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
@@ -79,29 +85,6 @@ def _video_fps(path: Path) -> float:
     except Exception:  # noqa: BLE001
         pass
     return DEFAULT_FRAME_FPS
-
-
-def demux_to_frames(video_path: Path, out_dir: Path, frames: int | None = None) -> list[Path]:
-    """Demux a video to **color** (bgr24) PNG frames via ffmpeg.
-
-    Decode to color so each extractor can decide gray-vs-color itself (HED/PiDiNet
-    were trained on color BSDS → prefer color; yoloe26 needs color; canny/sobel
-    convert to gray internally). Gray sources (infrared) decode to 3 identical
-    channels, which is harmless for all extractors.
-    """
-    out_dir.mkdir(parents=True, exist_ok=True)
-    pattern = str(out_dir / "frame_%06d.png")
-    args = [
-        "-y",
-        "-i", str(video_path),
-        "-pix_fmt", "bgr24",
-        "-vsync", "0",
-    ]
-    if frames is not None:
-        args += ["-vframes", str(frames)]
-    args += [pattern]
-    run_ffmpeg(args)
-    return sorted(out_dir.glob("frame_*.png"))
 
 
 def load_frame_sequence(frame_dir: Path) -> list[Path]:
@@ -191,37 +174,34 @@ def extract_contour_video(
 
     extractor = build_extractor(method)
 
-    # 1. Produce a raw grayscale frame sequence (intermediate, in-memory paths)
-    work_dir = work_out / "_raw_frames"
+    # 1. fps / duration (for the contour-mp4 stitch + manifest). The extractor
+    #    now owns the video→frames split (extract_video), so stage1 no longer
+    #    demuxes/loops here — it just assembles the contour.mp4 from edge frames.
     if kind == "video":
-        demux_to_frames(src_path, work_dir, frames=frames)
-        raw_frames = sorted(work_dir.glob("frame_*.png"))
         src_fps = fps if fps is not None else _video_fps(src_path)
         duration = get_duration_seconds(src_path)
     else:
-        raw_frames = load_frame_sequence(src_path)
-        if frames is not None:
-            raw_frames = raw_frames[:frames]
+        _dir_frames = load_frame_sequence(src_path)
+        _n = len(_dir_frames[:frames] if frames is not None else _dir_frames)
         src_fps = fps if fps is not None else DEFAULT_FRAME_FPS
-        duration = len(raw_frames) / src_fps if src_fps > 0 else 0.0
+        duration = _n / src_fps if src_fps > 0 else 0.0
 
-    if not raw_frames:
+    # 2. Extractor owns decoding + (per-frame or native-video) edge extraction.
+    #    Each model decides gray-vs-color; returns a list of uint8 HxW edge frames.
+    edges = extractor.extract_video(src_path, fps=src_fps, frames=frames)
+    if not edges:
         raise RuntimeError(f"No frames produced from {src_path}")
 
-    # 2. Extract edges per frame, write lossless grayscale PNG (intermediate).
-    #    Read the frame in COLOR (bgr24) — each extractor decides gray-vs-color
-    #    itself (HED/PiDiNet/yoloe26 want color; canny/sobel cvtColor to gray).
+    # 3. Write edge frames to lossless grayscale PNGs (intermediate for the stitch).
     contour_paths: list[Path] = []
     width = height = 0
-    for i, fp in enumerate(raw_frames):
-        frame = cv2.imread(str(fp), cv2.IMREAD_COLOR)
-        edges = extractor.extract(frame)
-        if edges.ndim == 3:
-            edges = cv2.cvtColor(edges, cv2.COLOR_BGR2GRAY)
+    for i, e in enumerate(edges):
+        if e.ndim == 3:
+            e = cv2.cvtColor(e, cv2.COLOR_BGR2GRAY)
         if i == 0:
-            height, width = edges.shape
+            height, width = e.shape
         cp = work_out / f"frame_{i:06d}.png"
-        cv2.imwrite(str(cp), edges)
+        cv2.imwrite(str(cp), e)
         contour_paths.append(cp)
 
     # 3. Stitch the contour PNGs into a LOSSLESS video (the persistent product).
@@ -261,10 +241,8 @@ def extract_contour_video(
     work_manifest = work_out / "manifest.json"
     work_manifest.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # Clean the intermediate raw frames before the swap.
-    shutil.rmtree(work_dir, ignore_errors=True)
-
     # Swap: replace the existing dir only after the new one is fully ready.
+    # (The raw-frame decode temp is owned + cleaned by extractor.extract_video.)
     if out_dir.exists():
         shutil.rmtree(out_dir)
     work_out.rename(out_dir)

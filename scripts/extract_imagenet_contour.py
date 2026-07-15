@@ -90,13 +90,14 @@ def _one_group(task) -> int:
             continue  # skip-if-exists（续跑）
         cell = col[r].as_py()
         b = cell["bytes"] if isinstance(cell, dict) else cell
-        img = Image.open(io.BytesIO(b)).convert("L")
+        img = Image.open(io.BytesIO(b)).convert("RGB")
         # 先把输入缩到 max 边 = extract_size（bounds hed 成本；最终输出是 size=128，
         # 原生 4K 图提取边缘再缩 128 没意义且慢 ~10×）
         if extract_size and max(img.size) > extract_size:
             ratio = extract_size / max(img.size)
             img = img.resize((max(1, int(img.size[0] * ratio)), max(1, int(img.size[1] * ratio))), Image.BILINEAR)
-        arr = np.array(img, dtype=np.uint8)
+        # color BGR (extractors expect cv2 BGR; hed/pidinet/yoloe26 trained on color)
+        arr = np.ascontiguousarray(np.array(img, dtype=np.uint8)[..., ::-1])
         edges = ex.extract(arr)
         if edges.dtype != np.uint8:
             edges = edges.astype(np.uint8)
