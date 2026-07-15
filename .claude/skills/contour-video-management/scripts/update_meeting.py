@@ -8,8 +8,8 @@ Supports:
   --append-todo       append a `- [ ]` bullet to the 待办 section
 
 Usage:
-    python3 update_meeting.py --date 2026-07-11 --participants "张三、李四"
-    python3 update_meeting.py --date 2026-07-11 --append-todo "张三：完成轮廓评测"
+    uv run python update_meeting.py --date 2026-07-11 --participants "张三、李四"
+    uv run python update_meeting.py --date 2026-07-11 --append-todo "张三：完成轮廓评测"
 """
 from __future__ import annotations
 

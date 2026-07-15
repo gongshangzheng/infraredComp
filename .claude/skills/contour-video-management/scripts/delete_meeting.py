@@ -2,7 +2,7 @@
 """Delete a meeting minutes file management/docs/meetings/{date}.md.
 
 Usage:
-    python3 delete_meeting.py --date 2026-07-11
+    uv run python delete_meeting.py --date 2026-07-11
 """
 from __future__ import annotations
 

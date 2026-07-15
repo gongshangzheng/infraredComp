@@ -8,9 +8,9 @@ Self-locating; argparse; identical file used in infraredComp and ProjFlow.
     monthly: management/monthly/{YYYY}/{MM}-{author}.md         (--year --month)
 
 Usage:
-    python3 create_report.py --type daily --author zhangsan --date 2026-07-11
-    python3 create_report.py --type weekly --author zhangsan --year 2026 --week 28
-    python3 create_report.py --type monthly --author zhangsan --year 2026 --month 07
+    uv run python create_report.py --type daily --author zhangsan --date 2026-07-11
+    uv run python create_report.py --type weekly --author zhangsan --year 2026 --week 28
+    uv run python create_report.py --type monthly --author zhangsan --year 2026 --month 07
 """
 from __future__ import annotations
 

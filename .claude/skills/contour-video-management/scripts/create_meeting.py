@@ -4,7 +4,7 @@
 Self-locating; argparse; identical file used in infraredComp and ProjFlow.
 
 Usage:
-    python3 create_meeting.py --date 2026-07-11 \\
+    uv run python create_meeting.py --date 2026-07-11 \\
         --participants "张三、李四" --recorder 张三 --topics "进度回顾,方案讨论" \\
         --decision "确认轮廓提取用 sobel" --todo "张三:跑 CRF 扫描"
 """

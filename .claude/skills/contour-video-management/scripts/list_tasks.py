@@ -2,8 +2,8 @@
 """List tasks in management/docs/tasks.md (one or all sections).
 
 Usage:
-    python3 list_tasks.py                  # all sections
-    python3 list_tasks.py --section 进行中   # one section
+    uv run python list_tasks.py                  # all sections
+    uv run python list_tasks.py --section 进行中   # one section
 """
 from __future__ import annotations
 

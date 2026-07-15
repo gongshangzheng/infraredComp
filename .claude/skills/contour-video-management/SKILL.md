@@ -13,7 +13,9 @@ description: |
 
 ## 脚本一览（`.claude/skills/contour-video-management/scripts/`）
 
-脚本 **self-locating**（用 `parents[4]` 解析仓库根），同一份文件在 infraredComp 与 ProjFlow 都能跑（两库 `tasks.md` schema 一致）。纯标准库，`python3` 直接运行（无需 `uv run`）。
+脚本 **self-locating**（用 `parents[4]` 解析仓库根），同一份文件在 infraredComp 与 ProjFlow 都能跑（两库 `tasks.md` schema 一致）。纯标准库，**推荐用 `uv run python` 运行**（项目是 uv 管理）。
+
+> **Windows 必看**：`python3` 在 Windows 上是 Microsoft Store 的占位 stub，非交互运行直接 exit 49、不可用；且脚本末尾 `print("✓ added ...")` 的 `✓`（U+2713）在 gbk stdout 下会 `UnicodeEncodeError`——崩溃发生在 `write_lines` **之后**，任务其实已写入文件，但 `&&` 链会断、后续命令不执行。Windows 下务必加前缀：`PYTHONUTF8=1 uv run python <script>`。多个脚本串行写同一个 `tasks.md`（每次读全文→写全文），只能 `&&` 串行，不能并行。
 
 | 实体 | 新增 | 修改 | 删除 | 查询 |
 |------|------|------|------|------|
@@ -62,24 +64,24 @@ management/
 SD=.claude/skills/contour-video-management/scripts
 
 # 新增任务（进行中）
-python3 $SD/add_task.py --section 进行中 --name "轮廓提取优化" \
+uv run python $SD/add_task.py --section 进行中 --name "轮廓提取优化" \
   --owner 张三 --start 2026-07-11 --end 2026-07-18 --status 🟢 --note "sobel 降噪"
 # 新增任务（待开始，带优先级）
-python3 $SD/add_task.py --section 待开始 --name "AV1 baseline" --owner 李四 --priority P1
+uv run python $SD/add_task.py --section 待开始 --name "AV1 baseline" --owner 李四 --priority P1
 
 # 修改字段（只改传了的）
-python3 $SD/update_task.py --section 进行中 --name "轮廓提取优化" --status 🔴 --owner 李四
+uv run python $SD/update_task.py --section 进行中 --name "轮廓提取优化" --status 🔴 --owner 李四
 # 改名
-python3 $SD/update_task.py --section 进行中 --name "轮廓提取优化" --new-name "轮廓提取 v2"
+uv run python $SD/update_task.py --section 进行中 --name "轮廓提取优化" --new-name "轮廓提取 v2"
 # 完成（跨段 move 进行中 -> 已完成，完成日期默认今天，产出可指定）
-python3 $SD/update_task.py --section 进行中 --name "轮廓提取优化" --move-to 已完成 --output "PR#12"
+uv run python $SD/update_task.py --section 进行中 --name "轮廓提取优化" --move-to 已完成 --output "PR#12"
 
 # 删除
-python3 $SD/delete_task.py --section 进行中 --name "轮廓提取优化"
+uv run python $SD/delete_task.py --section 进行中 --name "轮廓提取优化"
 
 # 查询
-python3 $SD/list_tasks.py                 # 全部
-python3 $SD/list_tasks.py --section 待开始
+uv run python $SD/list_tasks.py                 # 全部
+uv run python $SD/list_tasks.py --section 待开始
 ```
 
 `--section` 接受中文（进行中/待开始/已完成）或英文别名（in_progress/pending/completed、ongoing/todo/done）。状态 emoji：🟢 正常 / 🟡 风险 / 🔴 阻塞 / ✅ 完成。
@@ -90,16 +92,16 @@ python3 $SD/list_tasks.py --section 待开始
 
 ```bash
 # 新增（自动去掉 README 的"暂无"占位行，并生成 {id}.md 档案）
-python3 $SD/add_member.py --name 张三 --id zhangsan --role 算法工程师 \
+uv run python $SD/add_member.py --name 张三 --id zhangsan --role 算法工程师 \
   --join-date 2026-01-15 --research "红外视频压缩" --tech "Python,PyTorch,ffmpeg" --modules "评测,论文"
 
 # 修改（按 --id 定位；--new-id 会改 id 并重命名档案文件）
-python3 $SD/update_member.py --id zhangsan --role "高级算法工程师" --join-date 2026-01-15
-python3 $SD/update_member.py --id zhangsan --name 张三丰 --new-id zhangsanfeng
+uv run python $SD/update_member.py --id zhangsan --role "高级算法工程师" --join-date 2026-01-15
+uv run python $SD/update_member.py --id zhangsan --name 张三丰 --new-id zhangsanfeng
 
 # 删除（同时删 README 行 + 档案文件；--keep-profile 保留档案）
-python3 $SD/delete_member.py --id zhangsan
-python3 $SD/delete_member.py --id zhangsan --keep-profile
+uv run python $SD/delete_member.py --id zhangsan
+uv run python $SD/delete_member.py --id zhangsan --keep-profile
 ```
 
 ---
@@ -110,18 +112,18 @@ python3 $SD/delete_member.py --id zhangsan --keep-profile
 
 ```bash
 # 创建
-python3 $SD/create_report.py --type daily   --author zhangsan --date 2026-07-11
-python3 $SD/create_report.py --type weekly  --author zhangsan --year 2026 --week 28
-python3 $SD/create_report.py --type monthly --author zhangsan --year 2026 --month 07
+uv run python $SD/create_report.py --type daily   --author zhangsan --date 2026-07-11
+uv run python $SD/create_report.py --type weekly  --author zhangsan --year 2026 --week 28
+uv run python $SD/create_report.py --type monthly --author zhangsan --year 2026 --month 07
 
 # 更新（追加工作/计划条目，或重写备注）
-python3 $SD/update_report.py --type daily --author zhangsan --date 2026-07-11 \
+uv run python $SD/update_report.py --type daily --author zhangsan --date 2026-07-11 \
   --append-work "完成轮廓提取 baseline" --append-plan "跑 AV1 CRF 扫描" --note "ok"
 
 # 删除
-python3 $SD/delete_report.py --type daily   --author zhangsan --date 2026-07-11
-python3 $SD/delete_report.py --type weekly  --author zhangsan --year 2026 --week 28
-python3 $SD/delete_report.py --type monthly --author zhangsan --year 2026 --month 07
+uv run python $SD/delete_report.py --type daily   --author zhangsan --date 2026-07-11
+uv run python $SD/delete_report.py --type weekly  --author zhangsan --year 2026 --week 28
+uv run python $SD/delete_report.py --type monthly --author zhangsan --year 2026 --month 07
 ```
 
 ---
@@ -132,16 +134,16 @@ python3 $SD/delete_report.py --type monthly --author zhangsan --year 2026 --mont
 
 ```bash
 # 创建
-python3 $SD/create_meeting.py --date 2026-07-11 \
+uv run python $SD/create_meeting.py --date 2026-07-11 \
   --participants "张三、李四" --recorder 张三 --topics "进度回顾,方案讨论" \
   --decision "确认用 sobel" --todo "张三:跑 CRF 扫描"
 
 # 更新（换参会人/记录人，追加决议/待办）
-python3 $SD/update_meeting.py --date 2026-07-11 --participants "张三、李四、王五" \
+uv run python $SD/update_meeting.py --date 2026-07-11 --participants "张三、李四、王五" \
   --append-decision "追加决议" --append-todo "李四:调研 X"
 
 # 删除
-python3 $SD/delete_meeting.py --date 2026-07-11
+uv run python $SD/delete_meeting.py --date 2026-07-11
 ```
 
 ---
@@ -162,7 +164,7 @@ python3 $SD/delete_meeting.py --date 2026-07-11
 
 ```bash
 SD=.claude/skills/contour-video-management/scripts
-python3 $SD/list_tasks.py                      # 看任务看板
-python3 $SD/add_task.py --section 进行中 --name "X" --owner Y --start 2026-07-11 --end 2026-07-18
+uv run python $SD/list_tasks.py                      # 看任务看板
+uv run python $SD/add_task.py --section 进行中 --name "X" --owner Y --start 2026-07-11 --end 2026-07-18
 curl --noproxy '*' http://localhost:8091/api/management/tasks   # 前端所见
 ```

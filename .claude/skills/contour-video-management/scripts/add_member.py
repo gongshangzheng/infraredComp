@@ -9,7 +9,7 @@ Two steps:
 Self-locating; argparse; identical file used in infraredComp and ProjFlow.
 
 Usage:
-    python3 add_member.py --name 张三 --id zhangsan --role 算法工程师 \\
+    uv run python add_member.py --name 张三 --id zhangsan --role 算法工程师 \\
         --join-date 2026-01-15 --research "红外视频压缩" \\
         --tech "Python,PyTorch,ffmpeg" --modules "评测,论文"
 """

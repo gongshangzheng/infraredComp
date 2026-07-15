@@ -7,11 +7,11 @@ value. ``--move-to`` relocates the row to another section, remapping columns
 
 Usage:
     # change status / owner
-    python3 update_task.py --section 进行中 --name "轮廓提取优化" --status 🔴 --owner 李四
+    uv run python update_task.py --section 进行中 --name "轮廓提取优化" --status 🔴 --owner 李四
     # rename
-    python3 update_task.py --section 进行中 --name "轮廓提取优化" --new-name "轮廓提取 v2"
+    uv run python update_task.py --section 进行中 --name "轮廓提取优化" --new-name "轮廓提取 v2"
     # mark done (move 进行中 -> 已完成)
-    python3 update_task.py --section 进行中 --name "轮廓提取优化" --move-to 已完成 --output "PR#12"
+    uv run python update_task.py --section 进行中 --name "轮廓提取优化" --move-to 已完成 --output "PR#12"
 """
 from __future__ import annotations
 

@@ -2,7 +2,7 @@
 """Delete a task row from management/docs/tasks.md.
 
 Usage:
-    python3 delete_task.py --section 进行中 --name "轮廓提取优化"
+    uv run python delete_task.py --section 进行中 --name "轮廓提取优化"
 """
 from __future__ import annotations
 

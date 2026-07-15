@@ -111,6 +111,71 @@
       "description": "基于自有 diffTok 框架(gongshangzheng/diffTok),参考已有 encoder/decoder,实现针对灰度图(红外轮廓帧)的 encoder/decoder",
       "notePath": "",
       "children": []
+    },
+    {
+      "id": "t10",
+      "title": "DCVC 系列接入(训练+测试)",
+      "status": "active",
+      "startDate": "2026-07-15",
+      "assignee": "郑鑫裕",
+      "description": "third_party/DCVC/DCVC-family/ 下 DCVC/DCVC-DC/DCVC-HEM/DCVC-FM/DCVC-TCM/EVC 六成员逐个接入:下 OneDrive checkpoint + 构建 MLCodec_rans C++ ext + 仿 dcvc_rt.py 写 wrapper(IntraNoAR I帧 + DMC P帧 + DPB seeding + 二进制容器),注册 catalog,跑通 RD 点,纳入训练流程。OneDrive 环境不通需手动下;ext 构建用本机 MSVC(VS2022)+cmake,需 -DPYTHON_EXECUTABLE 指向 conda compression(python 3.12)。",
+      "notePath": "",
+      "children": [
+        {
+          "id": "t10-1",
+          "title": "DCVC-DC: 下 checkpoint + ext 已构建 + 写 wrapper",
+          "status": "active",
+          "startDate": "2026-07-15",
+          "assignee": "郑鑫裕",
+          "description": "下载放 third_party/DCVC/DCVC-family/DCVC-DC/checkpoints/：cvpr2023_image_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211259&authkey=AO_gFvTcYZUFd9U ；cvpr2023_video_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211256&authkey=ACzRzK3XgbQxEyk （另 ssim/yuv420 共6个见 download.py）。MLCodec_rans+MLCodec_CXX ext 已用 MSVC 构建为 cp312(放 src/models/,导入验证通过)。待 checkpoint 到位后仿 dcvc_rt.py 写 codecs/dcvc_dc.py(IntraNoAR+DMC+MLCodec_rans),注册 catalog,真跑 akiyo 验证 RD 点。",
+          "children": []
+        },
+        {
+          "id": "t10-2",
+          "title": "DCVC-HEM: 下 checkpoint + 构建 ext + wrapper",
+          "status": "planning",
+          "startDate": "",
+          "assignee": "郑鑫裕",
+          "description": "下载放 DCVC-HEM/checkpoints/：acmmm2022_image_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211220&authkey=AMRg1W3PVt_F3yc ；acmmm2022_video_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211217&authkey=AKpdgXQtvs-OxRs （另 ssim 2个见 download.py）。构建 MLCodec_rans ext(同 DCVC-DC cmake 流程);套 wrapper 模板写 codecs/dcvc_hem.py,注册,验证。",
+          "children": []
+        },
+        {
+          "id": "t10-3",
+          "title": "DCVC-FM: 下 checkpoint + 构建 ext + wrapper",
+          "status": "planning",
+          "startDate": "",
+          "assignee": "郑鑫裕",
+          "description": "下载放 DCVC-FM/checkpoints/：cvpr2024_image.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211494&authkey=!AOxzcrEFT_h-iCk ；cvpr2024_video.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211493&authkey=!AFxYv6oK1o6GrZc 。构建 MLCodec_rans ext;套 wrapper 模板写 codecs/dcvc_fm.py,注册,验证。",
+          "children": []
+        },
+        {
+          "id": "t10-4",
+          "title": "DCVC-TCM: 下 checkpoint + 构建 ext + wrapper",
+          "status": "planning",
+          "startDate": "",
+          "assignee": "郑鑫裕",
+          "description": "下载 DCVC-TCM checkpoint(OneDrive 文件夹,无 download.py,需从文件夹手动取)：https://onedrive.live.com/?authkey=%21ADwwaonwTGR%5FNR8&id=2866592D5C55DF8C%211234&cid=2866592D5C55DF8C ，放 DCVC-TCM/checkpoints/。构建 MLCodec_rans ext;套 wrapper 模板,注册,验证。",
+          "children": []
+        },
+        {
+          "id": "t10-5",
+          "title": "DCVC(NeurIPS 2021 原版): 下 checkpoint + 构建 ext + wrapper",
+          "status": "planning",
+          "startDate": "",
+          "assignee": "郑鑫裕",
+          "description": "下载 DCVC 原版 checkpoint(OneDrive 文件夹,无 download.py,需手动取)：https://1drv.ms/u/s!AozfVVwtWWYoiS5mcGX320bFXI0k?e=iMeykH ，放 DCVC/checkpoints/。构建 MLCodec_rans ext;套 wrapper 模板,注册,验证。",
+          "children": []
+        },
+        {
+          "id": "t10-6",
+          "title": "EVC: 下 checkpoint + 构建 ext + wrapper",
+          "status": "planning",
+          "startDate": "",
+          "assignee": "郑鑫裕",
+          "description": "下载放 EVC/checkpoints/(共9个 EVC_*.pth.tar + Scale_EVC_*.pth.tar,见 EVC/checkpoints/download.py),例：EVC_LL.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211227&authkey=AD8e586WrFlT6IE ；EVC_LS_MD.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211226&authkey=ADp_pN4gvxbHMrw 。构建 MLCodec_rans ext;套 wrapper 模板,注册,验证。",
+          "children": []
+        }
+      ]
     }
   ]
 }

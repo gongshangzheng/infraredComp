@@ -9,9 +9,9 @@ Self-locating: run from anywhere; resolves the repo root from its own path.
 Mirrors the same file in ~/ProjFlow (identical tasks.md schema).
 
 Usage:
-    python3 add_task.py --section 进行中 --name "轮廓提取优化" --owner 张三 \\
+    uv run python add_task.py --section 进行中 --name "轮廓提取优化" --owner 张三 \\
         --start 2026-07-11 --end 2026-07-18 --status 🟢 --note "sobel 降噪"
-    python3 add_task.py --section 待开始 --name "AV1 baseline" --priority P1
+    uv run python add_task.py --section 待开始 --name "AV1 baseline" --priority P1
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ import argparse
 import os
 import sys
 
-# Allow running as `python3 add_task.py` from anywhere: put this script's dir
+# Allow running as `uv run python add_task.py` from anywhere: put this script's dir
 # (which holds mgmt_io.py / task_schema.py) on sys.path before importing them.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 

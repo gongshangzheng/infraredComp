@@ -10,8 +10,8 @@ Touches TWO places:
 --new-id renames the profile file {old}.md -> {new}.md.
 
 Usage:
-    python3 update_member.py --id zhangsan --role "高级算法工程师" --join-date 2026-01-15
-    python3 update_member.py --id zhangsan --name 张三丰 --new-id zhangsanfeng
+    uv run python update_member.py --id zhangsan --role "高级算法工程师" --join-date 2026-01-15
+    uv run python update_member.py --id zhangsan --name 张三丰 --new-id zhangsanfeng
 """
 from __future__ import annotations
 

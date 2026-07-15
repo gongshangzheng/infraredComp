@@ -5,8 +5,8 @@ Removes the row in the member-list table (match by 英文标识) and deletes the
 profile file management/team/{id}.md, unless --keep-profile is given.
 
 Usage:
-    python3 delete_member.py --id zhangsan
-    python3 delete_member.py --id zhangsan --keep-profile
+    uv run python delete_member.py --id zhangsan
+    uv run python delete_member.py --id zhangsan --keep-profile
 """
 from __future__ import annotations
 

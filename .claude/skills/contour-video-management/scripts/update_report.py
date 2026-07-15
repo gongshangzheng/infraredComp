@@ -9,9 +9,9 @@ Section names differ per type:
     monthly -> 本月工作 / 下月计划 / 备注
 
 Usage:
-    python3 update_report.py --type daily --author zhangsan --date 2026-07-11 \\
+    uv run python update_report.py --type daily --author zhangsan --date 2026-07-11 \\
         --append-work "完成轮廓提取 baseline" --append-plan "跑 AV1 CRF 扫描"
-    python3 update_report.py --type weekly --author zhangsan --year 2026 --week 28 \\
+    uv run python update_report.py --type weekly --author zhangsan --year 2026 --week 28 \\
         --append-work "OSU 数据集落地"
 """
 from __future__ import annotations
