@@ -101,7 +101,8 @@ def catalog() -> list[dict]:
         else:
             quals = _NON_IMG_QUALITIES.get(cid, [18, 23, 28, 33])
             name, desc = _CODEC_META.get(cid, (cid, ""))
-            kind = "codec"
+            # is_neural (nevc/lsmc) → learned-video; else traditional ffmpeg codec
+            kind = "learned-video" if is_neural else "codec"
         out.append({
             "id": cid, "name": name, "family": family, "kind": kind,
             "ext": ext, "is_neural": is_neural,
