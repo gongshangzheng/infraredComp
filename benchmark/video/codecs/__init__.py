@@ -17,6 +17,7 @@ from . import mpeg4 as _mpeg4  # noqa: F401
 from . import ssf2020 as _ssf2020  # noqa: F401
 from . import dcvc_rt as _dcvc_rt  # noqa: F401
 from . import nevc as _nevc  # noqa: F401
+from . import lsmc as _lsmc  # noqa: F401
 from . import learned_image as _learned_image  # noqa: F401
 
 __all__ = [
@@ -42,6 +43,7 @@ _NON_IMG_QUALITIES: dict[str, list[int]] = {
     "ssf2020": [1, 3, 5, 7, 9],
     "dcvc_rt": [20, 30, 40],
     "nevc": [0, 1, 2, 3],
+    "lsmc": [0],
 }
 
 _CODEC_META: dict[str, tuple[str, str]] = {
@@ -53,6 +55,7 @@ _CODEC_META: dict[str, tuple[str, str]] = {
     "ssf2020": ("ssf2020 (Scale-Space Flow)", "CompressAI 视频模型 CVPR2020；可 fine-tune"),
     "dcvc_rt": ("DCVC-RT (real-time NVC)", "microsoft/DCVC CVPR2025；推理专用，需 setup"),
     "nevc": ("NEVC-1.0 (EHVC)", "bytedance DCVC-derived；IntraNoAR+DMC+MLCodec_rans；HF checkpoint"),
+    "lsmc": ("LSMC (Lossless SegMap)", "InterDigital C++ CLI；链码+算术编码；无损单点 PSNR=inf"),
 }
 
 

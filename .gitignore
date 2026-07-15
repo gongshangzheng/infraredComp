@@ -87,3 +87,4 @@ mobileclip2_*.pt
 # NEVC checkpoints (HF ByteDance/NEVC1.0, gitignore weights only; src/ tracked)
 third_party/nevc/models/*.pth.tar
 third_party/nevc/models/*.pth
+third_party/lsmc/*.exe
