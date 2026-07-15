@@ -65,6 +65,10 @@ class VideoCodec:
     default_preset: str | None = None
     ext: str = "mp4"            # output container
     is_neural: bool = False     # True → harness uses encode_inprocess/decode_inprocess (no ffmpeg)
+    # Whether the produced bitstream is directly <video>-playable in browsers.
+    # False (e.g. MPEG-4 Part 2, which no browser decodes) → harness synthesizes a
+    # viewable H.264 mp4 from the recon frames after metrics (size already measured).
+    browser_playable: bool = True
 
     def __init__(self, crf: int, preset: str | None = None):
         self.cfg = CodecConfig(

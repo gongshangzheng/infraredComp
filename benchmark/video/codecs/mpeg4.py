@@ -19,6 +19,9 @@ class Mpeg4Codec(VideoCodec):
     encoder = "mpeg4"          # libavcodec 原生 MPEG-4 Part 2 encoder
     default_preset = None      # mpeg4 无 preset 概念
     ext = "mp4"
+    # 浏览器不解码 MPEG-4 Part 2 → harness 从重建帧合成 H.264 可播 mp4 覆盖展示路径
+    # (码流大小已在编码后测得, bpp/bitrate 仍反映 Part 2 压缩, 不受影响)。
+    browser_playable = False
 
     def encode_args(self, frames_dir, fps, bitstream):  # type: ignore[override]
         # base 生成 "... -c:v mpeg4 -crf <q> -pix_fmt yuv420p <bitstream>"；
