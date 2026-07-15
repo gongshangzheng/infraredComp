@@ -1,0 +1,11 @@
+{
+  "source_name": "flower_cif",
+  "method": "hed",
+  "frame_count": 250,
+  "fps": 29.97002997002997,
+  "width": 352,
+  "height": 288,
+  "frames_dir": "D:\\code\\infraredComp\\datasets\\contour\\flower_cif\\hed",
+  "video_path": "D:\\code\\infraredComp\\datasets\\contour\\flower_cif\\hed\\contour.mp4",
+  "duration_s": 8.341667
+}

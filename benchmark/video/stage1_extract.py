@@ -16,7 +16,7 @@ import numpy as np
 from . import config
 from .data import ContourArtifact
 from .extractors import build_extractor, list_extractors
-from .ffmpeg_util import get_duration_seconds, get_stream_info, run_ffmpeg
+from .ffmpeg_util import find_ffmpeg, get_duration_seconds, get_stream_info, run_ffmpeg
 
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".m4v", ".webm", ".y4m"}
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
@@ -122,6 +122,7 @@ def extract_contour_video(
     out_dir: str | Path | None = None,
     frames: int | None = None,
     fps: float | None = None,
+    skip_if_exists: bool = False,
 ) -> ContourArtifact:
     """Extract a contour video from a raw video or frame directory.
 
@@ -132,6 +133,13 @@ def extract_contour_video(
     out_dir : output dir (default datasets/contour/<source_name>/<method>)
     frames : cap frame count (useful for AV1-heavy stage-2 runs)
     fps : override fps (default: probed for video, 25 for frame dir)
+    skip_if_exists : if True, reuse the existing contour dir when its
+        manifest.json already records this method with a valid contour.mp4
+        (training-flow idempotency; evaluation keeps the default re-build).
+
+    The persistent artifact is a lossless contour.mp4; the per-frame PNGs are
+    deleted after stitching (stage 2 materializes transient frames from the
+    video at run time).
     """
     if method not in list_extractors():
         raise KeyError(f"Unknown extractor '{method}'. Available: {list_extractors()}")
@@ -142,17 +150,46 @@ def extract_contour_video(
 
     if out_dir is None:
         # 按方法分目录: datasets/contour/<source>/<method>/ —— 不同提取方法
-        # (canny/sobel) 不互相覆盖；rmtree 只清该方法子目录，保留其它方法产物。
+        # (canny/sobel) 不互相覆盖。重建走 temp+原子替换，失败不毁既有产物。
         out_dir = config.CONTOUR_DIR / source_name / method
     out_dir = Path(out_dir)
-    if out_dir.exists():
-        shutil.rmtree(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # 训练流程幂等：产物已存在且 method 匹配、contour.mp4 在 → 直接复用。
+    if skip_if_exists:
+        manifest_path = out_dir / "manifest.json"
+        if manifest_path.is_file():
+            try:
+                m = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                m = {}
+            vp = m.get("video_path") or str(out_dir / "contour.mp4")
+            if (m.get("method") == method and (m.get("frame_count") or 0) > 0
+                    and Path(vp).is_file()):
+                return ContourArtifact(
+                    source_name=m.get("source_name", source_name),
+                    method=method,
+                    frames_dir=str(out_dir),
+                    frame_paths=[],  # PNGs not kept; stage 2 materializes from video
+                    frame_count=m.get("frame_count", 0),
+                    fps=m.get("fps", 0.0),
+                    width=m.get("width", 0),
+                    height=m.get("height", 0),
+                    manifest_path=str(manifest_path),
+                    video_path=vp,
+                )
+
+    # Build into a temp sibling dir, then atomically swap on success. A
+    # failed/interrupted re-extraction never wipes the existing contour frames:
+    # the old dir stays until the new one is fully written and ready.
+    work_out = out_dir.parent / (out_dir.name + ".tmp")
+    if work_out.exists():
+        shutil.rmtree(work_out)
+    work_out.mkdir(parents=True, exist_ok=True)
 
     extractor = build_extractor(method)
 
-    # 1. Produce a raw grayscale frame sequence (in-memory paths)
-    work_dir = out_dir / "_raw_frames"
+    # 1. Produce a raw grayscale frame sequence (intermediate, in-memory paths)
+    work_dir = work_out / "_raw_frames"
     if kind == "video":
         demux_to_frames(src_path, work_dir, frames=frames)
         raw_frames = sorted(work_dir.glob("frame_*.png"))
@@ -168,7 +205,7 @@ def extract_contour_video(
     if not raw_frames:
         raise RuntimeError(f"No frames produced from {src_path}")
 
-    # 2. Extract edges per frame, write lossless grayscale PNG (the contour video)
+    # 2. Extract edges per frame, write lossless grayscale PNG (intermediate)
     contour_paths: list[Path] = []
     width = height = 0
     for i, fp in enumerate(raw_frames):
@@ -178,11 +215,33 @@ def extract_contour_video(
             edges = cv2.cvtColor(edges, cv2.COLOR_BGR2GRAY)
         if i == 0:
             height, width = edges.shape
-        cp = out_dir / f"frame_{i:06d}.png"
+        cp = work_out / f"frame_{i:06d}.png"
         cv2.imwrite(str(cp), edges)
         contour_paths.append(cp)
 
-    # 3. Write manifest
+    # 3. Stitch the contour PNGs into a LOSSLESS video (the persistent product).
+    #    -qp 0 = lossless; yuv420p Y plane is exact for grayscale edges.
+    #    pad odd dims to even (libx264 yuv420p requirement); stage 2 crops back.
+    contour_mp4 = work_out / "contour.mp4"
+    run_ffmpeg([
+        "-y",
+        "-framerate", str(src_fps),
+        "-i", str(work_out / "frame_%06d.png"),
+        "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2:color=black",
+        "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p",
+        str(contour_mp4),
+    ])
+
+    # 4. Delete the contour frame PNGs — not kept on disk; stage 2 materializes
+    #    transient frames from contour.mp4 at run time.
+    for cp in contour_paths:
+        try:
+            cp.unlink()
+        except OSError:
+            pass
+
+    # 5. Write manifest (frames_dir + video_path point at the final out_dir)
+    final_video = out_dir / "contour.mp4"
     manifest = {
         "source_name": source_name,
         "method": method,
@@ -191,24 +250,31 @@ def extract_contour_video(
         "width": width,
         "height": height,
         "frames_dir": str(out_dir),
+        "video_path": str(final_video),
         "duration_s": duration,
     }
-    manifest_path = out_dir / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    work_manifest = work_out / "manifest.json"
+    work_manifest.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # Clean raw frames (intermediate)
+    # Clean the intermediate raw frames before the swap.
     shutil.rmtree(work_dir, ignore_errors=True)
+
+    # Swap: replace the existing dir only after the new one is fully ready.
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    work_out.rename(out_dir)
 
     return ContourArtifact(
         source_name=source_name,
         method=method,
         frames_dir=str(out_dir),
-        frame_paths=[str(p) for p in contour_paths],
+        frame_paths=[],  # PNGs deleted; stage 2 materializes from contour.mp4
         frame_count=len(contour_paths),
         fps=src_fps,
         width=width,
         height=height,
-        manifest_path=str(manifest_path),
+        manifest_path=str(out_dir / "manifest.json"),
+        video_path=str(final_video),
     )
 
 
@@ -224,3 +290,33 @@ def load_contour_frames(artifact: ContourArtifact) -> np.ndarray:
             raise RuntimeError(f"Failed to read contour frame: {p}")
         frames.append(arr)
     return np.stack(frames, axis=0)
+
+
+def load_contour_video_frames(artifact: ContourArtifact) -> np.ndarray:
+    """Decode the lossless contour video into an (N, H, W) uint8 array.
+
+    Replaces load_contour_frames for the video-based artifact (PNGs deleted).
+    ffmpeg pipes raw grayscale bytes; we reshape at the padded dims (lossless
+    stitch pads odd dims to even) and crop back to (height, width).
+    """
+    import subprocess
+    if not artifact.video_path:
+        raise RuntimeError("artifact has no video_path; cannot load contour video frames")
+    w, h = artifact.width, artifact.height
+    if w <= 0 or h <= 0:
+        raise RuntimeError("artifact missing width/height to crop decoded frames")
+    args = [find_ffmpeg(), "-i", artifact.video_path,
+            "-f", "rawvideo", "-pix_fmt", "gray", "pipe:1"]
+    proc = subprocess.run(args, capture_output=True)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"ffmpeg decode failed for {artifact.video_path}: "
+            f"{proc.stderr.decode(errors='ignore')[:300]}")
+    pw, ph = w + (w % 2), h + (h % 2)  # even dims after lossless stitch's pad
+    frame_bytes = pw * ph
+    n = len(proc.stdout) // frame_bytes
+    if n == 0:
+        raise RuntimeError(f"no frames decoded from {artifact.video_path} "
+                            f"(got {len(proc.stdout)} bytes, need {frame_bytes}/frame)")
+    arr = np.frombuffer(proc.stdout[:n * frame_bytes], dtype=np.uint8).reshape(n, ph, pw)
+    return arr[:, :h, :w]  # crop pad back to original dims

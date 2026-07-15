@@ -16,7 +16,7 @@ import numpy as np
 
 from . import config
 from .ffmpeg_util import find_ffmpeg
-from .stage1_extract import extract_contour_video, load_contour_frames
+from .stage1_extract import extract_contour_video, load_contour_video_frames
 from .stage2_benchmark import run_benchmark
 from .visualize import generate_report
 from .html_report import generate_html_report
@@ -62,7 +62,7 @@ def main() -> int:
     all_ok &= _check("even: manifest exists", Path(art.manifest_path).exists())
     all_ok &= _check("even: frame_count == 8", art.frame_count == 8)
     all_ok &= _check("even: dims 64x64", (art.height, art.width) == (64, 64))
-    gt = load_contour_frames(art)
+    gt = load_contour_video_frames(art)
     all_ok &= _check("even: gt shape (8,64,64) uint8",
                      gt.shape == (8, 64, 64) and gt.dtype == np.uint8)
 

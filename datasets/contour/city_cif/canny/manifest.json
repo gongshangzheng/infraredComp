@@ -6,5 +6,6 @@
   "width": 352,
   "height": 288,
   "frames_dir": "D:\\code\\infraredComp\\datasets\\contour\\city_cif\\canny",
+  "video_path": "D:\\code\\infraredComp\\datasets\\contour\\city_cif\\canny\\contour.mp4",
   "duration_s": 10.0
 }

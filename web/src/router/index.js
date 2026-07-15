@@ -141,13 +141,19 @@ const routes = [
         path: 'evaluation/models',
         name: 'ModelManage',
         component: () => import('../views/evaluation/ModelManage.vue'),
-        meta: { title: '模型(codec)配置', module: 'evaluation' },
+        meta: { title: '模型', module: 'evaluation' },
       },
       {
         path: 'evaluation/datasets',
         name: 'DatasetManage',
         component: () => import('../views/evaluation/DatasetManage.vue'),
-        meta: { title: '数据集配置', module: 'evaluation' },
+        meta: { title: '数据集', module: 'evaluation' },
+      },
+      {
+        path: 'evaluation/datasets/:id',
+        name: 'DatasetDetail',
+        component: () => import('../views/evaluation/DatasetDetail.vue'),
+        meta: { title: '数据集详情', module: 'evaluation' },
       },
       {
         path: 'evaluation/configs',

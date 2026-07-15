@@ -71,7 +71,7 @@ class SSF2020Codec(VideoCodec):
         h0, w0 = frames[0].shape[:2]
         for f in frames:
             t, st = _img_to_tensor(f)                 # (1,3,H,W) float [0,1] + norm_stats
-            t, pad = _pad_to_multiple(t, 64)
+            t, pad = _pad_to_multiple(t, 128)
             tframes.append(t.to(self.device)); stats_list.append(st); pads.append(pad)
         with torch.no_grad():
             x_hat_kf, out_kf = self.model.encode_keyframe(tframes[0])

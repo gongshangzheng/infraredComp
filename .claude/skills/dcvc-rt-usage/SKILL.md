@@ -136,10 +136,18 @@ DCVC-RT 用 `DMCI.get_padding_size(h, w, 16)` + `replicate_pad(x, pad_b, pad_r)`
 ## 跑 eval
 
 ```bash
-# 装好上面 5 步后
-uv run python -m benchmark.video --input <contour_artifact> --codecs dcvc_rt --crfs 18,23,28,33
+# 装好上面 5 步后（默认全帧,速度 18/23/28/28 三个 qp）
+uv run python -m benchmark.video --input <contour_artifact> --codecs dcvc_rt --crfs 20,30,40
 ```
 不装 rans ext / checkpoint 直接跑 → `_load` 抛 RuntimeError 提示哪步缺。
+
+### stage2 从 contour.mp4 读帧
+本 codec 走 `is_neural=True` 路径（`encode_inprocess/decode_inprocess`），
+`benchmark_codec` 通过 `load_contour_frames(artifact)` 读 PNG 帧。
+新版 stage1 不再保留 PNG → `load_contour_frames` 会失败。
+`run_benchmark` / `bench_one` / `run_all_video_models` 在 benchmark 前
+自动把 `contour.mp4` 解码到临时 PNG 目录（crop 回原尺寸），codec 跑完清理。
+**DCVC-RT 用户无需特殊处理**——临时物化自动生效。
 
 ## 限制 / 未来工作
 - **推理专用**：Microsoft 未放出训练代码。contour finetune = 未来自定义 RD-loss 训练（参考 `learned-codec-install` skill 的训练接入流程，但 DCVC-RT 需自己实现 train loop + entropy coder 兼容）。

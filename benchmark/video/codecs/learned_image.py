@@ -41,12 +41,19 @@ class _LearnedImageVideoCodec(VideoCodec):
     qualities: list = []          # set per-registration
     _CACHE: dict = {}
 
-    def __init__(self, crf: int, preset: str | None = None, checkpoint_path: str | None = None):
+    def __init__(self, crf: int, preset: str | None = None, checkpoint_path: str | None = None,
+                 estimate: bool = True):
         super().__init__(crf=crf, preset=preset)
         self.quality = crf
         self.checkpoint_path = checkpoint_path
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self._model = None
+        # estimate=True(默认):走 model(x) forward 拿 x_hat+likelihoods,bpp 用 -log2(lik) 估计,
+        # 不跑 rans 范围编码 → 纯 GPU、不 segfault、快。代价:bpp 是估计值(误差<1%),无真实 .bin。
+        # estimate=False:走 model.compress/decompress(真实 rans bitstream,慢 + 累积 segfault)。
+        self.estimate = estimate
+        self._recons = None            # estimate 模式下缓存重建帧供 decode 用
+        self._estimated_bytes = None   # estimate 模式下报告的压缩字节数(estimated_bits/8)
 
     def _load(self):
         key = (self.model_name, self.quality, self.device, self.checkpoint_path)
@@ -69,28 +76,64 @@ class _LearnedImageVideoCodec(VideoCodec):
     # ---- per-frame in-process encode/decode ----
 
     def encode_inprocess(self, frames: list, fps: float) -> bytes:
-        """frames = list[np.ndarray HxW uint8] -> bytes (per-frame strings+shape+stats+pad)."""
-        per_frame = []
+        """frames = list[np.ndarray HxW uint8] -> bytes。
+
+        estimate=True: model(x) forward(GPU) 拿 x_hat + likelihoods;不跑 rans。
+          bpp = Σ -log2(likelihood) / 像素数(标准 RD 估计,论文通用)。
+          重建帧缓存到 self._recons 供 decode 返回(无真实 bitstream 可解码)。
+          返回极小 pickle(仅 n/hw/estimated_bytes);compressed_bytes 走 self._estimated_bytes。
+        estimate=False: model.compress 跑真实 rans(慢 + 累积 segfault)。"""
         h0, w0 = frames[0].shape[:2]
+        if not self.estimate:
+            return self._encode_rans(frames, h0, w0)
+        import math
+        recons = []
+        total_bits = 0.0
         for f in frames:
-            x, stats = _img_to_tensor(f)                 # (1,3,H,W) [0,1] + norm_stats
+            x, stats = _img_to_tensor(f)
             x, pad = _pad_to_multiple(x, 64)
             x = x.to(self.device)
             with torch.no_grad():
-                out = self.model.compress(x)              # {"strings":[...], "shape":(B,C,H,W)}
+                out = self.model(x)               # {"x_hat", "likelihoods"}
+            liks = out["likelihoods"]
+            if isinstance(liks, dict):             # 命名 likelihoods dict -> 取 values
+                liks = liks.values()
+            for lik in liks:
+                total_bits += float((-torch.log2(lik.clamp(min=1e-9))).sum().item())
+            x_hat = _unpad(out["x_hat"], pad)
+            recons.append(_tensor_to_img(x_hat, stats))   # HxW uint8
+        self._recons = recons
+        self._estimated_bytes = max(1, int(round(total_bits / 8)))
+        # 极小 bitstream(仅元数据);真实 compressed_bytes 由 self._estimated_bytes 报告。
+        return pickle.dumps({"n": len(recons), "hw": (h0, w0),
+                              "estimated_bytes": self._estimated_bytes, "estimate": True})
+
+    def _encode_rans(self, frames, h0, w0):
+        """真实 rans 路径(estimate=False):model.compress 产 bitstream + model.decompress 出重建。"""
+        per_frame = []
+        for f in frames:
+            x, stats = _img_to_tensor(f)
+            x, pad = _pad_to_multiple(x, 64)
+            x = x.to(self.device)
+            with torch.no_grad():
+                out = self.model.compress(x)              # {"strings", "shape"}
             per_frame.append({"strings": out["strings"], "shape": out["shape"], "stats": stats, "pad": pad})
-        return pickle.dumps({"frames": per_frame, "n": len(per_frame), "hw": (h0, w0)})
+        return pickle.dumps({"frames": per_frame, "n": len(per_frame), "hw": (h0, w0), "estimate": False})
 
     def decode_inprocess(self, bitstream_bytes: bytes, n_frames: int, hw: tuple[int, int]) -> list:
-        """bytes -> list[np.ndarray HxW uint8] (每帧独立解压)。"""
+        """bytes -> list[np.ndarray HxW uint8]。
+
+        estimate 模式:无真实 bitstream,直接返回 encode 时缓存的 self._recons(forward 的 x_hat)。
+        rans 模式:model.decompress(strings, shape) 解码。"""
         d = pickle.loads(bitstream_bytes)
-        per_frame = d["frames"]
+        if d.get("estimate") or self._recons is not None:
+            return self._recons[:n_frames] if self._recons else []
         recons = []
-        for fr in per_frame:
+        for fr in d["frames"]:
             with torch.no_grad():
-                out = self.model.decompress(fr["strings"], fr["shape"])  # {"x_hat": tensor}
+                out = self.model.decompress(fr["strings"], fr["shape"])
             x_hat = _unpad(out["x_hat"], fr["pad"])
-            recons.append(_tensor_to_img(x_hat, fr["stats"]))           # HxW uint8（denorm 回原域）
+            recons.append(_tensor_to_img(x_hat, fr["stats"]))
         return recons
 
 

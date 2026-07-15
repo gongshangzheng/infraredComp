@@ -37,12 +37,14 @@ export INFRACOMP_DATASETS_DIR=/data/infrared   # 把大数据集放到仓库外(
 - 一键 baseline:`uv run python scripts/run_osu_baseline.py`(下载 + 6 段评测 + 单一多序列 `results.json`)
 - 路径:`${INFRACOMP_DATASETS_DIR}/raw/osu_color_thermal/seq{1..6}.mp4`
 - **注意**:`vcipl-okstate.org` 对部分网络/IP 返回 403 "administrative rules"(非代码问题),若失败需换网络或改用其他数据集
+- **OSU 在评测列表里被隐藏**(`_EVAL_HIDDEN_RAW = {"osu_color_thermal"}` 在 `server/routers/evaluation.py`),raw 目录保留但不展示;若想看 OSU 序列,先在 router 临时删掉这个集合。
 
 ### 3. raw / contour 视频(通用 contour-video 输入)
 - raw = 用户自备输入,接受**视频文件**(`.mp4/.avi/.mov/.mkv/.m4v/.webm/.y4m`)或**帧目录**(`.png/.jpg/.jpeg/.tif/.tiff/.bmp`);位置不固定,运行时由 `--input` 指定
-- contour = 阶段1 提取产物:**无损灰度 PNG 帧序列 + `manifest.json`**,按方法分目录(`datasets/contour/<source>/<method>/`,canny/sobel 不互相覆盖),可由 raw 重算
+- contour = 阶段1 提取产物:**无损 `contour.mp4`(`libx264 -qp 0 -pix_fmt yuv420p`)+ `manifest.json`**,按方法分目录(`datasets/contour/<source>/<method>/`,canny/sobel 不互相覆盖),**不再保留 PNG 帧**。阶段2 从 contour.mp4 解码出临时帧跑评测,跑完清理。
 - `--input` 接受视频或帧目录,目录会 glob VIDEO_EXTS(`benchmark/video/stage1_extract.py::expand_inputs`)
-- 路径:`${INFRACOMP_DATASETS_DIR}/contour/<source>/<method>/`(如 `contour/akiyo_cif/canny/`)
+- 路径:`${INFRACOMP_DATASETS_DIR}/contour/<source>/<method>/contour.mp4`(如 `contour/akiyo_cif/canny/contour.mp4`)+ 同目录 `manifest.json`
+- 迁移旧目录(从 PNG 帧格式转 contour.mp4 格式):`ffmpeg -y -framerate <fps> -i frame_%06d.png -vf pad=ceil(iw/2)*2:ceil(ih/2)*2:color=black -c:v libx264 -qp 0 -pix_fmt yuv420p contour.mp4` → 删 PNG → manifest 加 `"video_path"`。
 
 ### 4. Xiph derf CIF(自然视频,contour-video baseline 用)
 - 来源:[Xiph derf collection](https://media.xiph.org/video/derf/y4m/)(公开测试媒体)
@@ -51,6 +53,25 @@ export INFRACOMP_DATASETS_DIR=/data/infrared   # 把大数据集放到仓库外(
 - 获取:`uv run python scripts/download_xiph_natural.py`(幂等;`--force` 重下;`--dry-run` 预览)
 - 一键 baseline:`uv run python scripts/run_natural_baseline.py`(下载 + 6 段评测 + **独立文件** `results/video/xiph_cif.json`)
 - 路径:`${INFRACOMP_DATASETS_DIR}/raw/xiph_cif/<name>_cif.y4m`
+- **真实帧数(数 y4m 的 FRAME 标记或 ffprobe `nb_read_packets`)**:
+  - akiyo 300 / bus 150 / city 300 / flower 250 / foreman 300 / mobile 300(5–10s @30fps)
+- **下载脚本目前不写 raw manifest 的 `frame_count`**(只填 fps/size_bytes);运行后若数据集页序列头显示 "0 帧",用 ffprobe 回填:
+  ```bash
+  FP=.venv/Lib/site-packages/static_ffmpeg/bin/win32/ffprobe.exe
+  # conda compression python(无需 uv 网络):
+  "$USERPROFILE/.conda/envs/compression/python.exe" -c "
+  import json, subprocess
+  from pathlib import Path
+  mf=Path('datasets/raw/xiph_cif/manifest.json')
+  m=json.loads(mf.read_text(encoding='utf-8'))
+  for s in m['sequences']:
+      n=subprocess.run(['$FP','-v','error','-select_streams','v:0','-count_packets',
+          '-show_entries','stream=nb_read_packets','-of','csv=p=0',s['file']],
+          capture_output=True,text=True).stdout.strip()
+      s['frame_count']=int(n) if n.isdigit() else 0
+  mf.write_text(json.dumps(m,ensure_ascii=False,indent=2),encoding='utf-8')
+  "
+  ```
 - 用途:自然视频方向性 baseline;每条 run 携带 `dataset="Xiph-CIF-natural"`,与 OSU/demo 共存于 `results/video/`
 
 ## 按数据集区分结果(多数据集共存)
@@ -62,6 +83,9 @@ export INFRACOMP_DATASETS_DIR=/data/infrared   # 把大数据集放到仓库外(
 | demo(a3273aa 提交) | `python -m benchmark.video --input demo.mp4` | `results/video/results.json` | (无) | `"default"`(从文件名推断) |
 | OSU | `scripts/run_osu_baseline.py` | `results/video/results.json`(覆盖 demo) | `"OSU Color-Thermal (OTCBVS Dataset 03)"` | `"OSU Color-Thermal (OTCBVS Dataset 03)"` |
 | Xiph CIF | `scripts/run_natural_baseline.py` | `results/video/xiph_cif.json`(**独立**) | `"Xiph-CIF-natural"` | `"Xiph-CIF-natural"` |
+| xiph 全量(脚本入口) | `scripts/run_all_subprocess.py`(跑 stage1+stage2 with `--codecs`) | `results/video/xiph_cif.json` | `"Xiph-CIF-natural"` | `"Xiph-CIF-natural"` |
+
+> 注意:`run_natural_baseline.py` 与 `run_all_subprocess.py` 都写 `results/video/xiph_cif.json`,**会互覆盖**。后者用 `(sequence, codec, crf)` 作 run key 增量跳过(改管线后要刷新指标需先 `rm` 旧 JSON)。
 
 - **Per-run dataset 字段**:`VideoCompressionResult.dataset`(data.py),由 `benchmark_codec(..., dataset=...)` 填,`run_benchmark` 透传
 - **Evaluation 聚合**:`server/routers/evaluation.py::_load_results` 扫 `results/video/*.json`,每 run `setdefault("dataset", envelope 或文件名)`
@@ -75,7 +99,7 @@ export INFRACOMP_DATASETS_DIR=/data/infrared   # 把大数据集放到仓库外(
 # 任意视频文件
 uv run python -m benchmark.video --input /path/to/video.mp4 --method canny --crfs 18,23,28,33
 
-# 帧目录(如 FLIR thermal_8_bit)
+# 帧目录(如 FLIR thermal_8_bit) — 注意:帧目录输入会先生成 contour.mp4 再评测
 uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/FLIR_ADAS_1_3/video/thermal_8_bit --method canny --extract-only
 
 # Y4M(自然视频,如 Xiph)
@@ -87,14 +111,14 @@ uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/raw/xiph_cif 
 # 仅阶段 2(复用已有 contour 产物,按方法分子目录)
 uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/contour/demo/canny --skip-extract
 
-# speed run(少量视频子集,--sequences 选 stem 子集;跑完跳 /evaluation/speed 视频网格)
+# speed run(少量视频子集,**全帧不截断**;speed 靠 --sequences 加速,不靠 --frames)
 uv run python scripts/run_natural_baseline.py --sequences akiyo_cif,bus_cif --codecs x264 --crfs 23
 
-# formal test(全量,平均指标;跑完跳 /evaluation/formal)
+# formal test(全量,全帧;不传 --frames)
 uv run python scripts/run_natural_baseline.py --codecs x264,x265,vp9
 ```
 
-两模式评测逻辑统一(一套 stage1+stage2),差异只在 `--sequences` 子集 + 展示页(speed 网格 / formal 平均)。详见 `.claude/skills/contour-video-evaluation/SKILL.md` §3。
+两模式评测逻辑统一(一套 stage1+stage2),差异只在 `--sequences` 子集 + 展示页(speed 网格 / formal 平均)。详见 `.claude/skills/contour-video-evaluation/SKILL.md` §3。**默认不截断帧**;speed 加速靠 `--sequences` 子集,不靠 `--frames N` 限帧。
 
 ## ffmpeg 来源
 
@@ -108,7 +132,7 @@ uv run python scripts/run_natural_baseline.py --codecs x264,x265,vp9
 
 ## git 策略
 
-`datasets/` 下按媒体扩展名忽略(`*.mp4 *.png *.jpg *.tif ...`),不依赖固定目录名;`datasets/README.md`、`datasets/manifest.json`、`datasets/contour/*/manifest.json` 等小文件被追踪。**运行产物**(`results/video/xiph_cif.json`、`bitstreams/`、`recon/`、`_raw_frames/`、`*.png` 帧)也不进 git,各 baseline 脚本每次跑覆盖或写独立文件。
+`datasets/` 下按媒体扩展名忽略(`*.mp4 *.png *.jpg *.tif ...`),不依赖固定目录名;`datasets/README.md`、`datasets/manifest.json`、`datasets/contour/*/manifest.json` 等小文件被追踪。**运行产物**(`results/video/xiph_cif.json`、`bitstreams/`、`recon/`、`source/`、`contour_mp4/`、`_raw_frames/`、`*.png` 帧)也不进 git,各 baseline 脚本每次跑覆盖或写独立文件。
 
 ## Windows 已知坑
 
@@ -116,6 +140,7 @@ uv run python scripts/run_natural_baseline.py --codecs x264,x265,vp9
 - **证书吊销**:`vcipl-okstate.org` 走 Windows schannel + OCSP,可能返回 `CRYPT_E_REVOCATION_OFFLINE`;Xiph 不需要(curl 已加 `--ssl-no-revoke` 兜底)
 - **403 administrative rules**:`vcipl-okstate.org` 整站对部分网络拒绝(非代码问题,需换网络/VPN 或换数据集)
 - **缺失 ffmpeg**:`uv add static-ffmpeg` 一键解决,无需系统安装
+- **uv 网络炸(代理 10061)**:`uv run` 走 pypi 镜像(tuna)解析依赖失败时,直接用 `.venv/Scripts/python.exe -m <module>` 绕过 uv,或用 conda compression env `$USERPROFILE/.conda/envs/compression/python.exe`(无需 uv)
 
 ## 约定速查
 
@@ -123,3 +148,4 @@ uv run python scripts/run_natural_baseline.py --codecs x264,x265,vp9
 - 后端只读:`/api/benchmark/runs` 列 `contour/` 目录 + manifest;`/api/evaluation/*` 聚合多数据集
 - ffmpeg 统一 `-pix_fmt yuv420p` 编码、`gray` 解码(详见 AGENTS.md)
 - 下载幂等:已下文件 `--force` 才重下;`manifest.json` 记录每条 seq 元数据
+- **contour 产物是 `contour.mp4` 不是 PNG**:所有 contour 目录、stage2 临时物化、`_ensure_contour_video` 输入、manifest `video_path` 字段都指 `contour.mp4`(详见 contour-video-evaluation skill §1-2)

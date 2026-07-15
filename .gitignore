@@ -68,3 +68,7 @@ results/training/metrics.json
 
 # Vendored HED model binary (56 MB; deploy.prototxt is tracked, the caffemodel is not)
 third_party/hed/*.caffemodel
+logs/
+results/video/contour_mp4/
+results/video/row_demo/
+results/video/source/

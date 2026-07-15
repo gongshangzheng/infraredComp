@@ -6,5 +6,6 @@
   "width": 352,
   "height": 288,
   "frames_dir": "D:\\code\\infraredComp\\datasets\\contour\\flower_cif\\canny",
+  "video_path": "D:\\code\\infraredComp\\datasets\\contour\\flower_cif\\canny\\contour.mp4",
   "duration_s": 8.341667
 }

@@ -1,7 +1,7 @@
 ---
 name: learned-codec-install
 description: |
-  往 infraredComp 安装/集成一个新的学习式压缩模型库的流程 meta-skill。覆盖：装库、加 codec、接 eval+training、下 checkpoint、**为该库建专属 usage skill**（规则：每个学习式压缩库都配一个 skill）。也适用于 CompressAI(已装)/DCVC-RT(待装)/未来其它。
+  往 infraredComp 安装/集成一个新的学习式压缩模型库的流程 meta-skill。覆盖：装库、加 codec、接 eval+training、下 checkpoint、**为该库建专属 usage skill**（规则：每个学习式压缩库都配一个 skill）。也适用于 CompressAI(已装)/DCVC-RT(已装)/未来其它。
   触发场景：(1) 集成新的学习式压缩库 (2) 加学习式视频 codec (3) 接训练/评测 (4) 给某学习库建 usage skill (5) 不知道某步该改哪
 ---
 
@@ -37,6 +37,10 @@ class XCodec(VideoCodec):
 ```
 - 复用 `benchmark/learned.py` 的 `_img_to_tensor/_tensor_to_img/_pad_to_multiple/_unpad`（min-max norm + gray→3ch + ÷64 pad）。
 - bitstream 序列化：`pickle.dumps({"strings":..., "shapes":..., "n":..., "stats":..., "pads":..., "hw":...})`；decode 镜像。
+- **stage2 从 contour.mp4 起**：stage1 产物是 `contour.mp4`（不存 PNG 帧）；`benchmark_codec` 走
+  `load_contour_frames(artifact)` 读 PNG — 故 `run_benchmark` / `bench_one` /
+  `run_all_video_models` 在 benchmark 前自动把 `contour.mp4` 解码到临时 PNG
+  目录（crop 回原尺寸），codec 跑完清理。新库加完后无需额外处理。
 - 在 `benchmark/video/codecs/__init__.py` 加 `from . import <lib> as _<lib>` 注册。
 - `crf` 复用为该库的 quality 级（ssf2020: 1-9；DCVC-RT 各自）。
 

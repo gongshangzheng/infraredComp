@@ -12,18 +12,25 @@ from typing import Any
 
 @dataclass
 class ContourArtifact:
-    """A lossless contour frame sequence (the stage-1 product / stage-2 input)."""
+    """A lossless contour video (the stage-1 product / stage-2 input).
+
+    The persistent artifact is a lossless ``contour.mp4`` (``video_path``);
+    the per-frame PNGs are deleted after stitching. ``frame_paths`` is empty
+    for freshly produced artifacts — only populated transiently by stage 2's
+    temp-frame materialization, or for legacy dirs that still hold PNGs.
+    """
 
     source_name: str               # stem of the raw video / frame dir
     method: str                    # extractor name (canny / sobel / ...)
-    frames_dir: str                # dir holding frame_%06d.png
-    frame_paths: list[str] = field(default_factory=list)  # ordered PNG paths
+    frames_dir: str                # dir holding contour.mp4 + manifest.json
+    frame_paths: list[str] = field(default_factory=list)  # ordered PNG paths (legacy/transient)
     frame_count: int = 0
     fps: float = 25.0
     width: int = 0
     height: int = 0
     duration_s: float = 0.0
     manifest_path: str = ""        # manifest.json path
+    video_path: str = ""           # lossless contour video (stage-1 product)
 
     def to_dict(self) -> dict:
         return asdict(self)

@@ -7,7 +7,7 @@
       "status": "completed",
       "startDate": "2026-06-23",
       "endDate": "2026-07-11",
-      "assignee": "李四",
+      "assignee": "郑鑫裕",
       "description": "benchmark/video/ 两阶段评测：阶段1 提取轮廓帧(canny/sobel)，阶段2 用 x264/x265/svtav1/vp9 压缩并出 PSNR/SSIM/码率/BD-Rate",
       "notePath": "notes/01-contour-video.md",
       "children": [
@@ -15,7 +15,7 @@
           "id": "t1-1",
           "title": "阶段1 轮廓提取器 + manifest",
           "status": "completed",
-          "assignee": "李四",
+          "assignee": "郑鑫裕",
           "description": "stage1_extract：resolve_input/demux_to_frames/extract_contour_video，可插拔 @register 提取器",
           "children": []
         },
@@ -23,7 +23,7 @@
           "id": "t1-2",
           "title": "阶段2 codec 压缩评测 + results.json",
           "status": "completed",
-          "assignee": "李四",
+          "assignee": "郑鑫裕",
           "description": "stage2_benchmark：统一 yuv420p、奇数尺寸 pad、per-frame 指标聚合",
           "children": []
         }
@@ -35,7 +35,7 @@
       "status": "completed",
       "startDate": "2026-07-11",
       "endDate": "2026-07-11",
-      "assignee": "李四",
+      "assignee": "郑鑫裕",
       "description": "下载脚本从 OTCBVS Dataset 03 取 6 段热红外序列，归一化为 datasets/raw/osu_color_thermal/seqN.mp4",
       "notePath": "notes/02-dataset.md",
       "children": []
@@ -46,7 +46,7 @@
       "status": "completed",
       "startDate": "2026-07-11",
       "endDate": "2026-07-11",
-      "assignee": "李四",
+      "assignee": "郑鑫裕",
       "description": "task/member/meeting/report 全套自定位 CRUD 脚本；修 markdown_table 空表被丢导致 tasks_parser 位置映射错位的 bug",
       "notePath": "",
       "children": []
@@ -57,8 +57,58 @@
       "status": "active",
       "startDate": "2026-07-12",
       "endDate": "2026-07-13",
-      "assignee": "李四",
+      "assignee": "郑鑫裕",
       "description": "从 ProjFlow 上游移植 theme store/Pinia/暗主题令牌；修项目树 tooltip 透明背景；breadcrumb 可点回退；论文列表刷新保滚动位置",
+      "notePath": "",
+      "children": []
+    },
+    {
+      "id": "t5",
+      "title": "调研:视频 3D 轮廓提取算子(3D Sobel / 3D Canny)",
+      "status": "planning",
+      "startDate": "2026-07-14",
+      "assignee": "郑鑫裕",
+      "description": "调研传统方法在视频上做 3D 轮廓提取的算子(3D Sobel / 3D Canny / 时空梯度等)，评估接入 benchmark/video/extractors/ 的可行性(@register 新提取器，stage1 帧级 → 时空级)",
+      "notePath": "notes/03-research-3d-contour.md",
+      "children": []
+    },
+    {
+      "id": "t6",
+      "title": "调研:图片生成式模型跑视频压缩",
+      "status": "planning",
+      "startDate": "2026-07-14",
+      "assignee": "郑鑫裕",
+      "description": "调研用已训练好的图片生成式模型(生成式图像压缩 / Diffusion-based 压缩等)逐帧跑视频压缩看效果；评估接入 stage2(in-process neural path,仿 ssf2020/dcvc_rt)或新 codec",
+      "notePath": "notes/04-research-generative-video-compression.md",
+      "children": []
+    },
+    {
+      "id": "t7",
+      "title": "轮廓提取接入 PiDiNet / yoloe26",
+      "status": "active",
+      "startDate": "2026-07-15",
+      "assignee": "郑鑫裕",
+      "description": "将 PiDiNet、yoloe26 接入 benchmark/video/extractors/(@register 新提取器),与现有 canny/hed/sobel 并列,扩展轮廓提取算子",
+      "notePath": "",
+      "children": []
+    },
+    {
+      "id": "t8",
+      "title": "模型接入 LosslessSegmentationMapCompression",
+      "status": "active",
+      "startDate": "2026-07-15",
+      "assignee": "郑鑫裕",
+      "description": "接入 InterDigitalInc/LosslessSegmentationMapCompression 作为 codec/方法,纳入 stage2 评测对比",
+      "notePath": "",
+      "children": []
+    },
+    {
+      "id": "t9",
+      "title": "diffTok 灰度图 encoder/decoder",
+      "status": "active",
+      "startDate": "2026-07-15",
+      "assignee": "郑鑫裕",
+      "description": "基于自有 diffTok 框架(gongshangzheng/diffTok),参考已有 encoder/decoder,实现针对灰度图(红外轮廓帧)的 encoder/decoder",
       "notePath": "",
       "children": []
     }

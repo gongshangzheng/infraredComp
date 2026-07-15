@@ -7,7 +7,7 @@ tags: [红外压缩, 轮廓视频, 评测, 全栈]
 participants:
   - name: 张三
     role: 算法工程师
-  - name: 李四
+  - name: 郑鑫裕
     role: 全栈工程师
 ---
 
