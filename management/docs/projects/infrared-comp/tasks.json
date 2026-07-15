@@ -133,19 +133,19 @@
     },
     {
       "id": "t9",
-      "title": "diffTok 灰度图 encoder/decoder",
+      "title": "diffTok: TiTok 风格 1D Tokenizer for 轮廓图像",
       "status": "active",
       "startDate": "2026-07-15",
       "assignee": "郑鑫裕",
-      "description": "基于自有 diffTok 框架(gongshangzheng/diffTok),参考已有 encoder/decoder,实现针对灰度图(红外轮廓帧)的 encoder/decoder",
+      "description": "基于自有 diffTok 框架(gongshangzheng/diffTok),处理轮廓图像(与其他模型一样,非「灰度图 enc/dec」)。参考 TiTok 的 1D Tokenizer 形式:轮廓帧→1D token 序列(可加额外 tokens);或 MaskGIT-VQGAN 风格(image token 通过码表)。不使用 VAE。先使用 TiTok 风格 1D Tokenizer。注意:轮廓图是单通道(灰度,非彩色3通道),encoder/decoder 需适配单通道输入(1ch→特征→1D tokens→码表→1D tokens→特征→1ch 重建)。接入 stage2 codec + 注册 catalog + RD 验证。",
       "notePath": "",
       "children": [
         {
           "id": "t9-1",
-          "title": "diffTok 灰度 encoder 实现 + BSDS500 训练",
+          "title": "diffTok: TiTok 1D Tokenizer encoder 实现 + 训练",
           "status": "planned",
           "assignee": "郑鑫裕",
-          "description": "参考 diffTok 现有 encoder 实现灰度图 encoder;BSDS500 作训练数据",
+          "description": "参考 TiTok 1D Tokenizer 实现轮廓帧的 1D token encoder(非灰度 enc,非 VAE);BSDS500 作训练数据",
           "children": []
         },
         {
