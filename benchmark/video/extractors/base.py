@@ -46,6 +46,13 @@ class ContourExtractor(ABC):
     name: str = "base"
 
     @abstractmethod
-    def extract(self, frame_gray: np.ndarray) -> np.ndarray:
-        """Return a uint8 edge-intensity frame for the given grayscale frame."""
+    def extract(self, frame: np.ndarray) -> np.ndarray:
+        """Return a uint8 edge-intensity frame (HxW) for the given input frame.
+
+        ``frame`` is a COLOR BGR (HxWx3) uint8 array as of the colorized stage1
+        pipeline (gray sources decode to 3 identical channels — harmless). Each
+        extractor decides gray-vs-color: classical ops (canny/sobel) cvtColor to
+        gray; deep detectors (hed/pidinet/yoloe26) use the color directly (they
+        were trained on color). Output is always single-channel uint8 HxW.
+        """
         raise NotImplementedError

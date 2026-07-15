@@ -12,6 +12,8 @@ from .base import (  # noqa: F401
 from . import canny as _canny  # noqa: F401
 from . import sobel as _sobel  # noqa: F401
 from . import hed as _hed  # noqa: F401
+from . import pidinet as _pidinet  # noqa: F401
+from . import yoloe26 as _yoloe26  # noqa: F401
 
 __all__ = [
     "ContourExtractor",

@@ -25,12 +25,15 @@ class CannyExtractor(ContourExtractor):
         self.t1 = t1
         self.t2 = t2
 
-    def extract(self, frame_gray: np.ndarray) -> np.ndarray:
-        if frame_gray.dtype != np.uint8:
-            frame_gray = _to_uint8(frame_gray)
+    def extract(self, frame: np.ndarray) -> np.ndarray:
+        if frame.dtype != np.uint8:
+            frame = _to_uint8(frame)
+        # stage1 now passes COLOR (bgr24) frames; canny runs on luminance.
+        if frame.ndim == 3:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         if self.blur_ksize and self.blur_ksize > 0:
-            frame_gray = cv2.GaussianBlur(frame_gray, (self.blur_ksize, self.blur_ksize), 0)
-        edges = cv2.Canny(frame_gray, self.t1, self.t2)
+            frame = cv2.GaussianBlur(frame, (self.blur_ksize, self.blur_ksize), 0)
+        edges = cv2.Canny(frame, self.t1, self.t2)
         return edges  # uint8, values in {0, 255}
 
 

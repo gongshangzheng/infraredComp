@@ -646,8 +646,8 @@ async def get_configs():
         "name": "默认 baseline",
         "codecs": _traditional_codec_ids(),
         "crfs": [18, 23, 28, 33],
-        "methods": ["canny", "sobel", "hed"],
-        "description": "传统 codec × 4 CRF × 3 提取器（canny/sobel/hed），全序列",
+        "methods": ["canny", "sobel", "hed", "pidinet", "yoloe26"],
+        "description": "传统 codec × 4 CRF × 5 提取器（canny/sobel/hed/pidinet/yoloe26），全序列",
     }]
 
 

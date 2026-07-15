@@ -107,7 +107,7 @@ restoreForm()
 const modelOptions = computed(() => models.value.map(m => ({ label: `${m.name || m.id} (${m.架构 || m.type || '?'})`, value: m.id })))
 const datasetOptions = computed(() => datasets.value.map(d => ({ label: d.name || d.id, value: d.id })))
 const configOptions = computed(() => configs.value.map(c => ({ label: c.name || c.id, value: c.id })))
-const methodOptions = [{ label: 'canny', value: 'canny' }, { label: 'sobel', value: 'sobel' }, { label: 'hed', value: 'hed' }]
+const methodOptions = [{ label: 'canny', value: 'canny' }, { label: 'sobel', value: 'sobel' }, { label: 'hed', value: 'hed' }, { label: 'pidinet', value: 'pidinet' }, { label: 'yoloe26', value: 'yoloe26' }]
 const isImagenet = computed(() => String(form.value.dataset_id || '').startsWith('imagenet-'))
 const isVideo = computed(() => form.value.model_id === 'ssf2020')
 

@@ -23,6 +23,11 @@ datasets/**/*.tiff
 datasets/**/*.bmp
 datasets/**/*.zip
 datasets/contour/*/_raw_frames/
+# Large datasets: real data lives in D:/data (off-repo); junction'd into datasets/
+# and the junction dir is ignored so git never traverses the bulk files.
+datasets/BSDS500/
+datasets/SACo-VEval/
+*.mat
 # datasets/README.md、datasets/manifest.json、datasets/contour/*/manifest.json 等小文件默认被追踪
 
 # Environment
@@ -72,3 +77,9 @@ logs/
 results/video/contour_mp4/
 results/video/row_demo/
 results/video/source/
+third_party/pidinet/*.pth
+third_party/yoloe26/*.pt
+
+# ultralytics mobileclip2 text-model cache (auto-downloaded, ~253MB, never commit)
+mobileclip2_*.ts
+mobileclip2_*.pt

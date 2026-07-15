@@ -7,7 +7,7 @@ project, only swapping the (abandoned) Caffe runtime for ``cv2.dnn``.
 
 Produces a soft edge-probability map (uint8, 0..255), complementing the classical
 baselines: ``canny`` (binary hard-thresholded edges) and ``sobel`` (gradient
-magnitude). Same interface — ``extract(frame_gray) -> uint8 HxW``.
+magnitude). Same interface — ``extract(frame) -> uint8 HxW``.
 
 Two gotchas handled here (from the OpenCV HED sample):
   1. ``deploy.prototxt`` uses a Caffe ``Crop`` layer (centers each deconv
@@ -118,15 +118,15 @@ class HedExtractor(ContourExtractor):
         except Exception:  # noqa: BLE001
             pass
 
-    def extract(self, frame_gray: np.ndarray) -> np.ndarray:
-        if frame_gray.dtype != np.uint8:
-            frame_gray = _to_uint8(frame_gray)
+    def extract(self, frame: np.ndarray) -> np.ndarray:
+        if frame.dtype != np.uint8:
+            frame = _to_uint8(frame)
         # HED expects 3-channel BGR. The contour pipeline is single-channel gray;
         # expand to BGR losslessly (the network only cares about luminance edges).
         bgr = (
-            cv2.cvtColor(frame_gray, cv2.COLOR_GRAY2BGR)
-            if frame_gray.ndim == 2
-            else frame_gray
+            cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+            if frame.ndim == 2
+            else frame
         )
         h, w = bgr.shape[:2]
         blob = cv2.dnn.blobFromImage(

@@ -82,16 +82,19 @@ def _video_fps(path: Path) -> float:
 
 
 def demux_to_frames(video_path: Path, out_dir: Path, frames: int | None = None) -> list[Path]:
-    """Demux a video to grayscale PNG frames via ffmpeg.
+    """Demux a video to **color** (bgr24) PNG frames via ffmpeg.
 
-    Returns sorted list of produced frame paths.
+    Decode to color so each extractor can decide gray-vs-color itself (HED/PiDiNet
+    were trained on color BSDS → prefer color; yoloe26 needs color; canny/sobel
+    convert to gray internally). Gray sources (infrared) decode to 3 identical
+    channels, which is harmless for all extractors.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     pattern = str(out_dir / "frame_%06d.png")
     args = [
         "-y",
         "-i", str(video_path),
-        "-pix_fmt", "gray",
+        "-pix_fmt", "bgr24",
         "-vsync", "0",
     ]
     if frames is not None:
@@ -205,12 +208,14 @@ def extract_contour_video(
     if not raw_frames:
         raise RuntimeError(f"No frames produced from {src_path}")
 
-    # 2. Extract edges per frame, write lossless grayscale PNG (intermediate)
+    # 2. Extract edges per frame, write lossless grayscale PNG (intermediate).
+    #    Read the frame in COLOR (bgr24) — each extractor decides gray-vs-color
+    #    itself (HED/PiDiNet/yoloe26 want color; canny/sobel cvtColor to gray).
     contour_paths: list[Path] = []
     width = height = 0
     for i, fp in enumerate(raw_frames):
-        gray = _read_gray(fp)
-        edges = extractor.extract(gray)
+        frame = cv2.imread(str(fp), cv2.IMREAD_COLOR)
+        edges = extractor.extract(frame)
         if edges.ndim == 3:
             edges = cv2.cvtColor(edges, cv2.COLOR_BGR2GRAY)
         if i == 0:

@@ -137,7 +137,7 @@ const previewTitle = ref('')
 const previewMethod = ref('canny')
 const previewLoading = ref(false)
 const imagePreviews = ref([])
-const methodOptions = [{ label: 'canny', value: 'canny' }, { label: 'sobel', value: 'sobel' }]
+const methodOptions = [{ label: 'canny', value: 'canny' }, { label: 'sobel', value: 'sobel' }, { label: 'hed', value: 'hed' }, { label: 'pidinet', value: 'pidinet' }, { label: 'yoloe26', value: 'yoloe26' }]
 
 const datasetId = route.params.id
 

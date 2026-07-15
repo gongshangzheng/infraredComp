@@ -16,7 +16,7 @@ infraredComp/benchmark/video/
 ├── config.py            # 路径常量(datasets/raw|contour, results/video, bitstreams/recon/source/contour_mp4)
 ├── ffmpeg_util.py       # ffmpeg/ffprobe 发现(INFRACOMP_FFMPEG_BIN → PATH → static_ffmpeg fallback)
 ├── data.py              # ContourArtifact(带 video_path)/ VideoCompressionResult(含 dataset 字段)
-├── extractors/          # 阶段1 可插拔提取器(canny/sobel,@register)
+├── extractors/          # 阶段1 可插拔提取器(canny/sobel/hed/pidinet,@register)
 ├── stage1_extract.py    # extract_contour_video(产 contour.mp4,删 PNG,temp+swap 原子替换)
 │                        #   load_contour_frames(读 PNG)/ load_contour_video_frames(解码 video→np)
 ├── codecs/              # 阶段2 视频 codec(x264/x265/svtav1/vp9 + ssf2020/dcvc_rt/img-*)

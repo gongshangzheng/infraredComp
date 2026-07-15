@@ -16,13 +16,16 @@ class SobelExtractor(ContourExtractor):
         self.ksize = ksize
         self.blur_ksize = blur_ksize
 
-    def extract(self, frame_gray: np.ndarray) -> np.ndarray:
-        if frame_gray.dtype != np.uint8:
-            frame_gray = _to_uint8(frame_gray)
+    def extract(self, frame: np.ndarray) -> np.ndarray:
+        if frame.dtype != np.uint8:
+            frame = _to_uint8(frame)
+        # stage1 now passes COLOR (bgr24) frames; Sobel runs on luminance.
+        if frame.ndim == 3:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         if self.blur_ksize and self.blur_ksize > 0:
-            frame_gray = cv2.GaussianBlur(frame_gray, (self.blur_ksize, self.blur_ksize), 0)
-        gx = cv2.Sobel(frame_gray, cv2.CV_32F, 1, 0, ksize=self.ksize)
-        gy = cv2.Sobel(frame_gray, cv2.CV_32F, 0, 1, ksize=self.ksize)
+            frame = cv2.GaussianBlur(frame, (self.blur_ksize, self.blur_ksize), 0)
+        gx = cv2.Sobel(frame, cv2.CV_32F, 1, 0, ksize=self.ksize)
+        gy = cv2.Sobel(frame, cv2.CV_32F, 0, 1, ksize=self.ksize)
         mag = cv2.magnitude(gx, gy)
         mn, mx = float(mag.min()), float(mag.max())
         if mx - mn > 0:
