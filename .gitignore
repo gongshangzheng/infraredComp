@@ -83,3 +83,7 @@ third_party/yoloe26/*.pt
 # ultralytics mobileclip2 text-model cache (auto-downloaded, ~253MB, never commit)
 mobileclip2_*.ts
 mobileclip2_*.pt
+
+# NEVC checkpoints (HF ByteDance/NEVC1.0, gitignore weights only; src/ tracked)
+third_party/nevc/models/*.pth.tar
+third_party/nevc/models/*.pth
