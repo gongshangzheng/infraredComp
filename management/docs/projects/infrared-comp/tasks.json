@@ -281,11 +281,43 @@
     {
       "id": "t13",
       "title": "BSDS500 gt 转 PNG(boundaries+segmentation)",
-      "status": "planned",
+      "status": "completed",
       "assignee": "郑鑫裕",
       "startDate": "2026-07-15",
-      "description": "BSDS500 groundTruth/*.mat(MATLAB struct,含 Segmentation/Boundaries)转 PNG:boundaries→二值边缘 PNG(作边缘检测评测 gt),segmentation→mask PNG;存 datasets/BSDS500/groundTruth_png/{train,val,test}/;供 t7-1/t7-2(PiDiNet/yoloe26 提取器)对比 gt 边界评测",
+      "description": "BSDS500 groundTruth/*.mat(MATLAB struct,含 Segmentation/Boundaries)转 PNG:boundaries→二值边缘 PNG(作边缘检测评测 gt),segmentation→mask PNG;存 datasets/BSDS500/groundTruth_png/{train,val,test}/;供 t7-1/t7-2(PiDiNet/yoloe26 提取器)对比 gt 边界评测\n【完成@2026-07-16】boundaries 多标注者平均→软边缘 PNG 已落地（scripts/convert_bsds_gt.py，train 200/val 100/test 200，分桶 frame_*.png + manifest）；segmentation 未做（当前训练只需软边缘 GT，非必需）。已用于 BSDS GT 训练路径（train_model bsds- 路由 + ContourPNGDataset）。",
       "children": []
+    },
+    {
+      "id": "t14",
+      "title": "训练 checkpoint 接入验证流程（EvalRun 选 ckpt 自动定模型/参数）",
+      "status": "active",
+      "assignee": "郑鑫裕",
+      "startDate": "2026-07-16",
+      "description": "把训练产出的 checkpoint 接进验证：EvalRun 选 checkpoint→自动填 codec(img-<model_id>/ssf2020)+quality(crfs)+checkpoint_path→一键开验证。codec 层 checkpoint_path 已支持(learned_image/ssf2020/_load_model/load_elic_model)，缺 UI→API→runner plumbing + ckpt.json 自带模型信息。",
+      "children": [
+        {
+          "id": "t14-1",
+          "title": "eval runner checkpoint_path 透传（codec 层 base/stage2/bench_one/run_all_subprocess 已改；剩 evaluation.py /run 收 checkpoint+解析 abs+传 --checkpoint）",
+          "status": "active",
+          "assignee": "郑鑫裕",
+          "priority": "P1",
+          "children": []
+        },
+        {
+          "id": "t14-2",
+          "title": "ckpt.json 富化：根级带 model_id/quality/method/dataset/lambda/size（eval 自包含，老 run 回退 run 记录）",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "children": []
+        },
+        {
+          "id": "t14-3",
+          "title": "EvalRun checkpoint 选择器：选 ckpt 自动填 codecs=img-<model_id>/ssf2020 + crfs=[quality] + checkpoint（getTrainRuns 的 best/latest）",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "children": []
+        }
+      ]
     }
   ]
 }
