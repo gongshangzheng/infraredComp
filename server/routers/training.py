@@ -55,13 +55,13 @@ _DEFAULT_DATASETS = [
 _DEFAULT_CONFIGS = [
     {
         "id": "default", "name": "默认 RD 训练",
-        "epochs": 100, "lr": 1e-4, "batch_size": 16, "optimizer": "adam",
+        "epochs": 100, "lr": 1e-4, "batch_size": 16, "optimizer": "adamw",
         "scheduler": "cosine", "lambda": 0.01, "quality": 3,
         "description": "rate-distortion 训练（MSE + λ·bpp）；下游按模型/数据集调",
     },
     {
         "id": "fast", "name": "快速验证", "epochs": 2, "lr": 1e-4, "batch_size": 4,
-        "optimizer": "adam", "scheduler": "none", "lambda": 0.01, "quality": 1,
+        "optimizer": "adamw", "scheduler": "none", "lambda": 0.01, "quality": 1,
         "description": "2 epoch 小数据快速跑通流水线",
     },
 ]
@@ -186,6 +186,7 @@ async def run_training(data: dict = Body(...)):
             "--batch", str(data.get("batch_size", 16)),
             "--lambda", str(data.get("lamb", 0.01)),
             "--device", str(data.get("device", "cuda")),
+            "--optimizer", str(data.get("optimizer", "adamw")),
             "--method", method_tag,
             "--shards", str(data.get("shards", 4)),
             "--max-images", str(data.get("max_images", 0)),
@@ -223,6 +224,25 @@ async def run_training(data: dict = Body(...)):
 
 # ---- runs -------------------------------------------------------------- #
 
+def _attach_ckpt_meta(run: dict) -> dict:
+    """给 run 附 latest/best checkpoint 信息（从 checkpoints/<run>.ckpt.json 读，JSON 可含非展示字段）。"""
+    rid = run.get("id", "")
+    mf = os.path.join(CHECKPOINTS_DIR, f"{rid}.ckpt.json")
+    meta = {}
+    if os.path.isfile(mf):
+        try:
+            meta = json.loads(read_file(mf) or "{}")
+        except Exception:
+            meta = {}
+    run = dict(run)
+    run["latest"] = meta.get("latest")
+    run["best"] = meta.get("best")
+    # checkpoint 文件存在性（best/latest 下载按钮据此显隐）
+    run["has_latest"] = os.path.isfile(os.path.join(CHECKPOINTS_DIR, f"{rid}.pth"))
+    run["has_best"] = os.path.isfile(os.path.join(CHECKPOINTS_DIR, f"{rid}.best.pth"))
+    return run
+
+
 @router.get("/runs")
 async def get_runs(model: str = None, dataset: str = None, status: str = None):
     data = _load_metrics()
@@ -233,6 +253,7 @@ async def get_runs(model: str = None, dataset: str = None, status: str = None):
         runs = [r for r in runs if r.get("dataset") == dataset]
     if status:
         runs = [r for r in runs if r.get("status") == status]
+    runs = [_attach_ckpt_meta(r) for r in runs]
     return {"generated_at": data.get("generated_at"), "total": len(runs), "runs": runs}
 
 
@@ -241,7 +262,7 @@ async def get_run_detail(run_id: str):
     data = _load_metrics()
     for r in data.get("runs", []):
         if r.get("id") == run_id:
-            return r
+            return _attach_ckpt_meta(r)
     return {"detail": "Run not found"}, 404
 
 

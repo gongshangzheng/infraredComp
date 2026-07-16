@@ -49,6 +49,9 @@
           <n-form-item label="Batch Size">
             <n-input-number v-model:value="form.batch_size" :min="1" :max="512" />
           </n-form-item>
+          <n-form-item label="Optimizer">
+            <n-select v-model:value="form.optimizer" :options="optimizerOptions" />
+          </n-form-item>
           <n-form-item label="λ (RD)">
             <n-input-number v-model:value="form.lamb" :step="0.001" :min="0" />
           </n-form-item>
@@ -93,7 +96,7 @@ const models = ref([])
 const datasets = ref([])
 const configs = ref([])
 const runResult = ref(null)
-const form = ref({ model_id: null, dataset_id: null, config_id: null, quality: 3, epochs: 100, lr: 1e-4, batch_size: 16, lamb: 0.01, device: 'cuda', method: 'canny', size: 128, seq_len: 4, max_sequences: 64, warm_start: true, checkpoint: null, ckpt_mode: 'load', extra_args: '' })
+const form = ref({ model_id: null, dataset_id: null, config_id: null, quality: 3, epochs: 100, lr: 1e-4, batch_size: 16, optimizer: 'adamw', lamb: 0.01, device: 'cuda', method: 'canny', size: 128, seq_len: 4, max_sequences: 64, warm_start: true, checkpoint: null, ckpt_mode: 'load', extra_args: '' })
 
 // 下拉框跨浏览器刷新(F5)持久化（不清空）
 const FORM_STORE_KEY = 'infracomp:train-run'
@@ -122,6 +125,7 @@ const checkpointOptions = computed(() => {
 const datasetOptions = computed(() => datasets.value.map(d => ({ label: d.name || d.id, value: d.id })))
 const configOptions = computed(() => configs.value.map(c => ({ label: c.name || c.id, value: c.id })))
 const methodOptions = [{ label: 'canny', value: 'canny' }, { label: 'sobel', value: 'sobel' }, { label: 'hed', value: 'hed' }, { label: 'pidinet', value: 'pidinet' }, { label: 'yoloe26', value: 'yoloe26' }]
+const optimizerOptions = [{ label: 'AdamW', value: 'adamw' }, { label: 'Adam', value: 'adam' }]
 const isImagenet = computed(() => String(form.value.dataset_id || '').startsWith('imagenet-'))
 const isVideo = computed(() => form.value.model_id === 'ssf2020')
 
@@ -130,7 +134,7 @@ watch(() => form.value.config_id, (cfgId) => {
   if (!cfgId) return
   const cfg = configs.value.find(c => c.id === cfgId)
   if (!cfg) return
-  const fields = { epochs: 'epochs', lr: 'lr', batch_size: 'batch_size', lambda: 'lamb', quality: 'quality' }
+  const fields = { epochs: 'epochs', lr: 'lr', batch_size: 'batch_size', lambda: 'lamb', quality: 'quality', optimizer: 'optimizer' }
   for (const [src, dst] of Object.entries(fields)) {
     if (cfg[src] != null) form.value[dst] = cfg[src]
   }

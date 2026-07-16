@@ -30,19 +30,11 @@
       <div v-else class="curve-placeholder">暂无 run（在「训练运行」页启动训练后曲线在此叠加显示）</div>
     </n-card>
 
-    <!-- 训练 run 列表 -->
-    <n-card size="small" title="训练 run 列表" style="margin-top: 12px">
+    <!-- 训练结果列表（run + checkpoint 合并） -->
+    <n-card size="small" title="训练结果列表" style="margin-top: 12px">
       <n-spin :show="loading">
-        <n-data-table v-if="filteredRuns.length" :columns="runColumns" :data="filteredRuns" :bordered="false" size="small" striped />
-        <EmptyState v-else description="暂无训练 run。在「训练运行」页启动训练后，run 列表 + loss 曲线在此。" />
-      </n-spin>
-    </n-card>
-
-    <!-- checkpoint 文件列表 -->
-    <n-card size="small" title="checkpoint 文件（trained .pth）" style="margin-top: 12px">
-      <n-spin :show="cpLoading">
-        <n-data-table v-if="checkpoints.length" :columns="cpColumns" :data="checkpoints" :bordered="false" size="small" striped />
-        <EmptyState v-else description="暂无 trained checkpoint。训练产物在 results/training/checkpoints/。" />
+        <n-data-table v-if="filteredRuns.length" :columns="runColumns" :data="filteredRuns" :bordered="false" size="small" striped :scroll-x="1100" />
+        <EmptyState v-else description="暂无训练 run。在「训练运行」页启动训练后，结果 + 曲线在此。" />
       </n-spin>
     </n-card>
   </div>
@@ -57,7 +49,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import EmptyState from '../../components/common/EmptyState.vue'
-import { getTrainRuns, listCheckpoints, getTrainOutputUrl } from '../../api/training'
+import { getTrainRuns, getTrainOutputUrl } from '../../api/training'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -66,9 +58,7 @@ use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent
 
 const message = useMessage()
 const loading = ref(false)
-const cpLoading = ref(false)
 const runs = ref([])
-const checkpoints = ref([])
 const filters = ref({ model: null, dataset: null, status: null })
 const currentRun = ref(null)
 const currentRunId = ref(null)
@@ -105,14 +95,6 @@ function syncCurrent() {
   if (r) currentRun.value = r
 }
 
-async function refreshCheckpoints() {
-  cpLoading.value = true
-  try {
-    const cps = await listCheckpoints().catch(() => ({ checkpoints: [] }))
-    checkpoints.value = cps?.checkpoints || []
-  } finally { cpLoading.value = false }
-}
-
 function startPolling() {
   if (pollTimer) return
   pollTimer = setInterval(async () => {
@@ -121,11 +103,8 @@ function startPolling() {
       runs.value = sortRuns(res.runs)
       syncCurrent()
     }
-    // 全部 run 结束：补刷一次 checkpoints（拿新 .pth），停轮询
-    if (!runs.value.some(isRunning)) {
-      stopPolling()
-      refreshCheckpoints()
-    }
+    // 全部 run 结束：停轮询（latest/best 已随 /runs 返回）
+    if (!runs.value.some(isRunning)) stopPolling()
   }, 3000)
 }
 
@@ -190,71 +169,55 @@ const curveOption = computed(() => {
 })
 
 const runColumns = computed(() => [
-  { title: 'ID', key: 'id', width: 150 },
-  { title: '模型', key: 'model' },
-  { title: '数据集', key: 'dataset' },
-  { title: 'epochs', key: 'epochs', width: 70 },
-  { title: 'final_loss', key: 'final_loss', width: 90, render: (r) => fmt(r.final_loss) },
-  { title: 'best_metric', key: 'best_metric', width: 100, render: (r) => fmt(r.best_metric) },
+  { title: 'ID', key: 'id', width: 230, ellipsis: { tooltip: true } },
+  { title: '模型', key: 'model', width: 80 },
+  { title: '数据集', key: 'dataset', width: 120, ellipsis: { tooltip: true } },
+  { title: 'epochs', key: 'epochs', width: 80, render: (r) => `${r.loss_series?.length || 0}/${r.epochs ?? '-'}` },
+  { title: 'latest(test)', key: 'latest', width: 150, render: (r) => fmtLatest(r.latest) },
+  { title: 'best(test)', key: 'best', width: 130, render: (r) => fmtBest(r.best) },
   { title: '状态', key: 'status', width: 80 },
-  { title: '时间', key: 'started_at', render: (r) => r.started_at?.split('T')[0] || '-' },
+  { title: '时间', key: 'started_at', width: 100, render: (r) => r.started_at?.split('T')[0] || '-' },
   {
-    title: '操作', key: 'actions', width: 110,
-    render: (r) => h(NButton, { size: 'small', type: 'primary', secondary: true, onClick: () => router.push(`/training/results/runs/${r.id}`) }, { default: () => '详情' }),
+    title: '操作', key: 'actions', width: 180, fixed: 'right',
+    render: (r) => h('div', { style: 'display:flex;gap:6px' }, [
+      h(NButton, { size: 'small', type: 'primary', secondary: true, onClick: () => router.push(`/training/results/runs/${r.id}`) }, { default: () => '详情' }),
+      h(NButton, { size: 'small', secondary: true, disabled: !r.has_best, onClick: () => downloadCkpt(r, 'best') }, { default: () => 'best' }),
+      h(NButton, { size: 'small', secondary: true, disabled: !r.has_latest, onClick: () => downloadCkpt(r, 'latest') }, { default: () => 'latest' }),
+    ]),
   },
 ])
 
-const cpColumns = [
-  { title: 'checkpoint', key: 'name' },
-  { title: '大小', key: 'size_bytes', width: 100, render: (r) => fmtSize(r.size_bytes) },
-  {
-    title: '操作', key: 'actions', width: 160,
-    render: (r) => h('div', { style: 'display:flex;gap:6px' }, [
-      h(NButton, { size: 'small', secondary: true, onClick: () => copyUrl(r) }, { default: () => '复制路径' }),
-      h(NButton, { size: 'small', type: 'primary', secondary: true, onClick: () => download(r) }, { default: () => '下载' }),
-    ]),
-  },
-]
-
 function fmt(v) { return (v == null || isNaN(v)) ? '-' : Number(v).toFixed(4) }
-function fmtSize(b) {
-  if (!b) return '-'
-  const u = ['B', 'KB', 'MB', 'GB']; let i = 0, v = b
-  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++ }
-  return `${v.toFixed(1)} ${u[i]}`
+function fmtLatest(la) {
+  if (!la?.test) return '-'
+  return `ep${la.epoch} ${la.test.psnr != null ? Number(la.test.psnr).toFixed(2) + 'dB' : ''} ${la.test.bpp != null ? Number(la.test.bpp).toFixed(3) + 'bpp' : ''}`
+}
+function fmtBest(b) {
+  if (!b?.test) return '-'
+  return `ep${b.epoch} ${b.test.psnr != null ? Number(b.test.psnr).toFixed(2) + 'dB' : ''}`
 }
 
 function selectRun(r) {
   currentRunId.value = r?.id ?? null
   currentRun.value = r ?? null
   if (r && !r.loss_series?.length) message.info('该 run 暂无 loss_series（训练未开始或未记录）')
-  // 选中一条还在跑的 run → 确保轮询开着，曲线会随 epoch 更新
   if (isRunning(r)) startPolling()
 }
 
-function copyUrl(cp) {
-  const url = getTrainOutputUrl(cp.path)
-  navigator.clipboard?.writeText(url)
-  message.success(`已复制 checkpoint 服务路径: ${url}`)
-}
-
-function download(cp) {
+function downloadCkpt(run, kind) {
+  const rid = run.id
+  const path = kind === 'best' ? `checkpoints/${rid}.best.pth` : `checkpoints/${rid}.pth`
   const a = document.createElement('a')
-  a.href = getTrainOutputUrl(cp.path)
-  a.download = cp.name
+  a.href = getTrainOutputUrl(path)
+  a.download = kind === 'best' ? `${rid}.best.pth` : `${rid}.pth`
   a.click()
 }
 
 async function load() {
   loading.value = true
-  cpLoading.value = true
   try {
-    const [runsRes, cps] = await Promise.all([
-      getTrainRuns().catch(() => ({ runs: [] })),
-      listCheckpoints().catch(() => ({ checkpoints: [] })),
-    ])
+    const runsRes = await getTrainRuns().catch(() => ({ runs: [] }))
     runs.value = sortRuns(runsRes?.runs || [])
-    checkpoints.value = cps?.checkpoints || []
     // 自动选中最新一条 run（开页面即可看到正在跑的曲线）
     if (!currentRunId.value && runs.value.length) {
       selectRun(runs.value[0])
@@ -264,7 +227,6 @@ async function load() {
     if (runs.value.some(isRunning)) startPolling()
   } catch (e) { message.error('加载失败') }
   loading.value = false
-  cpLoading.value = false
 }
 
 onMounted(load)

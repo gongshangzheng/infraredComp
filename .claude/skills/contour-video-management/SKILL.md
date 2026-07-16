@@ -79,6 +79,11 @@ uv run python $SD/update_task.py --slug infrared-comp --id t2-3 --status active 
 uv run python $SD/update_task.py --slug infrared-comp --id t2-3 --title "轮廓提取 v2" --end 2026-07-20
 # 标记完成
 uv run python $SD/update_task.py --slug infrared-comp --id t2-3 --status completed
+# description 语义（两者互斥）：
+#   --description "新文本"            → 整体替换（原 description 被覆盖）
+#   --append-description "追加文本"    → 追加到原 description 末尾（换行连接，保留原文）
+uv run python $SD/update_task.py --slug infrared-comp --id t2-3 \
+  --append-description "【进度@2026-07-15】wrapper 已就位，crash 待解"
 
 # 删除（递归删节点及其子树）
 uv run python $SD/delete_task.py --slug infrared-comp --id t2-3
