@@ -3,7 +3,7 @@
     <div class="node-row-wrap" @mouseenter="onEnter" @mouseleave="onLeave">
       <div
         class="node-row"
-        :class="{ selected: isSelected, clickable: isClickable }"
+        :class="{ selected: isSelected, clickable: isClickable, 'is-hidden': task.hidden || task.__hidden }"
         @click="onClick"
       >
         <!-- git 分支线 -->
@@ -158,6 +158,7 @@ function onClick() {
   padding: 2px 0;
   &.clickable { cursor: pointer; &:hover { background: var(--color-hover); } }
   &.clickable.selected { background: var(--color-selected); }
+  &.is-hidden { opacity: 0.45; .node-title { font-style: italic; } }
 }
 
 .branch-lines {
@@ -236,6 +237,6 @@ function onClick() {
   .hc-badge { font-size: 10px; background: var(--color-elevated); padding: 1px 6px; border-radius: 4px; color: var(--color-text-secondary); }
   .hc-line { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; }
   .hc-progress { font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; }
-  .hc-desc { font-size: 12px; color: var(--color-text); margin-top: 6px; }
+  .hc-desc { font-size: 12px; color: var(--color-text); margin-top: 6px; white-space: pre-line; line-height: 1.5; }
 }
 </style>
