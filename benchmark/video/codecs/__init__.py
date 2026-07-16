@@ -20,6 +20,7 @@ from . import nevc as _nevc  # noqa: F401
 from . import dcvc_dc as _dcvc_dc  # noqa: F401
 from . import lsmc as _lsmc  # noqa: F401
 from . import learned_image as _learned_image  # noqa: F401
+from . import difftok as _difftok  # noqa: F401
 
 __all__ = [
     "CodecConfig",
@@ -46,6 +47,7 @@ _NON_IMG_QUALITIES: dict[str, list[int]] = {
     "nevc": [0, 1, 2, 3],
     "dcvc_dc": [0, 1, 2, 3],
     "lsmc": [0],
+    "difftok": [1],
 }
 
 _CODEC_META: dict[str, tuple[str, str]] = {
@@ -59,6 +61,7 @@ _CODEC_META: dict[str, tuple[str, str]] = {
     "nevc": ("NEVC-1.0 (EHVC)", "bytedance DCVC-derived；IntraNoAR+DMC+MLCodec_rans；HF checkpoint"),
     "dcvc_dc": ("DCVC-DC (CVPR2023)", "microsoft DCVC family；IntraNoAR+DMC+MLCodec_rans；OneDrive checkpoint"),
     "lsmc": ("LSMC (Lossless SegMap)", "InterDigital C++ CLI；链码+算术编码；无损单点 PSNR=inf"),
+    "difftok": ("DiffTok VQ Tokenizer", "灰度轮廓 1D VQ tokenizer；BCE loss；TiTok 风格 latent tokens"),
 }
 
 

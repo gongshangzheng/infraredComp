@@ -163,10 +163,11 @@ def split_from_dataset_id(dataset_id: str) -> str:
 
 class ContourPNGDataset(Dataset):
     """读预提取的 frame_*.png 边缘图（extract_imagenet_contour.py 产物），min-max 归一化
-    到 [0,1] 3 通道。训练快路径：无 JPEG 解码/无在线提边缘，PNG 多 worker 读且 OS 缓存友好。"""
+    到 [0,1]。out_channels=3（默认）输出 3 通道，out_channels=1 输出单通道。"""
 
-    def __init__(self, frames_dir: str, size: int = 128, max_images: int = 0):
+    def __init__(self, frames_dir: str, size: int = 128, max_images: int = 0, out_channels: int = 3):
         self.size = size
+        self.out_channels = out_channels
         root = Path(frames_dir)
         files = sorted(
             p for p in root.rglob("*")
@@ -189,7 +190,10 @@ class ContourPNGDataset(Dataset):
         t, _ = _img_to_tensor(arr)  # (1,3,H,W) float [0,1]（min-max + 复制3通道）
         if t.shape[2] != self.size or t.shape[3] != self.size:
             t = F.interpolate(t, size=(self.size, self.size), mode="bilinear", align_corners=False)
-        return torch.clamp(t.squeeze(0), 0.0, 1.0)  # (3,H,W)
+        t = torch.clamp(t.squeeze(0), 0.0, 1.0)  # (3,H,W)
+        if self.out_channels == 1:
+            t = t[:1]  # take first channel only → (1,H,W)
+        return t
 
 
 def preextracted_contour_dir(split: str, method: str) -> Path:

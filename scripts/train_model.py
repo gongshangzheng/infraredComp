@@ -157,7 +157,8 @@ def _ensure_contour_dir(dataset_id: str, method: str) -> Path:
 
 def resolve_training_dataset(dataset_id: str, method: str, max_images: int, size: int,
                              shards: int, *, is_video: bool, seq_len: int = 4,
-                             max_sequences: int = 64, num_workers: int = 0) -> Dataset:
+                             max_sequences: int = 64, num_workers: int = 0,
+                             out_channels: int = 3) -> Dataset:
     """按 --dataset 前缀分发到合适的训练 Dataset。
 
     - imagenet-<split>        → ImageNetContourDataset（parquet 流式在线提边缘，不落地）
@@ -174,7 +175,7 @@ def resolve_training_dataset(dataset_id: str, method: str, max_images: int, size
             raise RuntimeError(
                 f"BSDS GT 目录无 manifest：{png_dir}。先跑 python scripts/convert_bsds_gt.py --splits {split}"
             )
-        return ContourPNGDataset(str(png_dir), size=size, max_images=max_images)
+        return ContourPNGDataset(str(png_dir), size=size, max_images=max_images, out_channels=out_channels)
 
     if dataset_id.startswith("imagenet-"):
         from scripts.imagenet_contour_dataset import (
@@ -187,7 +188,7 @@ def resolve_training_dataset(dataset_id: str, method: str, max_images: int, size
         # 优先走预提取 PNG（快、GPU 喂得满）；无则回退流式在线提取（慢，仅小批量/验证用）
         png_dir = preextracted_contour_dir(split, method)
         if (png_dir / "manifest.json").is_file():
-            return ContourPNGDataset(str(png_dir), size=size, max_images=max_images)
+            return ContourPNGDataset(str(png_dir), size=size, max_images=max_images, out_channels=out_channels)
         # 每个 worker 都会各自建一份 dataset 实例（Windows spawn）；按 worker 数缩 row-group
         # 缓存 cap，把显式缓存总占用压在 ~16GB 内（每 group ~101MB）。
         nw = max(1, num_workers or 1)
@@ -272,6 +273,12 @@ def build_model(model_id: str, quality: int, device: str, warm_start: bool = Tru
     elif model_id == "ELIC":
         from benchmark.elic_model import ELICModel  # type: ignore
         m = ELICModel(N=192, M=320, num_slices=5)
+    elif model_id == "difftok":
+        from omegaconf import OmegaConf
+        from third_party.diffTok.src.nets.contour_vqae import ContourVQAE
+        cfg_path = REPO / "configs" / "difftok" / "bsds_contour.yaml"
+        cfg = OmegaConf.load(cfg_path)
+        m = ContourVQAE(cfg)
     else:
         from compressai.zoo import image_models
         m = image_models[model_id](quality=quality, pretrained=False)
@@ -296,6 +303,23 @@ def rd_loss(out, x, lam: float) -> tuple[torch.Tensor, float, float, float]:
     loss = lam * (rate / num_pixels) + dist
     psnr = 10.0 * math.log10(1.0 / (mse + 1e-10))
     return loss, loss.item(), psnr, bpp
+
+
+def rd_loss_difftok(logits, x0, vq_loss, pos_weight: float = 10.0) -> tuple:
+    """BCE loss for binary contour maps + VQ commitment loss.
+
+    pos_weight upweights edge pixels to compensate class imbalance (~5-15% edges).
+    Returns (loss, loss_val, psnr_proxy, bpp_dummy) matching rd_loss tuple shape.
+    """
+    import torch.nn.functional as F
+    pw = torch.tensor([pos_weight], dtype=logits.dtype, device=logits.device)
+    bce = F.binary_cross_entropy_with_logits(logits, x0, pos_weight=pw)
+    loss = bce + vq_loss
+    with torch.no_grad():
+        x_hat = torch.sigmoid(logits)
+        mse = torch.mean((x_hat - x0) ** 2).item()
+        psnr = 10.0 * math.log10(1.0 / (mse + 1e-10))
+    return loss, loss.item(), psnr, 0.0
 
 
 def video_rd_loss(out, frames: list, lam: float) -> tuple[torch.Tensor, float, float, float]:
@@ -344,7 +368,8 @@ def _eval_png_dir(dataset_id: str, split: str, method: str) -> Path:
     return preextracted_contour_dir(split, method)
 
 
-def _load_split_sample(dataset_id: str, split: str, method: str, n_take: int, size: int, what: str):
+def _load_split_sample(dataset_id: str, split: str, method: str, n_take: int, size: int, what: str,
+                       out_channels: int = 3):
     """从某个 split 的 PNG 目录取前 n_take 张固定样本。"""
     from scripts.imagenet_contour_dataset import ContourPNGDataset
     d = _eval_png_dir(dataset_id, split, method)
@@ -352,19 +377,19 @@ def _load_split_sample(dataset_id: str, split: str, method: str, n_take: int, si
         hint = (f"python scripts/convert_bsds_gt.py --splits {split}" if dataset_id.startswith("bsds-")
                 else f"python scripts/extract_imagenet_contour.py --split {split} --method {method}")
         raise RuntimeError(f"{what} 目录无 manifest：{d}。先跑 {hint}")
-    ds = ContourPNGDataset(str(d), size=size, max_images=0)
+    ds = ContourPNGDataset(str(d), size=size, max_images=0, out_channels=out_channels)
     if len(ds) == 0:
         raise RuntimeError(f"{what} 数据集为空：{d}")
     return [ds[i] for i in range(min(n_take, len(ds)))]
 
 
 def _load_eval_samples(dataset_id: str, method: str, eval_split: str, viz_split: str,
-                       eval_samples: int, viz_samples: int, size: int):
+                       eval_samples: int, viz_samples: int, size: int, out_channels: int = 3):
     """加载 held-out eval（eval_split）+ 可视化（viz_split）两份固定样本 + 原图。
     BSDS：eval=test、viz=val；imagenet：两者通常都 val（--viz-split 默认 = --eval-split）。
     """
-    eval_sample = _load_split_sample(dataset_id, eval_split, method, eval_samples, size, "eval")
-    viz_sample = _load_split_sample(dataset_id, viz_split, method, viz_samples, size, "viz")
+    eval_sample = _load_split_sample(dataset_id, eval_split, method, eval_samples, size, "eval", out_channels)
+    viz_sample = _load_split_sample(dataset_id, viz_split, method, viz_samples, size, "viz", out_channels)
     originals = _load_originals(dataset_id, viz_split, len(viz_sample), size)
     return eval_sample, viz_sample, originals
 
@@ -383,17 +408,22 @@ def _load_originals(dataset_id: str, split: str, n: int, size: int):
     return out or None
 
 
-def _run_eval(model, eval_sample: list, device: str, lam: float, batch: int) -> dict:
-    """model.eval() + no_grad，在固定 val 样本上算 likelihood-bpp + psnr（rd_loss 逻辑）。"""
+def _run_eval(model, eval_sample: list, device: str, lam: float, batch: int,
+              model_id: str = "") -> dict:
+    """model.eval() + no_grad，在固定 val 样本上算 loss + psnr。"""
     model.eval()
     tot_loss = tot_psnr = tot_bpp = 0.0
     n = 0
     with torch.no_grad():
         for s in range(0, len(eval_sample), batch):
             chunk = eval_sample[s:s + batch]
-            x = torch.stack([t.to(device) for t in chunk], dim=0)  # (B,3,H,W)
-            out = model.forward(x)
-            loss, lv, psnr, bpp = rd_loss(out, x, lam)
+            x = torch.stack([t.to(device) for t in chunk], dim=0)
+            if model_id == "difftok":
+                logits, vq_result = model.forward(x)
+                loss, lv, psnr, bpp = rd_loss_difftok(logits, x, vq_result["quantizer_loss"])
+            else:
+                out = model.forward(x)
+                loss, lv, psnr, bpp = rd_loss(out, x, lam)
             tot_loss += lv; tot_psnr += psnr; tot_bpp += bpp; n += 1
     model.train()
     return {"loss": tot_loss / max(n, 1), "psnr": tot_psnr / max(n, 1), "bpp": tot_bpp / max(n, 1)}
@@ -595,6 +625,7 @@ def main() -> int:
             args.dataset, args.method, args.max_images, args.size, args.shards,
             is_video=is_video, seq_len=args.seq_len, max_sequences=args.max_sequences,
             num_workers=args.num_workers,
+            out_channels=1 if args.model == "difftok" else 3,
         )
     except (RuntimeError, KeyError, FileNotFoundError) as e:
         log(run_id, f"[train] dataset error: {e}")
@@ -636,7 +667,8 @@ def main() -> int:
             viz_split = args.viz_split or args.eval_split
             eval_sample, viz_sample, originals = _load_eval_samples(
                 args.dataset, args.method, args.eval_split, viz_split,
-                args.eval_samples, args.viz_samples, args.size)
+                args.eval_samples, args.viz_samples, args.size,
+                out_channels=1 if args.model == "difftok" else 3)
             log(run_id, f"[train] eval on {args.dataset}/{args.eval_split} ({len(eval_sample)} imgs), "
                         f"viz on {args.dataset}/{viz_split} ({len(viz_sample)} imgs), every {args.eval_every} epoch"
                         + ("" if originals is None else f", with originals (3-panel)"))
@@ -665,8 +697,12 @@ def main() -> int:
                 for batch in loader:
                     batch = batch.to(device)
                     optimizer.zero_grad()
-                    out = model(batch)
-                    loss, lv, psnr, bpp = rd_loss(out, batch, args.lamb)
+                    if args.model == "difftok":
+                        logits, vq_result = model(batch)
+                        loss, lv, psnr, bpp = rd_loss_difftok(logits, batch, vq_result["quantizer_loss"])
+                    else:
+                        out = model(batch)
+                        loss, lv, psnr, bpp = rd_loss(out, batch, args.lamb)
                     loss.backward()
                     optimizer.step()
                     ep_loss += lv; ep_psnr += psnr; ep_bpp += bpp; n += 1
@@ -677,7 +713,7 @@ def main() -> int:
             # 训练中 eval + 可视化（每 eval_every epoch）
             if eval_on and (epoch % args.eval_every == 0):
                 try:
-                    em = _run_eval(model, eval_sample, device, args.lamb, args.batch)
+                    em = _run_eval(model, eval_sample, device, args.lamb, args.batch, model_id=args.model)
                     em["epoch"] = epoch
                     test_metrics.append(em)
                     vpaths = _save_viz(model, viz_sample, originals, device, run_id, epoch)
