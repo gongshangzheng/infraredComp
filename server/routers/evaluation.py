@@ -700,6 +700,8 @@ async def run_evaluation(data: dict = Body(...)):
     # 不截断帧：speed/formal 都用完整序列（speed 靠 --sequences 子集加速）。
     frames = None
 
+    checkpoint = data.get("checkpoint")
+
     if "osu_color_thermal" in dataset_id:
         if has_learned:
             return {"status": "error", "config": data, "output_video": None, "metrics": None,
@@ -714,6 +716,8 @@ async def run_evaluation(data: dict = Body(...)):
             cmd += ["--method", data["method"]]
         if mode == "speed" and data.get("sequences"):
             cmd += ["--sequences", _join_list(data["sequences"])]
+        if checkpoint:
+            cmd += ["--checkpoint", checkpoint]
     else:
         # xiph_cif（及 fallback）：run_all_subprocess 支持传统 + 学习式，子进程隔离段错误。
         script = os.path.join(scripts_dir, "run_all_subprocess.py")
@@ -726,6 +730,8 @@ async def run_evaluation(data: dict = Body(...)):
             cmd += ["--sequences", _join_list(data["sequences"])]
         if data.get("crfs"):
             cmd += ["--crfs", _join_list(data["crfs"])]
+        if checkpoint:
+            cmd += ["--checkpoint", checkpoint]
 
     env = {**os.environ, "NO_PROXY": "*", "no_proxy": "*", "PYTHONUTF8": "1"}
     try:

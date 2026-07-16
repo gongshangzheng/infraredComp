@@ -17,6 +17,9 @@
           <n-form-item label="提取方法" required>
             <n-select v-model:value="form.method" :options="methodOptions" placeholder="选择轮廓提取方法 (canny/sobel)" />
           </n-form-item>
+          <n-form-item v-if="isLearnedCodec" label="Checkpoint">
+            <n-select v-model:value="form.checkpoint" :options="checkpointOptions" placeholder="选择 checkpoint（可选，留空用默认权重）" clearable />
+          </n-form-item>
           <n-form-item label="CRFs">
             <n-select v-model:value="form.crfs" :options="crfOptions" multiple placeholder="默认 18,23,28,33（仅传统 codec）" />
           </n-form-item>
@@ -49,6 +52,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { NCard, NSpin, NForm, NFormItem, NSelect, NButton, NAlert, useMessage } from 'naive-ui'
 import { getCodecs, getDatasets, getEvalConfigs, getMethods, runEvaluation } from '../../api/evaluation'
+import { listCheckpoints } from '../../api/training'
 
 const message = useMessage()
 const router = useRouter()
@@ -58,14 +62,24 @@ const codecs = ref([])
 const datasets = ref([])
 const configs = ref([])
 const methods = ref([])
+const checkpoints = ref([])
 const runResult = ref(null)
-const form = ref({ mode: 'speed', method: 'canny', codecs: [], crfs: [], sequences: '', dataset_id: null, config_id: null })
+const form = ref({ mode: 'speed', method: 'canny', codecs: [], crfs: [], sequences: '', dataset_id: null, config_id: null, checkpoint: null })
+
+const LEARNED_KEYWORDS = ['ssf', 'elic', 'img-', 'dcvc', 'nevc']
+const isLearnedCodec = computed(() =>
+  (form.value.codecs || []).some(id => LEARNED_KEYWORDS.some(kw => id.includes(kw)))
+)
 
 const codecOptions = computed(() => codecs.value.map(c => ({ label: `${c.id}（${c.name} · ${c.kind}）`, value: c.id })))
 const methodOptions = computed(() => methods.value.map(m => ({ label: m, value: m })))
 const datasetOptions = computed(() => datasets.value.map(d => ({ label: `${d.name}${(d.sequences || []).some(s => s.missing) ? ' (文件缺失)' : ''}`, value: d.id })))
 const configOptions = computed(() => configs.value.map(c => ({ label: c.name || c.id, value: c.id })))
 const crfOptions = [18, 23, 28, 33].map(c => ({ label: 'crf' + c, value: c }))
+const checkpointOptions = computed(() => checkpoints.value.map(ck => ({
+  label: ck.name || ck.path,
+  value: ck.path,
+})))
 
 async function handleRun() {
   if (!form.value.codecs.length) {
@@ -100,16 +114,18 @@ async function handleRun() {
 onMounted(async () => {
   loading.value = true
   try {
-    const [c, d, cfg, meth] = await Promise.all([
+    const [c, d, cfg, meth, ckpts] = await Promise.all([
       getCodecs().catch(() => []),
       getDatasets().catch(() => []),
       getEvalConfigs().catch(() => []),
       getMethods().catch(() => ({ methods: [] })),
+      listCheckpoints().catch(() => []),
     ])
     codecs.value = c || []
     datasets.value = d || []
     configs.value = cfg || []
     methods.value = meth?.methods || []
+    checkpoints.value = Array.isArray(ckpts) ? ckpts : (ckpts?.checkpoints || [])
     if (!form.value.method && methods.value.length) form.value.method = methods.value[0]
   } catch {}
   loading.value = false
@@ -119,3 +135,4 @@ onMounted(async () => {
 <style scoped lang="scss">
 .hint { display: block; font-size: 11px; color: var(--color-text-dim); margin-top: 4px; }
 </style>
+
