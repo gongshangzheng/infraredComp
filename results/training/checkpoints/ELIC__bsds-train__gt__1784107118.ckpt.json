@@ -1,5 +1,11 @@
 {
   "run_id": "ELIC__bsds-train__gt__1784107118",
+  "model_id": "ELIC",
+  "quality": 1,
+  "method": "gt",
+  "dataset": "bsds-train",
+  "lambda": null,
+  "size": null,
   "latest": {
     "epoch": 10000,
     "path": "checkpoints/ELIC__bsds-train__gt__1784107118.pth",

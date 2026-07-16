@@ -240,6 +240,8 @@ def _attach_ckpt_meta(run: dict) -> dict:
     # checkpoint 文件存在性（best/latest 下载按钮据此显隐）
     run["has_latest"] = os.path.isfile(os.path.join(CHECKPOINTS_DIR, f"{rid}.pth"))
     run["has_best"] = os.path.isfile(os.path.join(CHECKPOINTS_DIR, f"{rid}.best.pth"))
+    for key in ("model_id", "quality", "method", "dataset", "lambda", "size"):
+        run[key] = meta.get(key)
     return run
 
 
