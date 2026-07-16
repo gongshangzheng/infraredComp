@@ -238,6 +238,23 @@
           "assignee": "郑鑫裕",
           "description": "t10-1~6 接入后用 SA-Co-VEval 统一跑评测 RD 点;训练侧 BSDS500(若 finetune)",
           "children": []
+        },
+        {
+          "id": "t10-8",
+          "title": "DCVC-RT (CVPR2025 real-time): setup✓ + 端到端跑通✓，contour 重建质量待修",
+          "status": "active",
+          "assignee": "郑鑫裕",
+          "description": "rans ext✓(MLCodec_extensions_cpp) + CVPR2025 ckpt✓(cvpr2025_image/video.pth.tar) + CUDA stream→default patch✓(rans ext Windows segfault workaround)。端到端测试(akiyo_cif 8帧 qp30)跑通：psnr 12.63/bpp 1.80/压缩比4.44/enc 2.2fps/dec 44.8fps，无 segfault。但重建质量异常：I帧 psnr 5.41、P帧9-14（轮廓图该25-40），_tensor_to_img 反归一化 invalid-value cast（重建张量有NaN/inf）。疑 DCVC-RT 训于自然视频吃[0,1]RGB，喂 contour 灰度 min-max 归一化分布不匹配 → 待修。",
+          "priority": "P1",
+          "children": [
+            {
+              "id": "t10-8-1",
+              "title": "DCVC-RT contour 重建 NaN/低质量修复：_tensor_to_img invalid cast 根因 + 输入归一化适配",
+              "status": "planned",
+              "assignee": "郑鑫裕",
+              "children": []
+            }
+          ]
         }
       ]
     },
