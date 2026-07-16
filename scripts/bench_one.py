@@ -56,6 +56,7 @@ def main() -> int:
     ap.add_argument("--contour-dir", default=None,
                     help="reuse existing contour dir (skip stage1); else extract")
     ap.add_argument("--dataset", default="Xiph-CIF-natural")
+    ap.add_argument("--checkpoint", default=None, help="trained checkpoint abs path（learned codec 覆盖权重）")
     args = ap.parse_args()
 
     config.ensure_dirs()
@@ -73,7 +74,7 @@ def main() -> int:
         crfs = [int(c) for c in args.crfs.split(",") if c.strip()]
         for crf in crfs:
             try:
-                r = benchmark_codec(art, args.codec, crf, dataset=args.dataset)
+                r = benchmark_codec(art, args.codec, crf, dataset=args.dataset, checkpoint_path=args.checkpoint)
                 print("RESULT:" + json.dumps(r.to_dict()), flush=True)
             except Exception as e:  # noqa: BLE001
                 msg = str(e).strip().splitlines()

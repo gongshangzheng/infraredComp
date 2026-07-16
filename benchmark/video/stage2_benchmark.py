@@ -75,10 +75,11 @@ def benchmark_codec(
     crf: int,
     preset: str | None = None,
     dataset: str = "",
+    checkpoint_path: str | None = None,
 ) -> VideoCompressionResult:
     """Run one codec @ one CRF on the contour video; return a result row."""
     config.ensure_dirs()
-    codec = build_codec(codec_name, crf=crf, preset=preset)
+    codec = build_codec(codec_name, crf=crf, preset=preset, checkpoint_path=checkpoint_path)
 
     frames_dir = artifact.frames_dir
     # tag 含 method: canny/sobel/hed 同 seq×codec×crf 的输出文件互不覆盖。
