@@ -65,7 +65,7 @@
     {
       "id": "t5",
       "title": "调研:视频 3D 轮廓提取算子(3D Sobel / 3D Canny)",
-      "status": "planning",
+      "status": "planned",
       "startDate": "2026-07-14",
       "assignee": "郑鑫裕",
       "description": "调研传统方法在视频上做 3D 轮廓提取的算子(3D Sobel / 3D Canny / 时空梯度等)，评估接入 benchmark/video/extractors/ 的可行性(@register 新提取器，stage1 帧级 → 时空级)",
@@ -75,7 +75,7 @@
     {
       "id": "t6",
       "title": "调研:图片生成式模型跑视频压缩",
-      "status": "planning",
+      "status": "planned",
       "startDate": "2026-07-14",
       "assignee": "郑鑫裕",
       "description": "调研用已训练好的图片生成式模型(生成式图像压缩 / Diffusion-based 压缩等)逐帧跑视频压缩看效果；评估接入 stage2(in-process neural path,仿 ssf2020/dcvc_rt)或新 codec",
@@ -165,73 +165,59 @@
     },
     {
       "id": "t10",
-      "title": "DCVC 系列接入(训练+测试)",
+      "title": "DCVC-RT 接入 (CVPR 2025 实时神经视频 codec)",
       "status": "active",
       "startDate": "2026-07-15",
       "assignee": "郑鑫裕",
-      "description": "third_party/DCVC/DCVC-family/ 下 DCVC/DCVC-DC/DCVC-HEM/DCVC-FM/DCVC-TCM/EVC 六成员逐个接入:下 OneDrive checkpoint + 构建 MLCodec_rans C++ ext + 仿 dcvc_rt.py 写 wrapper(IntraNoAR I帧 + DMC P帧 + DPB seeding + 二进制容器),注册 catalog,跑通 RD 点,纳入训练流程。OneDrive 环境不通需手动下;ext 构建用本机 MSVC(VS2022)+cmake,需 -DPYTHON_EXECUTABLE 指向 conda compression(python 3.12)。",
+      "description": "只接 DCVC-RT(microsoft/DCVC 顶层, CVPR2025 实时 codec)。DCVC-family 各变体(DCVC-DC/HEM/FM/TCM/NeurIPS2021/EVC)已从范围移除——仅 DCVC-DC 的 MLCodec_rans ext(Windows MSVC cp312 构建)被 NEVC(t12)复用,其余不接。推理专用(Microsoft 未放训练代码,fine-tune 需自写 RD-loss train loop)。wrapper dcvc_rt.py 已写(@register_codec, DMCI I帧 + DMC P帧 + DPB seeding + 二进制容器, crf→qp 1:1 clamp 0..63)。当前阻塞: rans ext (MLCodec_extensions_cpp)未构建 + cvpr2025 checkpoints 未下(OneDrive 手动)。详见 .claude/skills/dcvc-rt-usage。",
       "notePath": "",
       "children": [
         {
           "id": "t10-1",
-          "title": "DCVC-DC: 下 checkpoint + ext 已构建 + 写 wrapper",
-          "status": "active",
-          "startDate": "2026-07-15",
+          "title": "submodule vendored: third_party/DCVC (microsoft/DCVC, MIT)",
+          "status": "completed",
           "assignee": "郑鑫裕",
-          "description": "下载放 third_party/DCVC/DCVC-family/DCVC-DC/checkpoints/：cvpr2023_image_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211259&authkey=AO_gFvTcYZUFd9U ；cvpr2023_video_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211256&authkey=ACzRzK3XgbQxEyk （另 ssim/yuv420 共6个见 download.py）。MLCodec_rans+MLCodec_CXX ext 已用 MSVC 构建为 cp312(放 src/models/,导入验证通过)。待 checkpoint 到位后仿 dcvc_rt.py 写 codecs/dcvc_dc.py(IntraNoAR+DMC+MLCodec_rans),注册 catalog,真跑 akiyo 验证 RD 点。",
+          "description": ".gitmodules 已注册 + fetched(src/, DCVC-family/, test_video.py 齐全)。",
           "children": []
         },
         {
           "id": "t10-2",
-          "title": "DCVC-HEM: 下 checkpoint + 构建 ext + wrapper",
-          "status": "planning",
-          "startDate": "",
+          "title": "构建 rans C++ ext (MLCodec_extensions_cpp) — BLOCKING",
+          "status": "planned",
           "assignee": "郑鑫裕",
-          "description": "下载放 DCVC-HEM/checkpoints/：acmmm2022_image_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211220&authkey=AMRg1W3PVt_F3yc ；acmmm2022_video_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211217&authkey=AKpdgXQtvs-OxRs （另 ssim 2个见 download.py）。构建 MLCodec_rans ext(同 DCVC-DC cmake 流程);套 wrapper 模板写 codecs/dcvc_hem.py,注册,验证。",
+          "description": "cd third_party/DCVC/src/cpp && pip install . (需 cmake/编译器+pybind11),装 MLCodec_extensions_cpp。无 fallback——缺则 dcvc_rt._load 抛 RuntimeError。注意 DCVC-RT 顶层用统一的 MLCodec_extensions_cpp, 与 DCVC-family 的 MLCodec_rans+MLCodec_CXX 不是同一构建(NEVC 复用的 DCVC-DC ext 不能直接用于此)。",
           "children": []
         },
         {
           "id": "t10-3",
-          "title": "DCVC-FM: 下 checkpoint + 构建 ext + wrapper",
-          "status": "planning",
-          "startDate": "",
+          "title": "下 cvpr2025 checkpoints (OneDrive 手动) — BLOCKING",
+          "status": "planned",
           "assignee": "郑鑫裕",
-          "description": "下载放 DCVC-FM/checkpoints/：cvpr2024_image.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211494&authkey=!AOxzcrEFT_h-iCk ；cvpr2024_video.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211493&authkey=!AFxYv6oK1o6GrZc 。构建 MLCodec_rans ext;套 wrapper 模板写 codecs/dcvc_fm.py,注册,验证。",
+          "description": "OneDrive: https://1drv.ms/f/c/2866592d5c55df8c/Esu0KJ-I2kxCjEP565ARx_YB88i0UnR6XnODqFcvZs4LcA?e=by8CO8 (backup: https://1drv.ms/f/c/2866592d5c55df8c/EozfVVwtWWYggCitBAAAAAABbT4z2Z10fMXISnan72UtSA?e=BID7DA)。下 cvpr2025_image.pth.tar(DMCI/I帧) + cvpr2025_video.pth.tar(DMC/P帧) 放 third_party/DCVC/checkpoints/。不可脚本化(OneDrive 浏览器手动)。",
           "children": []
         },
         {
           "id": "t10-4",
-          "title": "DCVC-TCM: 下 checkpoint + 构建 ext + wrapper",
-          "status": "planning",
-          "startDate": "",
+          "title": "codec wrapper dcvc_rt.py + @register_codec 注册",
+          "status": "completed",
           "assignee": "郑鑫裕",
-          "description": "下载 DCVC-TCM checkpoint(OneDrive 文件夹,无 download.py,需从文件夹手动取)：https://onedrive.live.com/?authkey=%21ADwwaonwTGR%5FNR8&id=2866592D5C55DF8C%211234&cid=2866592D5C55DF8C ，放 DCVC-TCM/checkpoints/。构建 MLCodec_rans ext;套 wrapper 模板,注册,验证。",
+          "description": "benchmark/video/codecs/dcvc_rt.py 已写(family=learned-video, is_neural=True, DMCI/DMC + DPB seeding + 二进制容器 magic DCVCRT10, crf→qp clamp 0..63)。lazy _load, 缺 ext/ckpt 抛清晰 RuntimeError 不在 import 崩。",
           "children": []
         },
         {
           "id": "t10-5",
-          "title": "DCVC(NeurIPS 2021 原版): 下 checkpoint + 构建 ext + wrapper",
-          "status": "planning",
-          "startDate": "",
+          "title": "usage skill: dcvc-rt-usage + learned-codec-install",
+          "status": "completed",
           "assignee": "郑鑫裕",
-          "description": "下载 DCVC 原版 checkpoint(OneDrive 文件夹,无 download.py,需手动取)：https://1drv.ms/u/s!AozfVVwtWWYoiS5mcGX320bFXI0k?e=iMeykH ，放 DCVC/checkpoints/。构建 MLCodec_rans ext;套 wrapper 模板,注册,验证。",
+          "description": ".claude/skills/dcvc-rt-usage/ + learned-codec-install/ 已写(模型清单/API/checkpoint 放置/ext 构建/crf↔qp 语义/限制)。",
           "children": []
         },
         {
           "id": "t10-6",
-          "title": "EVC: 下 checkpoint + 构建 ext + wrapper",
-          "status": "planning",
-          "startDate": "",
-          "assignee": "郑鑫裕",
-          "description": "下载放 EVC/checkpoints/(共9个 EVC_*.pth.tar + Scale_EVC_*.pth.tar,见 EVC/checkpoints/download.py),例：EVC_LL.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211227&authkey=AD8e586WrFlT6IE ；EVC_LS_MD.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211226&authkey=ADp_pN4gvxbHMrw 。构建 MLCodec_rans ext;套 wrapper 模板,注册,验证。",
-          "children": []
-        },
-        {
-          "id": "t10-7",
-          "title": "DCVC 系列 评测/训练数据集接入(SA-Co/BSDS500)",
+          "title": "eval 验证: pretrained baseline RD (轮廓 OOD 预期偏低)",
           "status": "planned",
           "assignee": "郑鑫裕",
-          "description": "t10-1~6 接入后用 SA-Co-VEval 统一跑评测 RD 点;训练侧 BSDS500(若 finetune)",
+          "description": "uv run python -m benchmark.video --codecs dcvc_rt --crfs 20,30,40。blocked by t10-2 + t10-3。学习式 pretrained 在轮廓帧 OOD, PSNR/bpp 预期偏低 → 决定是否 fine-tune(推理专用无训练代码, 需自写 RD-loss train loop + 熵编码兼容)。",
           "children": []
         }
       ]
