@@ -15,10 +15,14 @@ Usage:
     uv run python update_task.py --slug projflow --id t2-3 --title "轮廓提取 v2" --end 2026-07-20
     # mark done
     uv run python update_task.py --slug projflow --id t2-3 --status completed
+    # description: --description REPLACES the whole field; --append-description APPENDS
+    uv run python update_task.py --slug projflow --id t2-3 --description "全新描述"
+    uv run python update_task.py --slug projflow --id t2-3 --append-description "【进度@2026-07-15】wrapper 已就位，crash 待解"
 """
 from __future__ import annotations
 
 import argparse
+import datetime
 import os
 import sys
 
@@ -48,9 +52,16 @@ def main() -> int:
     ap.add_argument("--assignee", default=None)
     ap.add_argument("--start", default=None, help="startDate (YYYY-MM-DD)")
     ap.add_argument("--end", default=None, help="endDate (YYYY-MM-DD)")
-    ap.add_argument("--description", default=None)
+    ap.add_argument("--description", default=None, help="整体替换 description（原内容被覆盖）")
+    ap.add_argument("--append-description", default=None, help="追加到 description 末尾（与 --description 互斥，用换行连接）")
     ap.add_argument("--note-path", default=None, help="相对项目目录的笔记 markdown 路径")
     ap.add_argument("--priority", default=None)
+    ap.add_argument("--progress", default=None,
+                    help="追加一条进展记录（自动加日期，新条目在前）")
+    ap.add_argument("--hidden", action="store_true", default=None,
+                    help="标记为不展示（项目树默认隐藏）")
+    ap.add_argument("--no-hidden", dest="hidden", action="store_false",
+                    help="取消不展示标记")
     args = ap.parse_args()
 
     tree = mgmt_io.read_tasks(args.slug)
@@ -66,17 +77,47 @@ def main() -> int:
         val = getattr(args, flag)
         if val is not None:
             updates[field] = val
+    if args.hidden is True:
+        updates["hidden"] = True
 
-    if not updates:
+    # --append-description: append to existing description (mutually exclusive
+    # with --description, which replaces via FLAG_FIELD above).
+    if args.append_description is not None:
+        if args.description is not None:
+            sys.exit("error: --description and --append-description are mutually exclusive")
+        existing = (task.get("description") or "").rstrip()
+        joined = (existing + "\n" + args.append_description) if existing else args.append_description
+        updates["description"] = joined
+
+    progress_entry = None
+    if args.progress is not None:
+        progress_entry = {
+            "date": datetime.date.today().isoformat(),
+            "note": args.progress,
+        }
+
+    if not updates and args.hidden is not False and progress_entry is None:
         print("no updates given; nothing to do.", file=sys.stderr)
         return 1
 
     # immutable: replace the node in its parent list
     new_task = {**task, **updates}
+    removed_keys = []
+    if args.hidden is False and "hidden" in task:
+        new_task.pop("hidden", None)
+        removed_keys.append("hidden")
+    if progress_entry is not None:
+        progress = list(new_task.get("progress") or [])
+        progress.insert(0, progress_entry)
+        new_task["progress"] = progress
     parent_list[idx] = new_task
     mgmt_io.write_tasks(args.slug, tree)
     path = mgmt_io.tasks_json_path(args.slug)
-    print(f"✓ updated task {args.id!r}: {', '.join(sorted(updates))}  ({mgmt_io.rel(path)})")
+    changed = sorted(set(list(updates.keys()) + removed_keys))
+    if progress_entry is not None:
+        changed.append("progress")
+        changed = sorted(set(changed))
+    print(f"✓ updated task {args.id!r}: {', '.join(changed)}  ({mgmt_io.rel(path)})")
     return 0
 
 

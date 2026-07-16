@@ -17,6 +17,10 @@
           <n-form-item label="提取方法" required>
             <n-select v-model:value="form.method" :options="methodOptions" placeholder="选择轮廓提取方法 (canny/sobel)" />
           </n-form-item>
+          <n-form-item label="训练 Checkpoint">
+            <n-select v-model:value="form.checkpoint" :options="checkpointOptions" clearable placeholder="选 run checkpoint → 自动填 codec/quality（可选）" />
+            <span class="hint">选择后自动填入 codec 和 quality，也可手动选 codec</span>
+          </n-form-item>
           <n-form-item label="CRFs">
             <n-select v-model:value="form.crfs" :options="crfOptions" multiple placeholder="默认 18,23,28,33（仅传统 codec）" />
           </n-form-item>
@@ -45,10 +49,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { NCard, NSpin, NForm, NFormItem, NSelect, NButton, NAlert, useMessage } from 'naive-ui'
 import { getCodecs, getDatasets, getEvalConfigs, getMethods, runEvaluation } from '../../api/evaluation'
+import { listCheckpoints, getTrainRuns } from '../../api/training'
 
 const message = useMessage()
 const router = useRouter()
@@ -58,14 +63,50 @@ const codecs = ref([])
 const datasets = ref([])
 const configs = ref([])
 const methods = ref([])
+const checkpoints = ref([])
+const trainRuns = ref([])
 const runResult = ref(null)
-const form = ref({ mode: 'speed', method: 'canny', codecs: [], crfs: [], sequences: '', dataset_id: null, config_id: null })
+const form = ref({ mode: 'speed', method: 'canny', codecs: [], crfs: [], sequences: '', dataset_id: null, config_id: null, checkpoint: null })
+
+const LEARNED_KEYWORDS = ['ssf', 'elic', 'img-', 'dcvc', 'nevc']
+const isLearnedCodec = computed(() =>
+  (form.value.codecs || []).some(id => LEARNED_KEYWORDS.some(kw => id.includes(kw)))
+)
 
 const codecOptions = computed(() => codecs.value.map(c => ({ label: `${c.id}（${c.name} · ${c.kind}）`, value: c.id })))
 const methodOptions = computed(() => methods.value.map(m => ({ label: m, value: m })))
 const datasetOptions = computed(() => datasets.value.map(d => ({ label: `${d.name}${(d.sequences || []).some(s => s.missing) ? ' (文件缺失)' : ''}`, value: d.id })))
 const configOptions = computed(() => configs.value.map(c => ({ label: c.name || c.id, value: c.id })))
 const crfOptions = [18, 23, 28, 33].map(c => ({ label: 'crf' + c, value: c }))
+const checkpointOptions = computed(() => {
+  const opts = []
+  for (const run of trainRuns.value) {
+    const mid = run.model_id || run.model || ''
+    const q = run.quality ?? ''
+    if (run.has_best && run.best) {
+      opts.push({
+        label: `${mid} q${q} · best (PSNR=${run.best.test?.psnr?.toFixed(2) ?? '?'})`,
+        value: { path: run.best.path, model_id: mid, quality: q }
+      })
+    }
+    if (run.has_latest && run.latest) {
+      opts.push({
+        label: `${mid} q${q} · latest (epoch=${run.latest.epoch ?? '?'})`,
+        value: { path: run.latest.path, model_id: mid, quality: q }
+      })
+    }
+  }
+  return opts
+})
+
+watch(() => form.value.checkpoint, (ckpt) => {
+  if (!ckpt || typeof ckpt !== 'object') return
+  const mid = (ckpt.model_id || '').toLowerCase()
+  const codecId = mid === 'ssf2020' ? 'ssf2020' : `img-${mid}`
+  const exists = codecs.value.some(c => c.id === codecId)
+  if (exists) form.value.codecs = [codecId]
+  form.value.crfs = []
+})
 
 async function handleRun() {
   if (!form.value.codecs.length) {
@@ -83,7 +124,8 @@ async function handleRun() {
   running.value = true
   runResult.value = null
   try {
-    const res = await runEvaluation(form.value)
+    const payload = { ...form.value, checkpoint: form.value.checkpoint?.path ?? form.value.checkpoint ?? null }
+    const res = await runEvaluation(payload)
     runResult.value = {
       success: true,
       output: JSON.stringify(res, null, 2),
@@ -100,16 +142,20 @@ async function handleRun() {
 onMounted(async () => {
   loading.value = true
   try {
-    const [c, d, cfg, meth] = await Promise.all([
+    const [c, d, cfg, meth, ckpts, runs] = await Promise.all([
       getCodecs().catch(() => []),
       getDatasets().catch(() => []),
       getEvalConfigs().catch(() => []),
       getMethods().catch(() => ({ methods: [] })),
+      listCheckpoints().catch(() => []),
+      getTrainRuns().catch(() => ({ runs: [] })),
     ])
     codecs.value = c || []
     datasets.value = d || []
     configs.value = cfg || []
     methods.value = meth?.methods || []
+    checkpoints.value = Array.isArray(ckpts) ? ckpts : (ckpts?.checkpoints || [])
+    trainRuns.value = runs?.runs || []
     if (!form.value.method && methods.value.length) form.value.method = methods.value[0]
   } catch {}
   loading.value = false
@@ -119,3 +165,4 @@ onMounted(async () => {
 <style scoped lang="scss">
 .hint { display: block; font-size: 11px; color: var(--color-text-dim); margin-top: 4px; }
 </style>
+

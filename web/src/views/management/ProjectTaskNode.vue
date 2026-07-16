@@ -3,7 +3,7 @@
     <div class="node-row-wrap" @mouseenter="onEnter" @mouseleave="onLeave">
       <div
         class="node-row"
-        :class="{ selected: isSelected, clickable: isClickable }"
+        :class="{ selected: isSelected, clickable: isClickable, 'is-hidden': task.hidden || task.__hidden }"
         @click="onClick"
       >
         <!-- git 分支线 -->
@@ -31,8 +31,10 @@
           <span v-else class="chevron-placeholder"></span>
 
           <span class="node-title" :class="{ done: task.status === 'completed', 'title-selected': isSelected }">
-            {{ task.title }}
+            <span class="task-id">{{ task.id }}</span>{{ task.title }}
           </span>
+
+          <span v-if="task.priority" class="priority-badge" :class="`priority-${task.priority.toLowerCase()}`">{{ task.priority }}</span>
 
           <span v-if="hasChildren" class="progress-text">{{ count.completed }}/{{ count.total }}</span>
 
@@ -48,9 +50,15 @@
       <!-- 悬浮提示 -->
       <div v-if="hovered && !isSelected" class="hover-card">
         <div class="hc-head">
-          <div class="status-dot sm" :class="[statusCfg.dot, statusCfg.ring]"></div>
-          <strong>{{ task.title }}</strong>
-          <span class="hc-badge">{{ statusCfg.label }}</span>
+          <div class="hc-title-row">
+            <div class="status-dot sm" :class="[statusCfg.dot, statusCfg.ring]"></div>
+            <strong>{{ task.title }}</strong>
+          </div>
+          <div class="hc-meta-row">
+            <span class="hc-id">{{ task.id }}</span>
+            <span class="hc-badge">{{ statusCfg.label }}</span>
+            <span v-if="task.priority" class="hc-priority" :class="`priority-${task.priority.toLowerCase()}`">{{ task.priority }}</span>
+          </div>
         </div>
         <div v-if="task.assignee" class="hc-line">执行人: {{ task.assignee }}</div>
         <div v-if="task.startDate" class="hc-line">
@@ -59,7 +67,16 @@
         <div v-if="hasChildren" class="hc-progress">
           子任务: {{ count.completed }}/{{ count.total }} 已完成
         </div>
+        <div v-if="recentProgress.length" class="hc-progress-section">
+          <div class="hc-progress-title">进展记录</div>
+          <div v-for="(p, i) in recentProgress" :key="i" class="hc-progress-entry"
+               :class="{ 'is-done': p.note && p.note.startsWith('[完成]') }">
+            <span class="hc-pdate">{{ p.date }}</span>
+            <span class="hc-pnote">{{ p.note }}</span>
+          </div>
+        </div>
         <div v-if="task.description" class="hc-desc">{{ task.description }}</div>
+        <div v-if="task.priority" class="hc-line">优先级: <span :class="`priority-${task.priority.toLowerCase()}`" style="font-weight:700">{{ task.priority }}</span></div>
       </div>
     </div>
 
@@ -104,16 +121,17 @@ const TASK_STATUS = {
   paused: { label: '已暂停', dot: 'bg-amber', ring: 'ring-amber' },
 }
 
-const expanded = ref(props.depth < 1)
+const expanded = ref(false)
 const hovered = ref(false)
 let hoverTimer = null
 
 const hasChildren = computed(() => (props.task.children || []).length > 0)
 const statusCfg = computed(() => TASK_STATUS[props.task.status] || TASK_STATUS.planned)
 const isSelected = computed(() => props.selectedId === props.task.id)
-const isClickable = computed(() => !!(props.task.notePath || props.task.description))
+const isClickable = computed(() => !!(props.task.notePath || props.task.description || (props.task.progress || []).length))
 
 const count = computed(() => countTasks(props.task.children || []))
+const recentProgress = computed(() => (props.task.progress || []).slice(0, 3))
 
 function countTasks(tasks) {
   let total = 0
@@ -155,6 +173,7 @@ function onClick() {
   padding: 2px 0;
   &.clickable { cursor: pointer; &:hover { background: var(--color-hover); } }
   &.clickable.selected { background: var(--color-selected); }
+  &.is-hidden { opacity: 0.45; .node-title { font-style: italic; } }
 }
 
 .branch-lines {
@@ -204,8 +223,16 @@ function onClick() {
 .node-title {
   font-size: 13px; color: var(--color-text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: inline-flex; align-items: center; gap: 4px;
   &.done { color: var(--color-text-dim); text-decoration: line-through; }
   &.title-selected { color: var(--color-text-heading); font-weight: 500; }
+}
+.task-id {
+  font-family: 'SF Mono', 'Menlo', monospace;
+  font-size: 10px; color: var(--color-text-dim);
+  background: var(--color-elevated); border-radius: 3px;
+  padding: 0 4px; line-height: 1.5;
+  flex-shrink: 0;
 }
 .progress-text { flex-shrink: 0; font-size: 10px; color: var(--color-text-dim); }
 .assignee {
@@ -215,16 +242,44 @@ function onClick() {
   padding: 1px 6px; border-radius: 999px; font-size: 10px;
 }
 .date-text { flex-shrink: 0; font-size: 10px; color: var(--color-text-dim); }
+.priority-badge {
+  flex-shrink: 0; font-size: 9px; font-weight: 700; letter-spacing: 0.03em;
+  padding: 1px 5px; border-radius: 3px;
+  &.priority-p1 { background: rgba(239,68,68,0.15); color: #ef4444; }
+  &.priority-p2 { background: rgba(245,158,11,0.15); color: #f59e0b; }
+  &.priority-p3 { background: rgba(161,161,170,0.15); color: #71717a; }
+}
 
 .hover-card {
   position: absolute; left: 32px; top: 100%; z-index: 50;
   width: 240px; padding: 12px;
   background: var(--color-card); border: 1px solid var(--color-border);
   border-radius: 8px; box-shadow: 0 8px 24px var(--color-shadow);
-  .hc-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; strong { font-size: 13px; color: var(--color-text-heading); } }
-  .hc-badge { font-size: 10px; background: var(--color-elevated); padding: 1px 6px; border-radius: 4px; color: var(--color-text-secondary); }
+  word-break: break-word; overflow-wrap: anywhere;
+  .hc-head { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+  .hc-title-row { display: flex; align-items: center; gap: 6px; strong { font-size: 13px; color: var(--color-text-heading); } }
+  .hc-meta-row { display: flex; align-items: center; gap: 6px; padding-left: 14px; }
+  .hc-id { font-family: 'SF Mono', 'Menlo', monospace; font-size: 10px; color: var(--color-text-dim); background: var(--color-elevated); padding: 1px 5px; border-radius: 3px; }
+  .hc-badge { font-size: 10px; min-width: 42px; text-align: center; background: var(--color-elevated); padding: 1px 6px; border-radius: 4px; color: var(--color-text-secondary); }
+  .hc-priority {
+    font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 500;
+    &.priority-p1 { background: rgba(239,68,68,0.12); color: #dc2626; }
+    &.priority-p2 { background: rgba(245,158,11,0.12); color: #d97706; }
+    &.priority-p3 { background: rgba(100,116,139,0.10); color: #64748b; }
+  }
   .hc-line { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; }
   .hc-progress { font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; }
-  .hc-desc { font-size: 12px; color: var(--color-text); margin-top: 6px; }
+  .hc-progress-section {
+    margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--color-border);
+    .hc-progress-title { font-size: 10px; color: var(--color-text-dim); margin-bottom: 3px; }
+    .hc-progress-entry {
+      font-size: 11px; line-height: 1.4; color: var(--color-text-secondary);
+      display: flex; gap: 6px; margin-top: 2px;
+      .hc-pdate { flex-shrink: 0; color: var(--color-text-dim); font-size: 10px; min-width: 70px; }
+      .hc-pnote { white-space: pre-line; word-break: break-word; }
+      &.is-done { color: #22c55e; .hc-pnote { font-weight: 500; } }
+    }
+  }
+  .hc-desc { font-size: 12px; color: var(--color-text); margin-top: 6px; white-space: pre-line; line-height: 1.5; }
 }
 </style>

@@ -6,6 +6,16 @@
           <n-form-item label="选择模型" required>
             <n-select v-model:value="form.model_id" :options="modelOptions" placeholder="可训练 DL 模型" />
           </n-form-item>
+          <n-form-item v-if="checkpointOptions.length" label="Checkpoint">
+            <n-select v-model:value="form.checkpoint" :options="checkpointOptions" placeholder="该模型已有的 trained checkpoint（可选）" clearable size="small" />
+            <span class="hint" style="margin-left:8px">选了再用下方 radio 决定 load/resume</span>
+          </n-form-item>
+          <n-form-item v-if="form.checkpoint" label="加载模式">
+            <n-radio-group v-model:value="form.ckpt_mode">
+              <n-radio value="load">load（加载权重 warm-start，新训）</n-radio>
+              <n-radio value="resume">resume（续跑，继承旧曲线）</n-radio>
+            </n-radio-group>
+          </n-form-item>
           <n-form-item label="选择数据集" required>
             <n-select v-model:value="form.dataset_id" :options="datasetOptions" placeholder="训练数据集" />
           </n-form-item>
@@ -38,6 +48,9 @@
           </n-form-item>
           <n-form-item label="Batch Size">
             <n-input-number v-model:value="form.batch_size" :min="1" :max="512" />
+          </n-form-item>
+          <n-form-item label="Optimizer">
+            <n-select v-model:value="form.optimizer" :options="optimizerOptions" />
           </n-form-item>
           <n-form-item label="λ (RD)">
             <n-input-number v-model:value="form.lamb" :step="0.001" :min="0" />
@@ -83,7 +96,7 @@ const models = ref([])
 const datasets = ref([])
 const configs = ref([])
 const runResult = ref(null)
-const form = ref({ model_id: null, dataset_id: null, config_id: null, quality: 3, epochs: 100, lr: 1e-4, batch_size: 16, lamb: 0.01, device: 'cuda', method: 'canny', size: 128, seq_len: 4, max_sequences: 64, warm_start: true, extra_args: '' })
+const form = ref({ model_id: null, dataset_id: null, config_id: null, quality: 3, epochs: 100, lr: 1e-4, batch_size: 16, optimizer: 'adamw', lamb: 0.01, device: 'cuda', method: 'canny', size: 128, seq_len: 4, max_sequences: 64, warm_start: true, checkpoint: null, ckpt_mode: 'load', extra_args: '' })
 
 // 下拉框跨浏览器刷新(F5)持久化（不清空）
 const FORM_STORE_KEY = 'infracomp:train-run'
@@ -105,9 +118,14 @@ watch(() => [form.value.model_id, form.value.dataset_id, form.value.config_id, f
 restoreForm()
 
 const modelOptions = computed(() => models.value.map(m => ({ label: `${m.name || m.id} (${m.架构 || m.type || '?'})`, value: m.id })))
+const checkpointOptions = computed(() => {
+  const m = models.value.find(x => x.id === form.value.model_id)
+  return (m?.trained_checkpoint || []).map(p => ({ label: p, value: p }))
+})
 const datasetOptions = computed(() => datasets.value.map(d => ({ label: d.name || d.id, value: d.id })))
 const configOptions = computed(() => configs.value.map(c => ({ label: c.name || c.id, value: c.id })))
 const methodOptions = [{ label: 'canny', value: 'canny' }, { label: 'sobel', value: 'sobel' }, { label: 'hed', value: 'hed' }, { label: 'pidinet', value: 'pidinet' }, { label: 'yoloe26', value: 'yoloe26' }]
+const optimizerOptions = [{ label: 'AdamW', value: 'adamw' }, { label: 'Adam', value: 'adam' }]
 const isImagenet = computed(() => String(form.value.dataset_id || '').startsWith('imagenet-'))
 const isVideo = computed(() => form.value.model_id === 'ssf2020')
 
@@ -116,7 +134,7 @@ watch(() => form.value.config_id, (cfgId) => {
   if (!cfgId) return
   const cfg = configs.value.find(c => c.id === cfgId)
   if (!cfg) return
-  const fields = { epochs: 'epochs', lr: 'lr', batch_size: 'batch_size', lambda: 'lamb', quality: 'quality' }
+  const fields = { epochs: 'epochs', lr: 'lr', batch_size: 'batch_size', lambda: 'lamb', quality: 'quality', optimizer: 'optimizer' }
   for (const [src, dst] of Object.entries(fields)) {
     if (cfg[src] != null) form.value[dst] = cfg[src]
   }

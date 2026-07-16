@@ -75,10 +75,11 @@ def benchmark_codec(
     crf: int,
     preset: str | None = None,
     dataset: str = "",
+    checkpoint_path: str | None = None,
 ) -> VideoCompressionResult:
     """Run one codec @ one CRF on the contour video; return a result row."""
     config.ensure_dirs()
-    codec = build_codec(codec_name, crf=crf, preset=preset)
+    codec = build_codec(codec_name, crf=crf, preset=preset, checkpoint_path=checkpoint_path)
 
     frames_dir = artifact.frames_dir
     # tag 含 method: canny/sobel/hed 同 seq×codec×crf 的输出文件互不覆盖。
@@ -183,7 +184,7 @@ def benchmark_codec(
 
     # 非 <video>-可播 codec (如 mpeg4 Part 2): 用重建帧合成 H.264 可播 mp4 覆盖展示路径。
     # 码流大小(compressed_bytes)与解码(读原 Part 2)已在上面完成, 指标不受影响。
-    if not getattr(codec, "browser_playable", True) and samples:
+    if not getattr(codec, "browser_playable", True) and not getattr(codec, "is_neural", False) and samples:
         try:
             synthesize_recon_video(recon_dir, artifact.fps, bitstream)
         except Exception as e:  # noqa: BLE001

@@ -158,6 +158,8 @@ const activeKey = computed(() => {
   for (const k of allKeys) {
     if (path.startsWith(k) && k.length > best.length) best = k
   }
+  // 训练 run 详情页归到「训练结果」高亮（否则会误命中 /training/run 前缀）
+  if (path.startsWith('/training/runs')) best = '/training/results'
   return best
 })
 
@@ -187,6 +189,10 @@ const breadcrumbs = computed(() => {
   const items = [{ title: '首页', path: '/' }]
   if (route.meta.module && MODULE_LABEL[route.meta.module]) {
     items.push({ title: MODULE_LABEL[route.meta.module], path: MODULE_PATH[route.meta.module] || '' })
+  }
+  // 中间层级（如详情页挂在某列表页下：训练结果 > 训练详情）
+  for (const c of (route.meta.crumbs || [])) {
+    items.push({ title: c.title, path: c.path || '' })
   }
   // 当前页放最后、不可点击（已在当前页）
   if (route.meta.title && route.meta.title !== '首页') {
@@ -252,6 +258,14 @@ const today = computed(() => {
   height: calc(100vh - 56px);
   padding: 0;
   background: var(--color-bg);
+
+  :deep(.n-scrollbar-content) {
+    height: 100%;
+  }
+
+  :deep(.n-scrollbar-content > *) {
+    min-height: 100%;
+  }
 }
 
 /* 侧边栏是导航区,不可选文本/不显示文本光标;菜单项保持 pointer */

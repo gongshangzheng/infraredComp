@@ -1,0 +1,43 @@
+{
+  "run_id": "ELIC__bsds-train__gt__1784107118",
+  "model_id": "ELIC",
+  "quality": 1,
+  "method": "gt",
+  "dataset": "bsds-train",
+  "lambda": null,
+  "size": null,
+  "latest": {
+    "epoch": 10000,
+    "path": "checkpoints/ELIC__bsds-train__gt__1784107118.pth",
+    "train": {
+      "epoch": 10000,
+      "loss": 0.0019623033003881574,
+      "psnr": 48.28863560001204,
+      "bpp": 0.19457909961541495
+    },
+    "test": {
+      "loss": 0.00595850187043349,
+      "psnr": 22.53638396725111,
+      "bpp": 0.03770844762523969,
+      "epoch": 10000
+    },
+    "saved_at": "2026-07-15T21:56:18"
+  },
+  "best": {
+    "epoch": 1770,
+    "criterion": "test_psnr",
+    "path": "checkpoints/ELIC__bsds-train__gt__1784107118.best.pth",
+    "train": {
+      "epoch": 1770,
+      "loss": 0.0021453585165242353,
+      "psnr": 39.38644550616429,
+      "bpp": 0.20301443338394165
+    },
+    "test": {
+      "psnr": 22.80625432540298,
+      "bpp": 0.07164594531059265,
+      "loss": 0.005963986273854971
+    },
+    "saved_at": "2026-07-15T20:07:28"
+  }
+}

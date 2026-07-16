@@ -1,7 +1,0 @@
-{
-  "source_name": "imagenet_train",
-  "method": "hed",
-  "size": 128,
-  "frame_count": 5000,
-  "frames_dir": "D:\\code\\infraredComp\\datasets\\contour\\imagenet_train_hed"
-}

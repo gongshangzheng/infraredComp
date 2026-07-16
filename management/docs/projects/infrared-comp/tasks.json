@@ -54,9 +54,9 @@
     {
       "id": "t4",
       "title": "dark 主题 + breadcrumb 回退 + 论文刷新保位",
-      "status": "active",
+      "status": "completed",
       "startDate": "2026-07-12",
-      "endDate": "2026-07-13",
+      "endDate": "2026-07-16",
       "assignee": "郑鑫裕",
       "description": "从 ProjFlow 上游移植 theme store/Pinia/暗主题令牌；修项目树 tooltip 透明背景；breadcrumb 可点回退；论文列表刷新保滚动位置",
       "notePath": "",
@@ -65,8 +65,9 @@
     {
       "id": "t5",
       "title": "调研:视频 3D 轮廓提取算子(3D Sobel / 3D Canny)",
-      "status": "planned",
+      "status": "completed",
       "startDate": "2026-07-14",
+      "endDate": "2026-07-16",
       "assignee": "郑鑫裕",
       "description": "调研传统方法在视频上做 3D 轮廓提取的算子(3D Sobel / 3D Canny / 时空梯度等)，评估接入 benchmark/video/extractors/ 的可行性(@register 新提取器，stage1 帧级 → 时空级)",
       "notePath": "notes/03-research-3d-contour.md",
@@ -75,8 +76,9 @@
     {
       "id": "t6",
       "title": "调研:图片生成式模型跑视频压缩",
-      "status": "planned",
+      "status": "completed",
       "startDate": "2026-07-14",
+      "endDate": "2026-07-16",
       "assignee": "郑鑫裕",
       "description": "调研用已训练好的图片生成式模型(生成式图像压缩 / Diffusion-based 压缩等)逐帧跑视频压缩看效果；评估接入 stage2(in-process neural path,仿 ssf2020/dcvc_rt)或新 codec",
       "notePath": "notes/04-research-generative-video-compression.md",
@@ -85,7 +87,7 @@
     {
       "id": "t7",
       "title": "轮廓提取接入 PiDiNet / yoloe26",
-      "status": "active",
+      "status": "completed",
       "startDate": "2026-07-15",
       "assignee": "郑鑫裕",
       "description": "将 PiDiNet、yoloe26 接入 benchmark/video/extractors/(@register 新提取器),与现有 canny/hed/sobel 并列,扩展轮廓提取算子",
@@ -94,20 +96,23 @@
         {
           "id": "t7-1",
           "title": "PiDiNet 接入 extractors + BSDS500/SA-Co 提取验证",
-          "status": "planned",
+          "status": "completed",
           "assignee": "郑鑫裕",
           "description": "PiDiNet 权重下 third_party/pidinet/,@register 注册为 stage1 提取器;BSDS500(图像边缘)+ SA-Co(视频)跑提取对比 canny/hed/sobel",
-          "children": []
+          "children": [],
+          "endDate": "2026-07-15"
         },
         {
           "id": "t7-2",
           "title": "yoloe26 接入 extractors + BSDS500/SA-Co 提取验证",
-          "status": "planned",
+          "status": "completed",
           "assignee": "郑鑫裕",
           "description": "yoloe26 权重下 third_party/yoloe26/,@register 注册;BSDS500 + SA-Co 跑提取验证",
-          "children": []
+          "children": [],
+          "endDate": "2026-07-15"
         }
-      ]
+      ],
+      "endDate": "2026-07-15"
     },
     {
       "id": "t8",
@@ -121,28 +126,28 @@
         {
           "id": "t8-1",
           "title": "LosslessSeg 接入 stage2 codec + SA-Co 评测",
-          "status": "planned",
+          "status": "active",
           "assignee": "郑鑫裕",
-          "description": "clone InterDigitalInc/LosslessSegmentationMapCompression → cmake+MSVC build 出 encoder/decoder.exe(vendor 到 third_party/lsmc/,gitignore 二进制) → 写 codecs/lsmc.py(@register_codec, is_neural=True, encode_inprocess=拼 temp .yuv→跑 encoder→读 .bin; decode_inprocess=写 .bin→跑 decoder→读 rec.yuv→parse frames;10MB buffer 限) → 注册 catalog qualities=[0](单无损点) → 跑 akiyo 出 1 个 RD 点(无损 rec==gt,PSNR=inf→前端 cap) → viewable mp4 合成。SA-Co-VEval 视频跑评测。",
+          "description": "clone InterDigitalInc/LosslessSegmentationMapCompression → cmake+MSVC build 出 encoder/decoder.exe(vendor 到 third_party/lsmc/,gitignore 二进制) → 写 codecs/lsmc.py(@register_codec, is_neural=True, encode_inprocess=拼 temp .yuv→跑 encoder→读 .bin; decode_inprocess=写 .bin→跑 decoder→读 rec.yuv→parse frames;10MB buffer 限) → 注册 catalog qualities=[0](单无损点) → 跑 akiyo 出 1 个 RD 点(无损 rec==gt,PSNR=inf→前端 cap) → viewable mp4 合成。SA-Co-VEval 视频跑评测。【进度@2026-07-16】wrapper+catalog 已就位(git 2249dd8)。C++ binaries MSVC build OK(encoder/decoder.exe)。但 encoder 在**任何多 label 输入** segfault (exit 139, 4x4 两 label 也崩;单 label 全零正常 byteNum:5)。根因=MSVC 下 C++ UB(chain-coding 多 label 时)。g++ 5.3.0 (m2w64-toolchain) 太老 ICE。待解: 装 MinGW g++ 14+ 重编 或 C++ debug。",
           "children": []
         }
       ]
     },
     {
       "id": "t9",
-      "title": "diffTok 灰度图 encoder/decoder",
+      "title": "diffTok: TiTok 风格 1D Tokenizer for 轮廓图像",
       "status": "active",
       "startDate": "2026-07-15",
       "assignee": "郑鑫裕",
-      "description": "基于自有 diffTok 框架(gongshangzheng/diffTok),参考已有 encoder/decoder,实现针对灰度图(红外轮廓帧)的 encoder/decoder",
+      "description": "基于自有 diffTok 框架(gongshangzheng/diffTok),处理轮廓图像(与其他模型一样,非「灰度图 enc/dec」)。参考 TiTok 的 1D Tokenizer 形式:轮廓帧→1D token 序列(可加额外 tokens);或 MaskGIT-VQGAN 风格(image token 通过码表)。不使用 VAE。先使用 TiTok 风格 1D Tokenizer。注意:轮廓图是单通道(灰度,非彩色3通道),encoder/decoder 需适配单通道输入(1ch→特征→1D tokens→码表→1D tokens→特征→1ch 重建)。接入 stage2 codec + 注册 catalog + RD 验证。",
       "notePath": "",
       "children": [
         {
           "id": "t9-1",
-          "title": "diffTok 灰度 encoder 实现 + BSDS500 训练",
+          "title": "diffTok: TiTok 1D Tokenizer encoder 实现 + 训练",
           "status": "planned",
           "assignee": "郑鑫裕",
-          "description": "参考 diffTok 现有 encoder 实现灰度图 encoder;BSDS500 作训练数据",
+          "description": "参考 TiTok 1D Tokenizer 实现轮廓帧的 1D token encoder(非灰度 enc,非 VAE);BSDS500 作训练数据",
           "children": []
         },
         {
@@ -165,76 +170,108 @@
     },
     {
       "id": "t10",
-      "title": "DCVC-RT 接入 (CVPR 2025 实时神经视频 codec)",
+      "title": "DCVC 系列接入(训练+测试)",
       "status": "active",
       "startDate": "2026-07-15",
       "assignee": "郑鑫裕",
-      "description": "只接 DCVC-RT(microsoft/DCVC 顶层, CVPR2025 实时 codec)。DCVC-family 各变体(DCVC-DC/HEM/FM/TCM/NeurIPS2021/EVC)已从范围移除——仅 DCVC-DC 的 MLCodec_rans ext(Windows MSVC cp312 构建)被 NEVC(t12)复用,其余不接。推理专用(Microsoft 未放训练代码,fine-tune 需自写 RD-loss train loop)。wrapper dcvc_rt.py 已写(@register_codec, DMCI I帧 + DMC P帧 + DPB seeding + 二进制容器, crf→qp 1:1 clamp 0..63)。当前阻塞: rans ext (MLCodec_extensions_cpp)未构建 + cvpr2025 checkpoints 未下(OneDrive 手动)。详见 .claude/skills/dcvc-rt-usage。",
+      "description": "DCVC 系列接入(训练+测试)。当前进度@2026-07-16：(1) DCVC-RT: wrapper dcvc_rt.py 已写好(DMCI+DMC+MLCodec_extensions_cpp); checkpoints 已就位(third_party/DCVC/checkpoints/cvpr2025_*.pth.tar); rans ext MLCodec_extensions_cpp 已 build cp312 ✅ (setup.py /utf-8 修 C4819); neural forward ✅ (enc/hyper_enc/dec 无 NaN); CUDA stream patch ✅ (去掉 with torch.cuda.stream → default stream); BUT rans encode_z+encode_y ×2+ → get_encoded_stream() exit 127 crash (MLCodec_extensions_cpp buffer bug on Windows/cp312)。encode_z alone + get_encoded_stream OK (3639B)。API 不兼容 MLCodec_rans (encode_y/encode_z vs encode_with_indexes), 不能 swap。待解: C++ debug rans buffer 或 build cuda_inference ext (nvcc + torch C2872)。(2) DCVC-DC(t10-1): MLCodec_rans ext 已 build cp312 ✅; checkpoints 未下(OneDrive 被拦); wrapper 未写但 NEVC(t12) 已验证 IntraNoAR+DMC+MLCodec_rans 的 encode_decode 路径跑通(bpp=0.31 psnr=33.08)。DCVC-DC 同接口, wrapper=nevc.py 改 src+ckpt 路径。(3) DCVC-HEM/FM/TCM/EVC(t10-2~6): 全 planning。",
       "notePath": "",
       "children": [
         {
           "id": "t10-1",
-          "title": "submodule vendored: third_party/DCVC (microsoft/DCVC, MIT)",
-          "status": "completed",
+          "title": "DCVC-DC: 下 checkpoint + ext 已构建 + 写 wrapper",
+          "status": "active",
+          "startDate": "2026-07-15",
           "assignee": "郑鑫裕",
-          "description": ".gitmodules 已注册 + fetched(src/, DCVC-family/, test_video.py 齐全)。",
+          "description": "下载放 third_party/DCVC/DCVC-family/DCVC-DC/checkpoints/：cvpr2023_image_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211259&authkey=AO_gFvTcYZUFd9U ；cvpr2023_video_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211256&authkey=ACzRzK3XgbQxEyk （另 ssim/yuv420 共6个见 download.py）。MLCodec_rans+MLCodec_CXX ext 已用 MSVC 构建为 cp312(放 src/models/,导入验证通过)。NEVC(t12)已验证 IntraNoAR+DMC+MLCodec_rans 的 encode_decode 路径跑通(bpp=0.31 psnr=33.08)。DCVC-DC 同接口, wrapper=nevc.py 改 src 路径(third_party/DCVC/DCVC-family/DCVC-DC/)+ ckpt 路径(cvpr2023_*)。待 checkpoint 到位后写 codecs/dcvc_dc.py,注册 catalog,真跑 akiyo 验证 RD 点。",
           "children": []
         },
         {
           "id": "t10-2",
-          "title": "构建 rans C++ ext (MLCodec_extensions_cpp) — BLOCKING",
-          "status": "planned",
+          "title": "DCVC-HEM: 下 checkpoint + 构建 ext + wrapper",
+          "status": "planning",
+          "startDate": "",
           "assignee": "郑鑫裕",
-          "description": "cd third_party/DCVC/src/cpp && pip install . (需 cmake/编译器+pybind11),装 MLCodec_extensions_cpp。无 fallback——缺则 dcvc_rt._load 抛 RuntimeError。注意 DCVC-RT 顶层用统一的 MLCodec_extensions_cpp, 与 DCVC-family 的 MLCodec_rans+MLCodec_CXX 不是同一构建(NEVC 复用的 DCVC-DC ext 不能直接用于此)。",
+          "description": "下载放 DCVC-HEM/checkpoints/：acmmm2022_image_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211220&authkey=AMRg1W3PVt_F3yc ；acmmm2022_video_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211217&authkey=AKpdgXQtvs-OxRs （另 ssim 2个见 download.py）。构建 MLCodec_rans ext(同 DCVC-DC cmake 流程);套 wrapper 模板写 codecs/dcvc_hem.py,注册,验证。",
           "children": []
         },
         {
           "id": "t10-3",
-          "title": "下 cvpr2025 checkpoints (OneDrive 手动) — BLOCKING",
-          "status": "planned",
+          "title": "DCVC-FM: 下 checkpoint + 构建 ext + wrapper",
+          "status": "planning",
+          "startDate": "",
           "assignee": "郑鑫裕",
-          "description": "OneDrive: https://1drv.ms/f/c/2866592d5c55df8c/Esu0KJ-I2kxCjEP565ARx_YB88i0UnR6XnODqFcvZs4LcA?e=by8CO8 (backup: https://1drv.ms/f/c/2866592d5c55df8c/EozfVVwtWWYggCitBAAAAAABbT4z2Z10fMXISnan72UtSA?e=BID7DA)。下 cvpr2025_image.pth.tar(DMCI/I帧) + cvpr2025_video.pth.tar(DMC/P帧) 放 third_party/DCVC/checkpoints/。不可脚本化(OneDrive 浏览器手动)。",
+          "description": "下载放 DCVC-FM/checkpoints/：cvpr2024_image.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211494&authkey=!AOxzcrEFT_h-iCk ；cvpr2024_video.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211493&authkey=!AFxYv6oK1o6GrZc 。构建 MLCodec_rans ext;套 wrapper 模板写 codecs/dcvc_fm.py,注册,验证。",
           "children": []
         },
         {
           "id": "t10-4",
-          "title": "codec wrapper dcvc_rt.py + @register_codec 注册",
-          "status": "completed",
+          "title": "DCVC-TCM: 下 checkpoint + 构建 ext + wrapper",
+          "status": "planning",
+          "startDate": "",
           "assignee": "郑鑫裕",
-          "description": "benchmark/video/codecs/dcvc_rt.py 已写(family=learned-video, is_neural=True, DMCI/DMC + DPB seeding + 二进制容器 magic DCVCRT10, crf→qp clamp 0..63)。lazy _load, 缺 ext/ckpt 抛清晰 RuntimeError 不在 import 崩。",
+          "description": "下载 DCVC-TCM checkpoint(OneDrive 文件夹,无 download.py,需从文件夹手动取)：https://onedrive.live.com/?authkey=%21ADwwaonwTGR%5FNR8&id=2866592D5C55DF8C%211234&cid=2866592D5C55DF8C ，放 DCVC-TCM/checkpoints/。构建 MLCodec_rans ext;套 wrapper 模板,注册,验证。",
           "children": []
         },
         {
           "id": "t10-5",
-          "title": "usage skill: dcvc-rt-usage + learned-codec-install",
-          "status": "completed",
+          "title": "DCVC(NeurIPS 2021 原版): 下 checkpoint + 构建 ext + wrapper",
+          "status": "planning",
+          "startDate": "",
           "assignee": "郑鑫裕",
-          "description": ".claude/skills/dcvc-rt-usage/ + learned-codec-install/ 已写(模型清单/API/checkpoint 放置/ext 构建/crf↔qp 语义/限制)。",
+          "description": "下载 DCVC 原版 checkpoint(OneDrive 文件夹,无 download.py,需手动取)：https://1drv.ms/u/s!AozfVVwtWWYoiS5mcGX320bFXI0k?e=iMeykH ，放 DCVC/checkpoints/。构建 MLCodec_rans ext;套 wrapper 模板,注册,验证。",
           "children": []
         },
         {
           "id": "t10-6",
-          "title": "eval 验证: pretrained baseline RD (轮廓 OOD 预期偏低)",
+          "title": "EVC: 下 checkpoint + 构建 ext + wrapper",
+          "status": "planning",
+          "startDate": "",
+          "assignee": "郑鑫裕",
+          "description": "下载放 EVC/checkpoints/(共9个 EVC_*.pth.tar + Scale_EVC_*.pth.tar,见 EVC/checkpoints/download.py),例：EVC_LL.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211227&authkey=AD8e586WrFlT6IE ；EVC_LS_MD.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211226&authkey=ADp_pN4gvxbHMrw 。构建 MLCodec_rans ext;套 wrapper 模板,注册,验证。",
+          "children": []
+        },
+        {
+          "id": "t10-7",
+          "title": "DCVC 系列 评测/训练数据集接入(SA-Co/BSDS500)",
           "status": "planned",
           "assignee": "郑鑫裕",
-          "description": "uv run python -m benchmark.video --codecs dcvc_rt --crfs 20,30,40。blocked by t10-2 + t10-3。学习式 pretrained 在轮廓帧 OOD, PSNR/bpp 预期偏低 → 决定是否 fine-tune(推理专用无训练代码, 需自写 RD-loss train loop + 熵编码兼容)。",
+          "description": "t10-1~6 接入后用 SA-Co-VEval 统一跑评测 RD 点;训练侧 BSDS500(若 finetune)",
           "children": []
+        },
+        {
+          "id": "t10-8",
+          "title": "DCVC-RT (CVPR2025 real-time): setup✓ + 端到端跑通✓，contour 重建质量待修",
+          "status": "active",
+          "assignee": "郑鑫裕",
+          "description": "rans ext✓(MLCodec_extensions_cpp) + CVPR2025 ckpt✓(cvpr2025_image/video.pth.tar) + CUDA stream→default patch✓(rans ext Windows segfault workaround)。端到端测试(akiyo_cif 8帧 qp30)跑通：psnr 12.63/bpp 1.80/压缩比4.44/enc 2.2fps/dec 44.8fps，无 segfault。但重建质量异常：I帧 psnr 5.41、P帧9-14（轮廓图该25-40），_tensor_to_img 反归一化 invalid-value cast（重建张量有NaN/inf）。疑 DCVC-RT 训于自然视频吃[0,1]RGB，喂 contour 灰度 min-max 归一化分布不匹配 → 待修。",
+          "priority": "P1",
+          "children": [
+            {
+              "id": "t10-8-1",
+              "title": "DCVC-RT contour 重建 NaN/低质量修复：_tensor_to_img invalid cast 根因 + 输入归一化适配",
+              "status": "planned",
+              "assignee": "郑鑫裕",
+              "children": []
+            }
+          ]
         }
       ]
     },
     {
       "id": "t11",
       "title": "接入 SA-Co-VEval 数据集(ModelScope)",
-      "status": "planned",
+      "status": "completed",
       "assignee": "郑鑫裕",
       "startDate": "2026-07-15",
-      "description": "ModelScope facebook/SACo-VEval(~32GB,视频分割评估,Meta AI);用 modelscope python SDK 下到 D:/data/SACo-VEval/ + junction 到 datasets/SACo-VEval/;详见 dataset-management skill D:/data+symlink 段",
+      "endDate": "2026-07-16",
+      "description": "ModelScope facebook/SACo-VEval(~31GB,下载完成✅,D:/data/SACo-VEval/ + junction datasets/SACo-VEval/);annotation=6 json(sav/sg/yt1b × val/test),media=saco_sg.tar.gz(SmartGlasses 视频,需解压)+ yt1b 时间索引;SA-V/YT-Temporal 视频来源待确认(似只含 SmartGlasses 视频);详见 dataset-management skill",
       "children": []
     },
     {
       "id": "t12",
       "title": "接入 NEVC(bytedance, x264/x265 + 神经 post-filter 混合 codec)",
-      "status": "active",
+      "status": "completed",
       "startDate": "2026-07-15",
       "assignee": "郑鑫裕",
       "description": "接入 bytedance/NEVC。重要更正:NEVC-1.0 = EHVC(ACM MM 2025, arXiv:2509.04118),是 ByteDance 基于 microsoft/DCVC 的扩展(test.py 头部明示 modified from DCVC),用同 DCVC-DC 的 IntraNoAR(I帧)+DMC(P帧)+MLCodec_rans(C++ 熵编码 ext)——是端到端神经视频 codec,非 post-filter。利好:(1)MLCodec_rans ext 已为 DCVC-DC 构建为 cp312,可直接复用;(2)checkpoint 在 HuggingFace ByteDance/NEVC1.0(HF 可达,可自动下,不像 OneDrive/GDrive 被拦)。集成=仿 dcvc_dc wrapper(IntraNoAR+DMC+MLCodec_rans,DPB seeding,二进制容器),vendor NEVC-1.0-EHVC/src/,下 HF checkpoint,注册 catalog。",
@@ -243,17 +280,70 @@
         {
           "id": "t12-1",
           "title": "NEVC: 下 HF checkpoint + 复用 rans ext + vendor src",
-          "status": "planned",
+          "status": "completed",
           "assignee": "郑鑫裕",
           "description": "git clone --depth 1 bytedance/NEVC → vendor NEVC-1.0-EHVC/src/ 到 third_party/nevc/(tracked);下 HuggingFace ByteDance/NEVC1.0 checkpoint 到 third_party/nevc/(gitignore)+ scripts/download_nevc_weights.py(HF 可达)。MLCodec_rans ext 复用 DCVC-DC 已构建的 cp312 版(若 NEVC src/cpp 有差异则同法重建)。读 test.py 确认 q_indexes/rate 点 + I/P frame API(DCVC 同构)。",
-          "children": []
+          "children": [],
+          "endDate": "2026-07-15"
         },
         {
           "id": "t12-2",
           "title": "NEVC: 写 dcvc_dc 式 wrapper + 注册 + 验证 RD",
-          "status": "planned",
+          "status": "completed",
           "assignee": "郑鑫裕",
           "description": "仿 dcvc_rt.py/dcvc_dc 计划写 codecs/nevc.py(@register_codec, is_neural=True, IntraNoAR I帧+DMC P帧+MLCodec_rans,DPB seeding,二进制容器)。注册 catalog qualities(NEVC 的 q_indexes)+ kind=learned-video。跑 akiyo 扫 q 出 RD 曲线;重启后端 /codecs 含 nevc。",
+          "children": [],
+          "endDate": "2026-07-15"
+        }
+      ],
+      "endDate": "2026-07-15"
+    },
+    {
+      "id": "t13",
+      "title": "BSDS500 gt 转 PNG(boundaries+segmentation)",
+      "status": "completed",
+      "assignee": "郑鑫裕",
+      "startDate": "2026-07-15",
+      "description": "BSDS500 groundTruth/*.mat(MATLAB struct,含 Segmentation/Boundaries)转 PNG:boundaries→二值边缘 PNG(作边缘检测评测 gt),segmentation→mask PNG;存 datasets/BSDS500/groundTruth_png/{train,val,test}/;供 t7-1/t7-2(PiDiNet/yoloe26 提取器)对比 gt 边界评测\n【完成@2026-07-16】boundaries 多标注者平均→软边缘 PNG 已落地（scripts/convert_bsds_gt.py，train 200/val 100/test 200，分桶 frame_*.png + manifest）；segmentation 未做（当前训练只需软边缘 GT，非必需）。已用于 BSDS GT 训练路径（train_model bsds- 路由 + ContourPNGDataset）。",
+      "children": []
+    },
+    {
+      "id": "t14",
+      "title": "训练 checkpoint 接入验证流程（EvalRun 选 ckpt 自动定模型/参数）",
+      "status": "active",
+      "assignee": "郑鑫裕",
+      "startDate": "2026-07-16",
+      "description": "把训练产出的 checkpoint 接进验证：EvalRun 选 checkpoint→自动填 codec(img-<model_id>/ssf2020)+quality(crfs)+checkpoint_path→一键开验证。codec 层 checkpoint_path 已支持(learned_image/ssf2020/_load_model/load_elic_model)，缺 UI→API→runner plumbing + ckpt.json 自带模型信息。",
+      "children": [
+        {
+          "id": "t14-1",
+          "title": "eval runner checkpoint_path 透传（codec 层 base/stage2/bench_one/run_all_subprocess 已改；剩 evaluation.py /run 收 checkpoint+解析 abs+传 --checkpoint）",
+          "status": "active",
+          "assignee": "郑鑫裕",
+          "priority": "P1",
+          "children": []
+        },
+        {
+          "id": "t14-2",
+          "title": "ckpt.json 富化：根级带 model_id/quality/method/dataset/lambda/size（eval 自包含，老 run 回退 run 记录）",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "children": []
+        },
+        {
+          "id": "t14-3",
+          "title": "EvalRun checkpoint 选择器：选 ckpt 自动填 codecs=img-<model_id>/ssf2020 + crfs=[quality] + checkpoint（getTrainRuns 的 best/latest）",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "children": [],
+          "description": "【流程细化】选 ckpt 后自动填：① codec id = ssf2020 或 img-<model_id>（model_id 来自 ckpt.json/run 记录）；② crfs=[quality]（训练 quality）；③ form.checkpoint=该 ckpt 相对路径。其余 eval 目标参数（method 提取方法/dataset/sequences/mode）由用户选（不自动填——那是 eval 目标，非训练侧）。runEvaluation payload 带 checkpoint 字段一键启动验证。"
+        },
+        {
+          "id": "t14-4",
+          "title": "端到端验证 + 回归：选 ELIC__bsds-train__gt best ckpt → eval xiph_cif → 结果 JSON 出现 img-ELIC-q1(checkpoint) 行；不选 ckpt 时原 pretrained 流程不变",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "priority": "P1",
           "children": []
         }
       ]

@@ -34,8 +34,18 @@
           </button>
           <div class="sidebar-meta">
             <span v-if="activeTree" class="meta-count">
-              {{ treeCount.completed }}/{{ treeCount.total }}
+              {{ visibleCount.completed }}/{{ visibleCount.total }}
             </span>
+            <button
+              v-if="activeTree && hiddenCount > 0"
+              class="hidden-toggle"
+              :class="{ active: showHidden }"
+              :title="showHidden ? '隐藏已标记为不展示的任务' : '显示已标记为不展示的任务'"
+              @click="showHidden = !showHidden"
+            >
+              <n-icon size="12"><component :is="showHidden ? EyeOffOutline : EyeOutline" /></n-icon>
+              <span>{{ hiddenCount }}</span>
+            </button>
             <n-tooltip trigger="hover" placement="bottom-end">
               <template #trigger>
                 <n-icon size="14" class="help-icon"><help-circle-outline /></n-icon>
@@ -52,13 +62,13 @@
         </div>
 
         <div v-if="treeLoading" class="empty">加载中…</div>
-        <div v-else-if="activeTree && activeTree.tasks.length" class="tree-list">
+        <div v-else-if="activeTree && visibleTasks.length" class="tree-list">
           <project-task-node
-            v-for="(task, i) in activeTree.tasks"
+            v-for="(task, i) in visibleTasks"
             :key="task.id"
             :task="task"
             :depth="0"
-            :is-last="i === activeTree.tasks.length - 1"
+            :is-last="i === visibleTasks.length - 1"
             :parent-lines="[]"
             :color="activeColor"
             :selected-id="selectedTask?.id"
@@ -75,6 +85,7 @@
       <main class="detail-main">
         <div v-if="selectedTask" class="task-detail">
           <div class="detail-head">
+            <span class="detail-task-id">{{ selectedTask.id }}</span>
             <span class="status-dot" :class="[taskStatus(selectedTask.status).dot, taskStatus(selectedTask.status).ring]"></span>
             <h3>{{ selectedTask.title }}</h3>
             <span class="detail-badge">{{ taskStatus(selectedTask.status).label }}</span>
@@ -85,10 +96,37 @@
               {{ selectedTask.startDate }}{{ selectedTask.endDate ? ' → ' + selectedTask.endDate : '' }}
             </span>
           </div>
-          <div v-if="noteLoading" class="empty-inline">加载笔记中…</div>
-          <markdown-renderer v-else-if="noteContent !== null" :content="noteContent" />
-          <p v-else-if="selectedTask.description" class="desc-text">{{ selectedTask.description }}</p>
-          <p v-else class="empty-inline">该任务暂无描述或笔记。</p>
+
+          <div class="cornell-body">
+            <div class="cornell-main">
+              <div class="desc-panel">
+                <div v-if="noteLoading" class="empty-inline">加载笔记中…</div>
+                <markdown-renderer v-else-if="noteContent !== null" :content="noteContent" />
+                <p v-else-if="selectedTask.description" class="desc-text">{{ selectedTask.description }}</p>
+                <p v-else class="empty-inline">该任务暂无描述或笔记。</p>
+              </div>
+
+              <div v-if="completionProgress.length" class="completion-panel">
+                <div class="completion-head">完成总结</div>
+                <div v-for="(p, i) in completionProgress" :key="i" class="completion-entry">
+                  <span class="progress-date">{{ p.date }}</span>
+                  <span class="progress-note">{{ p.note.replace(/^\[完成\]\s*/, '') }}</span>
+                </div>
+              </div>
+            </div>
+
+            <aside v-if="allProgress.length" class="cornell-right">
+              <div class="progress-head">进展记录</div>
+              <div v-for="(p, i) in allProgress" :key="i" class="progress-entry"
+                   :class="{ 'is-done': p.note && p.note.startsWith('[完成]') }">
+                <div class="progress-dot"></div>
+                <div class="progress-body">
+                  <span class="progress-date">{{ p.date }}</span>
+                  <span class="progress-note">{{ p.note }}</span>
+                </div>
+              </div>
+            </aside>
+          </div>
         </div>
 
         <div v-else class="readme-view">
@@ -132,7 +170,7 @@ import { NIcon, NTooltip } from 'naive-ui'
 import {
   GitBranchOutline, ArrowBackOutline, HelpCircleOutline,
   PersonOutline, PeopleOutline, CheckmarkCircleOutline,
-  PauseOutline, EllipseOutline,
+  PauseOutline, EllipseOutline, EyeOutline, EyeOffOutline,
 } from '@vicons/ionicons5'
 import MarkdownRenderer from '../../components/common/MarkdownRenderer.vue'
 import ProjectTaskNode from './ProjectTaskNode.vue'
@@ -163,6 +201,7 @@ const selectedTask = ref(null)
 const noteContent = ref(null)
 const noteLoading = ref(false)
 const pendingTaskId = ref(null) // 从 URL 恢复的任务 id，等任务树加载后定位
+const showHidden = ref(false)   // 是否展示 hidden:true 的任务
 
 const route = useRoute()
 const router = useRouter()
@@ -170,6 +209,31 @@ const router = useRouter()
 const activeColorIndex = computed(() => projects.value.findIndex(p => p.slug === activeSlug.value))
 const activeColor = computed(() => projectColor(Math.max(0, activeColorIndex.value)))
 const treeCount = computed(() => activeTree.value ? countAll(activeTree.value.tasks) : { total: 0, completed: 0 })
+
+function filterTree(tasks, show) {
+  const out = []
+  for (const t of tasks) {
+    if (t.hidden && !show) continue
+    const childList = t.children?.length ? filterTree(t.children, show) : []
+    out.push({ ...t, children: childList, __hidden: !!t.hidden })
+  }
+  return out
+}
+
+const visibleTasks = computed(() =>
+  activeTree.value ? filterTree(activeTree.value.tasks, showHidden.value) : []
+)
+
+const visibleCount = computed(() => countAll(visibleTasks.value))
+
+const hiddenCount = computed(() => {
+  if (!activeTree.value) return 0
+  return treeCount.value.total - countAll(filterTree(activeTree.value.tasks, false)).total
+})
+
+const allProgress = computed(() => selectedTask.value?.progress || [])
+const ongoingProgress = computed(() => allProgress.value.filter(p => !p.note?.startsWith('[完成]')))
+const completionProgress = computed(() => allProgress.value.filter(p => p.note?.startsWith('[完成]')))
 
 function projectColor(idx) {
   return PROJECT_COLORS[((idx % PROJECT_COLORS.length) + PROJECT_COLORS.length) % PROJECT_COLORS.length]
@@ -330,9 +394,9 @@ onMounted(loadProjects)
 </script>
 
 <style scoped lang="scss">
-.projects-page { padding: 4px 8px; }
+.projects-page { padding: 4px 8px; height: 100%; display: flex; flex-direction: column; }
 
-.page-header { margin-bottom: 20px; }
+.page-header { margin-bottom: 20px; flex-shrink: 0; }
 .title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
   h2 { font-size: 18px; font-weight: 600; margin: 0; color: var(--color-text-heading); }
 }
@@ -350,6 +414,7 @@ onMounted(loadProjects)
 .content-grid {
   display: grid; gap: 24px;
   grid-template-columns: 280px 1fr;
+  flex: 1; min-height: 0;
 }
 @media (max-width: 900px) { .content-grid { grid-template-columns: 1fr; } }
 
@@ -366,6 +431,15 @@ onMounted(loadProjects)
 }
 .sidebar-meta { margin-left: auto; display: flex; align-items: center; gap: 6px;
   .meta-count { font-size: 10px; color: var(--color-text-dim); }
+  .hidden-toggle {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 10px; color: var(--color-text-dim);
+    background: var(--color-elevated); border: 1px solid transparent;
+    padding: 1px 6px; border-radius: 999px; cursor: pointer;
+    transition: all 0.15s;
+    &:hover { color: var(--color-text); border-color: var(--color-border); }
+    &.active { color: var(--color-primary); border-color: var(--color-primary-soft); background: var(--color-primary-soft); }
+  }
   .help-icon { color: var(--color-text-dim); cursor: help; &:hover { color: var(--color-text-secondary); } }
 }
 .tree-list { display: flex; flex-direction: column; gap: 2px; }
@@ -374,19 +448,78 @@ onMounted(loadProjects)
   p { margin-top: 8px; font-size: 12px; }
 }
 
-.detail-main { min-width: 0; }
+.detail-main {
+  min-width: 0;
+  display: flex; flex-direction: column;
+}
+.task-detail {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+}
 .detail-head {
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-  border-bottom: 1px solid var(--color-border); padding-bottom: 16px; margin-bottom: 20px;
+  border-bottom: 1px solid var(--color-border); padding-bottom: 16px; margin-bottom: 0;
   h3 { font-size: 18px; font-weight: 700; margin: 0; color: var(--color-text-heading); }
 }
-.detail-badge { font-size: 10px; background: var(--color-elevated); padding: 2px 8px; border-radius: 4px; color: var(--color-text-secondary); }
+.detail-task-id {
+  font-family: 'SF Mono', 'Menlo', monospace; font-size: 11px;
+  color: var(--color-text-dim); background: var(--color-elevated);
+  padding: 2px 8px; border-radius: 4px;
+}
+.detail-badge { font-size: 10px; min-width: 42px; text-align: center; background: var(--color-elevated); padding: 2px 8px; border-radius: 4px; color: var(--color-text-secondary); }
 .detail-assignee {
   display: inline-flex; align-items: center; gap: 4px;
   background: var(--color-primary-soft); color: var(--color-primary);
   padding: 2px 10px; border-radius: 999px; font-size: 11px;
 }
 .detail-date { font-family: monospace; font-size: 12px; color: var(--color-text-secondary); }
+
+.cornell-body {
+  display: grid; gap: 20px; padding: 20px 0;
+  grid-template-columns: 1fr 220px;
+  flex: 1; min-height: 0;
+  @media (max-width: 900px) { grid-template-columns: 1fr; }
+}
+.cornell-main {
+  min-width: 0;
+  display: flex; flex-direction: column; gap: 20px;
+  .desc-panel {
+    flex: 1; min-height: 0; overflow-y: auto;
+    padding: 14px; border: 1px solid var(--color-border); border-radius: 8px;
+    background: var(--color-elevated);
+  }
+}
+.cornell-right {
+  border-left: 2px solid var(--color-border); padding-left: 16px;
+  @media (max-width: 900px) { border-left: none; border-top: 2px solid var(--color-border); padding-left: 0; padding-top: 16px; }
+  .progress-head { font-size: 11px; font-weight: 600; color: var(--color-text-dim); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+}
+.progress-entry {
+  display: flex; gap: 8px; margin-bottom: 10px;
+  .progress-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    background: var(--color-border); margin-top: 4px;
+  }
+  .progress-body { display: flex; flex-direction: column; gap: 2px; }
+  .progress-date { font-size: 10px; color: var(--color-text-dim); font-family: monospace; }
+  .progress-note { font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; white-space: pre-line; word-break: break-word; }
+  &.is-done {
+    .progress-dot { background: #22c55e; }
+    .progress-note { color: #22c55e; }
+  }
+}
+.completion-panel {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 12px 14px;
+  border: 1px solid rgba(34,197,94,0.15); border-radius: 8px;
+  background: rgba(34,197,94,0.03);
+  .completion-head { font-size: 11px; font-weight: 600; color: #22c55e; margin-bottom: 6px; letter-spacing: 0.5px; }
+  .completion-entry {
+    display: flex; gap: 10px; margin-bottom: 4px;
+    .progress-date { font-size: 10px; color: var(--color-text-dim); font-family: monospace; flex-shrink: 0; min-width: 70px; }
+    .progress-note { font-size: 12px; color: var(--color-text); line-height: 1.5; white-space: pre-line; word-break: break-word; }
+  }
+}
 .desc-text { font-size: 14px; color: var(--color-text); line-height: 1.6; white-space: pre-line; }
 .empty-inline { padding: 16px 0; text-align: center; color: var(--color-text-dim); font-size: 13px; }
 

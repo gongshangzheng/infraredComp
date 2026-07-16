@@ -1,0 +1,37 @@
+model:
+  image_size: 128
+  patch_size: 8
+  inout_chans: 1
+  num_latent: 64
+  mlp_ratio: 4.0
+  qkv_bias: true
+  drop: 0.0
+  attn_drop: 0.0
+  qk_norm: false
+
+  encoder:
+    dim: 384
+    depth: 6
+    num_heads: 6
+
+  decoder:
+    dim: 384
+    depth: 6
+    num_heads: 6
+
+quantizer:
+  token_dim: 32
+  codebook_size: 1024
+  commitment_cost: 0.25
+  reservoir_size: 4096
+  dead_code_threshold: 1.0
+  decay: 0.99
+  eps: 1.0e-5
+  use_l2_norm: false
+
+train:
+  lr: 1.0e-4
+  batch_size: 32
+  bce_pos_weight: 10.0
+  epochs: 500
+  save_interval: 50

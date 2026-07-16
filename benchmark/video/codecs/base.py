@@ -27,12 +27,15 @@ def register_codec(name: str) -> Callable[[type], type]:
     return _wrap
 
 
-def build_codec(name: str, crf: int, preset: str | None = None) -> "VideoCodec":
+def build_codec(name: str, crf: int, preset: str | None = None, checkpoint_path: str | None = None) -> "VideoCodec":
     if name not in CODEC_REGISTRY:
         avail = ", ".join(sorted(CODEC_REGISTRY)) or "(none)"
         raise KeyError(f"Unknown codec '{name}'. Available: {avail}")
     cls = CODEC_REGISTRY[name]
-    return cls(crf=crf, preset=preset)
+    kw = {"crf": crf, "preset": preset}
+    if checkpoint_path:
+        kw["checkpoint_path"] = checkpoint_path  # learned codec __init__ 接；传统 codec 无此参数
+    return cls(**kw)
 
 
 def list_codecs() -> list[str]:

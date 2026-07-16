@@ -4,31 +4,26 @@ __pycache__/
 *.egg-info/
 .venv/
 
-# Datasets — 大体积媒体文件不进 git,保留 README / manifest 作为索引
-# (输入位置可经 INFRACOMP_DATASETS_DIR 配置、不固定,故按扩展名忽略而非目录名)
-datasets/FLIR_ADAS_1_3/
-datasets/imagenet/
-datasets/**/*.mp4
-datasets/**/*.avi
-datasets/**/*.mov
-datasets/**/*.mkv
-datasets/**/*.m4v
-datasets/**/*.webm
-datasets/**/*.y4m
-datasets/**/*.png
-datasets/**/*.jpg
-datasets/**/*.jpeg
-datasets/**/*.tif
-datasets/**/*.tiff
-datasets/**/*.bmp
-datasets/**/*.zip
-datasets/contour/*/_raw_frames/
-# Large datasets: real data lives in D:/data (off-repo); junction'd into datasets/
-# and the junction dir is ignored so git never traverses the bulk files.
-datasets/BSDS500/
-datasets/SACo-VEval/
-*.mat
-# datasets/README.md、datasets/manifest.json、datasets/contour/*/manifest.json 等小文件默认被追踪
+# Datasets — 整个 datasets/ 不进 git(大数据集物理在 D:/data,junction 进 datasets/;
+# 索引/manifest 由代码 + D:/data 管理,不再 tracked)
+datasets/
+
+# Temp/test artifacts (not committed)
+_*.yuv
+_*.png
+_*.bin
+_test.*
+
+# DCVC checkpoints (vendored weights, large)
+pretrained/
+
+# Preview/visualizations (generated)
+results/video/
+results/training/viz/
+results/hed_preview.png
+
+# DCVC source (cloned nested repo, not part of this repo)
+third_party/DCVC/
 
 # Environment
 .env
@@ -87,3 +82,4 @@ mobileclip2_*.pt
 # NEVC checkpoints (HF ByteDance/NEVC1.0, gitignore weights only; src/ tracked)
 third_party/nevc/models/*.pth.tar
 third_party/nevc/models/*.pth
+third_party/lsmc/*.exe

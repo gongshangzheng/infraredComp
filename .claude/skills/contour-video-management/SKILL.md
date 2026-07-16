@@ -60,9 +60,14 @@ management/
   "id": "t1-1", "title": "...", "status": "completed|active|planned|paused|blocked",
   "startDate": "2026-07-08", "endDate": "2026-07-10", "assignee": "张三",
   "description": "...", "notePath": "notes/01.md", "priority": "P1",
+  "hidden": true,
+  "progress": [ { "date": "2026-07-16", "note": "完成了 X" } ],
   "children": [ ... ]
 }
 ```
+
+字段说明补充：
+- `hidden: true` — 项目树默认不展示此节点（前端眼睛图标可切换显示，节点以半透明斜体呈现）。子任务会随父任务一起隐藏。用法：`add_task.py --hidden` / `update_task.py --hidden` 或 `--no-hidden`。
 
 ```bash
 SD=.claude/skills/contour-video-management/scripts
@@ -79,17 +84,103 @@ uv run python $SD/update_task.py --slug infrared-comp --id t2-3 --status active 
 uv run python $SD/update_task.py --slug infrared-comp --id t2-3 --title "轮廓提取 v2" --end 2026-07-20
 # 标记完成
 uv run python $SD/update_task.py --slug infrared-comp --id t2-3 --status completed
+# description 语义（两者互斥）：
+#   --description "新文本"            → 整体替换（原 description 被覆盖）
+#   --append-description "追加文本"    → 追加到原 description 末尾（换行连接，保留原文）
+uv run python $SD/update_task.py --slug infrared-comp --id t2-3 \
+  --append-description "【进度@2026-07-15】wrapper 已就位，crash 待解"
+# 追加进展记录（自动加日期，新条目在前）
+uv run python $SD/update_task.py --slug infrared-comp --id t2-3 --progress "完成 API 对接，数据可正常加载"
+# 完成 + 完成总结（一步到位）
+uv run python $SD/update_task.py --slug infrared-comp --id t2-3 --status completed \
+  --progress "[完成] 修复分页 bug——根因是 offset 未重置，已在 onMounted 中加 resetPage() 解决"
 
 # 删除（递归删节点及其子树）
 uv run python $SD/delete_task.py --slug infrared-comp --id t2-3
 
-# 查询（树视图 / 展平看板桶 / 按 status 过滤）
+# 查询（树视图 / 展平看板桶 / 按 status 过滤 / 按 ID 精确定位）
 uv run python $SD/list_tasks.py --slug infrared-comp              # 树视图
 uv run python $SD/list_tasks.py --slug infrared-comp --flat       # 展平成 看板 三桶
 uv run python $SD/list_tasks.py --slug infrared-comp --status active
+uv run python $SD/list_tasks.py --slug infrared-comp --id t2-3    # 单个任务详情（含 progress）
 ```
 
 `--status` 接受 canonical（completed/active/planned/paused/blocked）或别名（done/in_progress/ongoing/todo/pending）。
+
+### 1.1 任务描述（description）写作规范
+
+**反模式**：把所有信息塞进一行的 description 字段（标题、范围、交付物、约束都连在一起），导致看板/项目树悬浮卡只看到一行密密麻麻的字。
+
+**正确做法**：description 字段允许 `\n` 换行（前端 `white-space: pre-line` 渲染）。按下面结构写，每段各司其职：
+
+```
+<一句话定位：做什么 + 为什么>                       ← 必填
+                                                   ← 一个空行
+• <要点 1：范围 / 交付物 / 约束>                    ← 2-4 条，可选
+• <要点 2：关键依赖或验收标准>
+• <要点 3：非目标 / 不在范围内>
+```
+
+**硬性规则**：
+1. 首行必须是**单句定位**，≤ 40 汉字，回答"这个任务到底要做什么"。不要复述 title。
+2. 要点段用 `• `（U+2022 + 空格）开头，每条独立成行；不要写 `- ` 或 `* `（会被当成 markdown 渲染错乱）。
+3. 每条要点 ≤ 60 汉字；超过就拆成两条。
+4. 整段 ≤ 6 行（含空行）。太长说明该拆子任务了，不要堆在 description 里。
+5. **禁止**：HTML 标签、emoji、markdown 链接、`TODO:` 前缀、"详见 notePath" 这种占位废话。
+6. 中文语境下英文专有名词首字母大写（PyTorch 不是 pytorch），且左右各留一个半角空格。
+7. 如果任务已经挂了 `notePath`，description 仍要独立可读（用户不点进笔记也能看懂）。
+
+**好例子**（tasks.json 中的 description 值）：
+```json
+"description": "为项目树页面包裹一层 Git 风格的分支线，让层级关系一眼可见。\n\n• 输入：任意深度 children 数组，输出递归分支线 + 悬浮卡\n• 首屏性能：500 节点内 < 100ms 渲染完成\n• 不在范围内：节点拖拽排序（放到 t9）"
+```
+
+**坏例子**：
+```json
+"description": "实现项目树页面的分支线渲染逻辑，用递归组件包裹每个 task node，支持任意深度，带 git 风格连接线，悬浮卡展示详情，要求性能达标（500节点<100ms），不包括拖拽排序功能，那个放到后面的 t9 里做。"
+```
+
+**调用专用 subagent（推荐）**：创建/修改任务时，若 description 需要新写或重写，主 agent 应派生一个 `general-purpose` subagent 专门产出描述文本，避免主上下文被写作过程污染。
+
+- **提示词文件**：`.claude/agents/description-writer.md`（frontmatter 含 subagent 类型、输入/输出约定、完整规则）
+- **调用方式**：
+  1. 读取 `.claude/agents/description-writer.md` 正文
+  2. 在末尾追加：`任务 title：<TITLE>\n上下文：<CONTEXT>`（占位符替换为实际值）
+  3. 通过 `Agent` 工具派生 subagent（`subagent_type: general-purpose`）
+  4. subagent 返回的字符串即 description 值，原样传给 `add_task.py --description "..."` 或 `update_task.py --description "..."`
+
+> 写作规范的**人读版**（给主 agent / 人类 review 用）见上面的"硬性规则"。subagent 提示词是其**机器读版**，含更严格的输出格式约束（只输出字符串本身，不要前言后语）。两份要保持语义一致；修改规范时两处同步更新。
+
+### 1.2 工作流公约（任务状态同步）
+
+每完成一个用户请求，检查是否有对应的任务需要更新状态或进展。**铁律**：做了事就要记到任务树上，不要只做事不更新。
+
+**开始工作时**（把任务从 planned → active）：
+```bash
+python3 $SD/update_task.py --slug <slug> --id <id> --status active
+```
+
+**推进过程中**（每完成一个有意义的步骤，追加一条 progress）：
+```bash
+python3 $SD/update_task.py --slug <slug> --id <id> --progress "完成了 X，下一步 Y"
+```
+
+**完成工作时**（status → completed + 完成总结一步到位）：
+```bash
+python3 $SD/update_task.py --slug <slug> --id <id> --status completed \
+  --progress "[完成] <方法总结>"
+```
+
+**通过编号查找任务**（agent 快速定位任务详情）：
+```bash
+python3 $SD/list_tasks.py --slug <slug> --id <task-id>
+```
+
+**progress 格式规则**：
+1. 进展记录：1-2 句话，不要复述代码变更，写"做了什么 + 下一步"。
+2. 完成总结：以 `[完成]` 开头，侧重"怎么做 + 遇到什么问题 + 怎么解决"，不写"做了什么"（title 已经说了）。
+3. 每条 note ≤ 120 汉字。太长说明该拆子任务了。
+4. 不要写空泛的进展（"继续开发中"、"修了一些 bug"）。
 
 ---
 

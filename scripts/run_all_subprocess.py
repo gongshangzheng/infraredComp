@@ -83,6 +83,8 @@ def main() -> int:
     ap.add_argument("--crfs", default=None,
                     help="comma-separated CRF list; overrides the default sweep for "
                          "TRADITIONAL codecs only (learned keep their quality map)")
+    ap.add_argument("--checkpoint", default=None,
+                    help="trained checkpoint abs path（learned codec 覆盖权重）")
     args = ap.parse_args()
 
     config.ensure_dirs()
@@ -135,6 +137,8 @@ def main() -> int:
                    "--codec", codec, "--crfs", ",".join(str(c) for c in pending)]
             if args.frames is not None:
                 cmd += ["--frames", str(args.frames)]
+            if args.checkpoint:
+                cmd += ["--checkpoint", args.checkpoint]
             print(f"  RUN  {art['stem']}|{codec} crfs={pending}", flush=True)
             try:
                 proc = subprocess.run(cmd, env=env, capture_output=True, text=True)

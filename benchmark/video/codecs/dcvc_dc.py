@@ -1,26 +1,17 @@
-"""NEVC (bytedance/NEVC-1.0 = EHVC) learned video codec — DCVC-derived.
+"""DCVC-DC (CVPR 2023) learned video codec — Microsoft DCVC family member.
 
-ByteDance NEVC-1.0 is **EHVC** (Efficient Hierarchical Reference and Quality
-Structure for Neural Video Coding, ACM MM 2025, arXiv:2509.04118) — a fork of
-microsoft/DCVC (test.py header: "modified from DCVC"). Same I/P interface as
-DCVC-DC: ``IntraNoAR`` (I-frame) + ``DMC`` (P-frame) + ``MLCodec_rans`` C++ entropy
-ext. Vendored under ``third_party/nevc/``; checkpoint on HuggingFace
-``ByteDance/NEVC1.0`` (``nevc1.0_intra.pth.tar`` / ``nevc1.0_inter.pth.tar``) —
-reachable here, auto-downloaded. The ``MLCodec_rans`` ext is **reused** from the
-DCVC-DC build (cp312 ``.pyd`` copied into ``third_party/nevc/src/models/`` — the
-``src/cpp`` is byte-identical to DCVC-DC's).
+DCVC-DC is the DCVC-family's CVPR 2023 variant, using the same I/P interface
+as NEVC (bytedance/NEVC-1.0 = EHVC): ``IntraNoAR`` (I-frame) + ``DMC`` (P-frame)
++ ``MLCodec_rans`` C++ entropy ext. The ext is built from DCVC-DC's own ``src/cpp``
+(cmake, cp312) — byte-identical to NEVC's, so the same ``.pyd`` is reused.
 
-Differences from ``dcvc_rt`` (DCVC-RT): (1) ``IntraNoAR`` I-frame (not ``DMCI``);
-(2) DMC uses an **explicit DPB dict** (seeded from the I-recon) rather than
-``clear_dpb``/``add_ref_frame``; (3) ``DMC.compress`` needs ``x_next`` (look-ahead
-— the next frame, ``None`` for the last); (4) rate control = ``q_in_ckpt=True`` +
-``q_index`` (NEVC's rate points), not DCVC-RT's ``qp``.
+Checkpoints: ``cvpr2023_image_psnr.pth.tar`` + ``cvpr2023_video_psnr.pth.tar``
+on OneDrive (blocked here — download manually per t10-1 description). Vendor
+src under ``third_party/DCVC/DCVC-family/DCVC-DC/`` (in the submodule).
 
-Setup: ``third_party/nevc/src/`` vendored (tracked); checkpoints at
-``third_party/nevc/models/nevc1.0_{intra,inter}.pth.tar`` (gitignored — fetch via
-``scripts/download_nevc_weights.py`` or ``huggingface_hub``); rans ext reused
-(``MLCodec_rans``/``MLCodec_CXX`` ``.pyd`` in ``src/models/``). ``_load`` raises a
-clear error if any are missing. Inference-only (no training code shipped).
+This wrapper is a near-copy of ``nevc.py`` with src + checkpoint paths adapted.
+NEVC proved the ``encode_decode`` + ``decode_i``/``decode_p`` path works
+(bpp=0.31, psnr=33.08). DCVC-DC has the same API.
 """
 from __future__ import annotations
 
@@ -39,18 +30,16 @@ from .base import VideoCodec, register_codec
 from .. import config  # noqa: F401
 from benchmark.learned import _img_to_tensor, _tensor_to_img
 
-# Binary container: magic + n,h,w + per-frame (type, q_index, blen) + bitstream
-# + stats_pickle(len+bytes). Same shape as dcvc_rt's container.
-_MAGIC = b"NEVC1\x00\x00\x00"
+_MAGIC = b"DCVCDC10"
 _HDR = struct.Struct("<III")      # n, h, w
 _FREC = struct.Struct("<BiI")     # type, q_index, blen
 _LEN = struct.Struct("<I")        # stats_pickle length
 
-_NEVC_DIR = Path(__file__).resolve().parents[3] / "third_party" / "nevc"
-DEFAULT_CKPT_I = str(_NEVC_DIR / "models" / "nevc1.0_intra.pth.tar")
-DEFAULT_CKPT_P = str(_NEVC_DIR / "models" / "nevc1.0_inter.pth.tar")
+_DCVC_DC_DIR = Path(__file__).resolve().parents[3] / "third_party" / "DCVC" / "DCVC-family" / "DCVC-DC"
+DEFAULT_CKPT_I = str(_DCVC_DC_DIR / "checkpoints" / "cvpr2023_image_psnr.pth.tar")
+DEFAULT_CKPT_P = str(_DCVC_DC_DIR / "checkpoints" / "cvpr2023_video_psnr.pth.tar")
 
-# Empty DPB after the I-frame seeds it with the I-recon (NEVC test.py shape).
+
 def _seed_dpb(x_hat) -> dict:
     return {
         "ref_frame": x_hat,
@@ -63,12 +52,12 @@ def _seed_dpb(x_hat) -> dict:
     }
 
 
-@register_codec("nevc")
-class NevcCodec(VideoCodec):
-    """NEVC-1.0 (EHVC) — IntraNoAR I-frame + DMC P-frame, DCVC-derived."""
+@register_codec("dcvc_dc")
+class DcvcDcCodec(VideoCodec):
+    """DCVC-DC (CVPR 2023) — IntraNoAR I-frame + DMC P-frame, MLCodec_rans ext."""
 
-    name = "nevc"
-    family = "nevc"
+    name = "dcvc_dc"
+    family = "dcvc_dc"
     ext = "bin"
     is_neural = True
     browser_playable = False
@@ -77,7 +66,7 @@ class NevcCodec(VideoCodec):
     def __init__(self, crf: int = 1, preset: str | None = None,
                  checkpoint_i: str | None = None, checkpoint_p: str | None = None):
         super().__init__(crf=crf, preset=preset)
-        self.q_index = int(crf)              # NEVC rate point (q_index)
+        self.q_index = int(crf)
         self.checkpoint_i = checkpoint_i
         self.checkpoint_p = checkpoint_p
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -85,40 +74,37 @@ class NevcCodec(VideoCodec):
 
     def _setup_error(self, reason: str) -> RuntimeError:
         return RuntimeError(
-            f"NEVC setup incomplete: {reason}\n"
-            "  1. vendor src: git clone --depth 1 bytedance/NEVC, copy NEVC-1.0-EHVC/src "
-            "-> third_party/nevc/src\n"
-            "  2. checkpoints: python scripts/download_nevc_weights.py  "
-            "(HuggingFace ByteDance/NEVC1.0 -> third_party/nevc/models/)\n"
-            "  3. rans ext: reuse DCVC-DC's MLCodec_rans/MLCodec_CXX cp312 .pyd into "
-            "third_party/nevc/src/models/ (src/cpp is identical)\n"
+            f"DCVC-DC setup incomplete: {reason}\n"
+            "  1. src: third_party/DCVC/DCVC-family/DCVC-DC/src/ (git submodule)\n"
+            "  2. checkpoints: download cvpr2023_image_psnr.pth.tar + cvpr2023_video_psnr.pth.tar\n"
+            f"     from OneDrive (see t10-1 in tasks.json for URLs) -> {_DCVC_DC_DIR}/checkpoints/\n"
+            "  3. rans ext: MLCodec_rans + MLCodec_CXX .pyd in src/models/ (built from src/cpp, cp312)\n"
             f"     I ckpt: {self.checkpoint_i or DEFAULT_CKPT_I}\n"
             f"     P ckpt: {self.checkpoint_p or DEFAULT_CKPT_P}"
         )
 
     def _load(self) -> dict:
         key = (self.device, self.checkpoint_i, self.checkpoint_p)
-        if key in NevcCodec._CACHE:
-            return NevcCodec._CACHE[key]
-        repo = str(_NEVC_DIR)
+        if key in DcvcDcCodec._CACHE:
+            return DcvcDcCodec._CACHE[key]
+        repo = str(_DCVC_DC_DIR)
         if not os.path.isdir(os.path.join(repo, "src", "models")):
-            raise self._setup_error("third_party/nevc/src not found")
+            raise self._setup_error("DCVC-DC src not found")
         if repo not in sys.path:
             sys.path.insert(0, repo)
 
-        # ext present? (entropy_models.py imports .MLCodec_rans / .MLCodec_CXX)
         try:
             from src.models.MLCodec_rans import RansEncoder  # noqa: F401
             from src.models.MLCodec_CXX import pmf_to_quantized_cdf  # noqa: F401
         except ImportError as exc:
             raise self._setup_error(
                 f"MLCodec_rans/MLCodec_CXX ext not importable ({exc}); "
-                "copy the cp312 .pyd from DCVC-DC's src/models/"
+                "build from src/cpp with cmake (cp312)"
             ) from exc
 
         from src.models.image_model import IntraNoAR
         from src.models.video_model import DMC
-        from src.utils.stream_helper import (  # noqa: E402
+        from src.utils.stream_helper import (
             get_state_dict,
             get_padding_size,
             decode_i,
@@ -147,17 +133,12 @@ class NevcCodec(VideoCodec):
         except Exception:  # noqa: BLE001
             pass
 
-        # NEVC's DMC flow_warp (grid_sample) does NOT support fp16 (Half/Float
-        # mismatch in the flow grid) — stay fp32 on CUDA (slower than dcvc_rt's
-        # fp16, but correct).
         bundle = {
-            "i_net": i_net,
-            "p_net": p_net,
+            "i_net": i_net, "p_net": p_net,
             "get_padding_size": get_padding_size,
-            "decode_i": decode_i,
-            "decode_p": decode_p,
+            "decode_i": decode_i, "decode_p": decode_p,
         }
-        NevcCodec._CACHE[key] = bundle
+        DcvcDcCodec._CACHE[key] = bundle
         return bundle
 
     @property
@@ -166,28 +147,18 @@ class NevcCodec(VideoCodec):
             self._models = self._load()
         return self._models
 
-    # ---- in-process encode/decode ----
-
     def encode_inprocess(self, frames: list, fps: float) -> bytes:
-        """frames = list[np.ndarray HxW uint8] -> bytes (binary container).
-
-        Uses ``encode_decode`` (compress+decompress combined, test.py's path) — the
-        decompress step POPULATES ``dpb["key_feature"]`` (``= feature``), which a
-        bare ``compress`` does NOT (it copies the input's key_feature=None). Without
-        encode_decode, the 2nd P-frame's ``multi_scale_key_feature_extractor`` hits
-        the else-branch with key_feature=None -> conv None -> crash.
-        """
         bundle = self.models
-        i_net, p_net, get_padding_size = bundle["i_net"], bundle["p_net"], bundle["get_padding_size"]
+        i_net, p_net = bundle["i_net"], bundle["p_net"]
+        get_padding_size = bundle["get_padding_size"]
         h0, w0 = frames[0].shape[:2]
         pad_l, pad_r, pad_t, pad_b = get_padding_size(h0, w0, 16)
 
-        records: list[tuple[int, int, bytes]] = []   # (type, q_index, bit_stream)
+        records: list[tuple[int, int, bytes]] = []
         stats_list: list[dict] = []
-        tmp_dir = tempfile.mkdtemp(prefix="nevc_enc_")
+        tmp_dir = tempfile.mkdtemp(prefix="dcvc_dc_enc_")
         try:
             with torch.no_grad():
-                # I-frame (frame 0): encode_decode writes bin + returns x_hat.
                 x0, st0 = _img_to_tensor(frames[0])
                 x0 = x0.to(self.device)
                 x0_pad = torch.nn.functional.pad(x0, (pad_l, pad_r, pad_t, pad_b), mode="replicate")
@@ -199,7 +170,6 @@ class NevcCodec(VideoCodec):
                     records.append((0, self.q_index, f.read()))
                 stats_list.append(st0)
 
-                # P-frames 1..n-1 (look-ahead x_next; None for the last frame).
                 for i in range(1, len(frames)):
                     xi, sti = _img_to_tensor(frames[i])
                     xi = xi.to(self.device)
@@ -214,33 +184,25 @@ class NevcCodec(VideoCodec):
                     result = p_net.encode_decode(xi_pad, dpb, True, self.q_index,
                                                 x_next_pad, bin_path,
                                                 pic_height=h0, pic_width=w0, frame_idx=i % 4)
-                    dpb = result["dpb"]   # key_feature populated by the decompress step
+                    dpb = result["dpb"]
                     with open(bin_path, "rb") as f:
                         records.append((1, self.q_index, f.read()))
                     stats_list.append(sti)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
-
         return self._serialize(records, len(frames), h0, w0, stats_list)
 
     def decode_inprocess(self, bitstream_bytes: bytes, n_frames: int, hw: tuple[int, int]) -> list:
-        """bytes -> list[np.ndarray HxW uint8].
-
-        The container stores per-frame FILE bytes (encode_p/encode_i output, with
-        metadata header). decode_i/decode_p parse the header + extract the raw
-        bitstream string, then decompress -- mirroring encode_decode's internal
-        decode path. Passing file bytes directly to decompress would feed the rans
-        coder misaligned data -> segfault (exit 139)."""
         bundle = self.models
         i_net, p_net = bundle["i_net"], bundle["p_net"]
         decode_i, decode_p = bundle["decode_i"], bundle["decode_p"]
         records, (h0, w0), stats_list = self._deserialize(bitstream_bytes)
         if len(records) != n_frames:
             raise RuntimeError(
-                f"NEVC bitstream frame count {len(records)} != requested {n_frames}"
+                f"DCVC-DC bitstream frame count {len(records)} != requested {n_frames}"
             )
 
-        tmp_dir = tempfile.mkdtemp(prefix="nevc_dec_")
+        tmp_dir = tempfile.mkdtemp(prefix="dcvc_dc_dec_")
         recons: list[np.ndarray] = []
         try:
             with torch.no_grad():
@@ -248,12 +210,12 @@ class NevcCodec(VideoCodec):
                     bin_path = os.path.join(tmp_dir, f"f{idx:06d}.bin")
                     with open(bin_path, "wb") as f:
                         f.write(bs)
-                    if ftype == 0:  # I-frame
+                    if ftype == 0:
                         h, w, q, q_idx, string = decode_i(bin_path)
                         dec = i_net.decompress(string, h, w, q, q_idx)
                         x_hat = dec["x_hat"]
                         dpb = _seed_dpb(x_hat)
-                    else:           # P-frame
+                    else:
                         q, q_idx, fidx, string = decode_p(bin_path)
                         dec = p_net.decompress(dpb, string, h0, w0, q, q_idx, fidx)
                         dpb = dec["dpb"]
@@ -263,8 +225,6 @@ class NevcCodec(VideoCodec):
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
         return recons
-
-    # ---- (de)serialization ----
 
     @staticmethod
     def _serialize(records, n, h, w, stats_list) -> bytes:
@@ -282,7 +242,7 @@ class NevcCodec(VideoCodec):
     @staticmethod
     def _deserialize(buf):
         if not buf.startswith(_MAGIC):
-            raise RuntimeError(f"NEVC bitstream magic mismatch (got {buf[:8]!r})")
+            raise RuntimeError(f"DCVC-DC bitstream magic mismatch (got {buf[:8]!r})")
         off = len(_MAGIC)
         n, h, w = _HDR.unpack_from(buf, off); off += _HDR.size
         records = []
