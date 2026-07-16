@@ -19,8 +19,11 @@
           <n-card title="待开始" size="small">
             <template #header-extra><n-tag size="small" round>{{ tasks.pending.length }}</n-tag></template>
             <div class="task-list">
-              <div v-for="t in tasks.pending" :key="t.id" class="task-card">
-                <div class="task-name">{{ t.name }}</div>
+              <div v-for="t in tasks.pending" :key="t.id" class="task-card" :class="t.priority ? `pri-${t.priority.toLowerCase()}` : ''">
+                <div class="task-name">
+                  <span v-if="t.priority" class="priority-badge" :class="`priority-${t.priority.toLowerCase()}`">{{ t.priority }}</span>
+                  {{ t.name }}
+                </div>
                 <div class="task-meta">
                   <span>{{ t.owner }}</span>
                   <span v-if="t.end_date">{{ t.end_date }}</span>
@@ -34,8 +37,11 @@
           <n-card title="进行中" size="small">
             <template #header-extra><n-tag size="small" type="info" round>{{ tasks.in_progress.length }}</n-tag></template>
             <div class="task-list">
-              <div v-for="t in tasks.in_progress" :key="t.id" class="task-card">
-                <div class="task-name">{{ t.name }}</div>
+              <div v-for="t in tasks.in_progress" :key="t.id" class="task-card" :class="t.priority ? `pri-${t.priority.toLowerCase()}` : ''">
+                <div class="task-name">
+                  <span v-if="t.priority" class="priority-badge" :class="`priority-${t.priority.toLowerCase()}`">{{ t.priority }}</span>
+                  {{ t.name }}
+                </div>
                 <div class="task-meta">
                   <StatusBadge :status="t.status" />
                   <span>{{ t.owner }}</span>
@@ -50,8 +56,11 @@
           <n-card title="已完成" size="small">
             <template #header-extra><n-tag size="small" type="success" round>{{ tasks.completed.length }}</n-tag></template>
             <div class="task-list">
-              <div v-for="t in tasks.completed" :key="t.id" class="task-card">
-                <div class="task-name">{{ t.name }}</div>
+              <div v-for="t in tasks.completed" :key="t.id" class="task-card" :class="t.priority ? `pri-${t.priority.toLowerCase()}` : ''">
+                <div class="task-name">
+                  <span v-if="t.priority" class="priority-badge" :class="`priority-${t.priority.toLowerCase()}`">{{ t.priority }}</span>
+                  {{ t.name }}
+                </div>
                 <div class="task-meta">
                   <span>{{ t.owner }}</span>
                   <span v-if="t.end_date">{{ t.end_date }}</span>
@@ -115,9 +124,19 @@ onMounted(async () => {
   background: #f9fafb;
   border-radius: 8px;
   border-left: 3px solid #e5e7eb;
+  &.pri-p1 { border-left-color: #ef4444; }
+  &.pri-p2 { border-left-color: #f59e0b; }
+  &.pri-p3 { border-left-color: #a1a1aa; }
 
-  .task-name { font-weight: 500; margin-bottom: 6px; }
+  .task-name { font-weight: 500; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
   .task-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6b7280; }
   .task-note { font-size: 12px; color: #9ca3af; margin-top: 4px; }
+}
+.priority-badge {
+  flex-shrink: 0; font-size: 9px; font-weight: 700; letter-spacing: 0.03em;
+  padding: 1px 5px; border-radius: 3px;
+  &.priority-p1 { background: rgba(239,68,68,0.15); color: #ef4444; }
+  &.priority-p2 { background: rgba(245,158,11,0.15); color: #f59e0b; }
+  &.priority-p3 { background: rgba(161,161,170,0.15); color: #71717a; }
 }
 </style>

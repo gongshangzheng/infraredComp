@@ -54,9 +54,9 @@
     {
       "id": "t4",
       "title": "dark 主题 + breadcrumb 回退 + 论文刷新保位",
-      "status": "active",
+      "status": "completed",
       "startDate": "2026-07-12",
-      "endDate": "2026-07-13",
+      "endDate": "2026-07-16",
       "assignee": "郑鑫裕",
       "description": "从 ProjFlow 上游移植 theme store/Pinia/暗主题令牌；修项目树 tooltip 透明背景；breadcrumb 可点回退；论文列表刷新保滚动位置",
       "notePath": "",
@@ -65,8 +65,9 @@
     {
       "id": "t5",
       "title": "调研:视频 3D 轮廓提取算子(3D Sobel / 3D Canny)",
-      "status": "planning",
+      "status": "completed",
       "startDate": "2026-07-14",
+      "endDate": "2026-07-16",
       "assignee": "郑鑫裕",
       "description": "调研传统方法在视频上做 3D 轮廓提取的算子(3D Sobel / 3D Canny / 时空梯度等)，评估接入 benchmark/video/extractors/ 的可行性(@register 新提取器，stage1 帧级 → 时空级)",
       "notePath": "notes/03-research-3d-contour.md",
@@ -75,8 +76,9 @@
     {
       "id": "t6",
       "title": "调研:图片生成式模型跑视频压缩",
-      "status": "planning",
+      "status": "completed",
       "startDate": "2026-07-14",
+      "endDate": "2026-07-16",
       "assignee": "郑鑫裕",
       "description": "调研用已训练好的图片生成式模型(生成式图像压缩 / Diffusion-based 压缩等)逐帧跑视频压缩看效果；评估接入 stage2(in-process neural path,仿 ssf2020/dcvc_rt)或新 codec",
       "notePath": "notes/04-research-generative-video-compression.md",
@@ -242,9 +244,10 @@
     {
       "id": "t11",
       "title": "接入 SA-Co-VEval 数据集(ModelScope)",
-      "status": "active",
+      "status": "completed",
       "assignee": "郑鑫裕",
       "startDate": "2026-07-15",
+      "endDate": "2026-07-16",
       "description": "ModelScope facebook/SACo-VEval(~31GB,下载完成✅,D:/data/SACo-VEval/ + junction datasets/SACo-VEval/);annotation=6 json(sav/sg/yt1b × val/test),media=saco_sg.tar.gz(SmartGlasses 视频,需解压)+ yt1b 时间索引;SA-V/YT-Temporal 视频来源待确认(似只含 SmartGlasses 视频);详见 dataset-management skill",
       "children": []
     },

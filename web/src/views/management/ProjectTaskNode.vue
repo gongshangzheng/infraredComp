@@ -34,6 +34,8 @@
             {{ task.title }}
           </span>
 
+          <span v-if="task.priority" class="priority-badge" :class="`priority-${task.priority.toLowerCase()}`">{{ task.priority }}</span>
+
           <span v-if="hasChildren" class="progress-text">{{ count.completed }}/{{ count.total }}</span>
 
           <span v-if="task.assignee" class="assignee">
@@ -60,6 +62,7 @@
           子任务: {{ count.completed }}/{{ count.total }} 已完成
         </div>
         <div v-if="task.description" class="hc-desc">{{ task.description }}</div>
+        <div v-if="task.priority" class="hc-line">优先级: <span :class="`priority-${task.priority.toLowerCase()}`" style="font-weight:700">{{ task.priority }}</span></div>
       </div>
     </div>
 
@@ -104,7 +107,7 @@ const TASK_STATUS = {
   paused: { label: '已暂停', dot: 'bg-amber', ring: 'ring-amber' },
 }
 
-const expanded = ref(props.depth < 1)
+const expanded = ref(false)
 const hovered = ref(false)
 let hoverTimer = null
 
@@ -215,12 +218,20 @@ function onClick() {
   padding: 1px 6px; border-radius: 999px; font-size: 10px;
 }
 .date-text { flex-shrink: 0; font-size: 10px; color: var(--color-text-dim); }
+.priority-badge {
+  flex-shrink: 0; font-size: 9px; font-weight: 700; letter-spacing: 0.03em;
+  padding: 1px 5px; border-radius: 3px;
+  &.priority-p1 { background: rgba(239,68,68,0.15); color: #ef4444; }
+  &.priority-p2 { background: rgba(245,158,11,0.15); color: #f59e0b; }
+  &.priority-p3 { background: rgba(161,161,170,0.15); color: #71717a; }
+}
 
 .hover-card {
   position: absolute; left: 32px; top: 100%; z-index: 50;
   width: 240px; padding: 12px;
   background: var(--color-card); border: 1px solid var(--color-border);
   border-radius: 8px; box-shadow: 0 8px 24px var(--color-shadow);
+  word-break: break-word; overflow-wrap: anywhere;
   .hc-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; strong { font-size: 13px; color: var(--color-text-heading); } }
   .hc-badge { font-size: 10px; background: var(--color-elevated); padding: 1px 6px; border-radius: 4px; color: var(--color-text-secondary); }
   .hc-line { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; }
