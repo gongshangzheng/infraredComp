@@ -315,6 +315,15 @@
           "title": "EvalRun checkpoint 选择器：选 ckpt 自动填 codecs=img-<model_id>/ssf2020 + crfs=[quality] + checkpoint（getTrainRuns 的 best/latest）",
           "status": "planned",
           "assignee": "郑鑫裕",
+          "children": [],
+          "description": "【流程细化】选 ckpt 后自动填：① codec id = ssf2020 或 img-<model_id>（model_id 来自 ckpt.json/run 记录）；② crfs=[quality]（训练 quality）；③ form.checkpoint=该 ckpt 相对路径。其余 eval 目标参数（method 提取方法/dataset/sequences/mode）由用户选（不自动填——那是 eval 目标，非训练侧）。runEvaluation payload 带 checkpoint 字段一键启动验证。"
+        },
+        {
+          "id": "t14-4",
+          "title": "端到端验证 + 回归：选 ELIC__bsds-train__gt best ckpt → eval xiph_cif → 结果 JSON 出现 img-ELIC-q1(checkpoint) 行；不选 ckpt 时原 pretrained 流程不变",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "priority": "P1",
           "children": []
         }
       ]
