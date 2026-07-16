@@ -258,6 +258,14 @@ const today = computed(() => {
   height: calc(100vh - 56px);
   padding: 0;
   background: var(--color-bg);
+
+  :deep(.n-scrollbar-content) {
+    height: 100%;
+  }
+
+  :deep(.n-scrollbar-content > *) {
+    min-height: 100%;
+  }
 }
 
 /* 侧边栏是导航区,不可选文本/不显示文本光标;菜单项保持 pointer */
