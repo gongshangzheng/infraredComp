@@ -128,7 +128,7 @@
           "title": "LSMC 编译 + 接入 stage2 + BSDS-val 评测",
           "status": "active",
           "assignee": "郑鑫裕",
-          "description": "把 LosslessSegmentationMapCompression 接为 stage2 无损 codec,纳入评测对比。\n\n• 接入:clone repo → cmake+MSVC build encoder/decoder.exe(vendor models/lsmc/) → 写 codecs/lsmc.py(@register_codec,is_neural,encode/decode_inprocess 拼 temp .yuv/.bin) → 注册 catalog qualities=[0](单无损点)\n• 评测:跑 akiyo 出 RD 点(无损 rec==gt,PSNR=inf 前端 cap)+ SA-Co 视频\n• 待解:encoder 多 label 输入 segfault(MSVC UB),需 MinGW g++14+ 重编或 C++ debug;详见 progress\n【最新目标@2026-07-17】编译 encoder/decoder.exe → models/lsmc/ → 跑 bsds-val formal eval（无损 baseline 参照线）。当前阻塞: github clone 网络超时。",
+          "description": "把 LosslessSegmentationMapCompression 接为 stage2 无损 codec,纳入评测对比。\n\n• 接入:clone repo → cmake+MSVC build encoder/decoder.exe(vendor models/lsmc/) → 写 codecs/lsmc.py(@register_codec,is_neural,encode/decode_inprocess 拼 temp .yuv/.bin) → 注册 catalog qualities=[0](单无损点)\n• 评测:跑 akiyo 出 RD 点(无损 rec==gt,PSNR=inf 前端 cap)+ SA-Co 视频\n• 待解:encoder 多 label 输入 segfault(MSVC UB),需 MinGW g++14+ 重编或 C++ debug;详见 progress\n【最新目标@2026-07-17】编译 encoder/decoder.exe → models/lsmc/ → 跑 bsds-val formal eval（无损 baseline 参照线）。当前阻塞: github clone 网络超时。\n【进度@2026-07-18】encoder.exe + decoder.exe cmake 编译成功（CMakeLists 修 2 处：arithmetic_codec 路径 + 加 acodec.cpp）。但 encoder 运行时 segfault：acodec.encode(first_color, aColor) 调基类 Arithmetic_Codec::encode → crash。根因：Adaptive_Data_Model::update(bool) 非 virtual，AdaptiveDataModel::update() 不覆盖它 → 基类 update 访问子类未初始化的内部状态。试过 virtual fix（ABI 问题）+ 2-param wrapper（forbidden=-1 导致 length=0 → crash）。需 VS Debugger 进一步定位。",
           "children": [],
           "progress": [
             {
@@ -525,11 +525,17 @@
     {
       "id": "t17",
       "title": "Surface Infrared Camera 画面展示页面",
-      "status": "planned",
+      "status": "active",
       "assignee": "郑鑫裕",
       "description": "创建新前端页面，用于展示 Surface 自带的 Infrared Camera 录到的画面。\n\n需求:\n- 新路由 + 新 Vue 页面\n- 从 Surface Infrared Camera 采集的素材展示（可能是视频/帧序列/热成像数据）\n- 可能需要后端 API 暴露素材目录 + 前端 <video>/图片展示\n- 与现有评测页（speed/formal）的 <video> 展示复用模式\n\n待定:\n- 素材格式（mp4? 帧? raw thermal?）\n- 实时预览还是回放？\n- 是否需要接入评测管线（做红外 contour 评测？）",
       "priority": "P1",
-      "children": []
+      "children": [],
+      "progress": [
+        {
+          "date": "2026-07-18",
+          "note": "SDK 探测+路径迁移:三 DLL(GuideUSBCamera/GuideUSB2LiveStream/MTSDK)ctypes 加载验证 OK;GuideUSB2LiveStream 依赖 libusb0.dll(在 AllDriverAutoInstall\\amd64\\,系统未装,加 DLL 搜索路径即解),skill 补此说明;软件目录迁 D:\\Programs\\GuideIR_V1.2.4 避中文路径坑(WPS 占用户手册 PDF 致 mv 失败 WinError32,kill 后成);5 文件路径引用同步更新,ir_probe 新路径加载验证通过。下一步反推 .pdb 签名,调 initialize+getDeviceList 验证枚举,起 MJPEG 桥接骨架。"
+        }
+      ]
     },
     {
       "id": "t18",
@@ -560,6 +566,40 @@
           "status": "planned",
           "assignee": "郑鑫裕",
           "description": "在 BSDS-val 上对 diffTok 跑正式 RD 评测，对齐 1D token 码表 bpp。\n\n• 依赖 diffTok 权重训练完成（runner 就位、权重待训）\n• GPU 推理错峰训练，防 CUDA OOM\n• 与神经 codec 统一基准对比",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "t19",
+      "title": "数据集布局清理: original→raw 改名 + 删冗余 symlink + caller 迁移",
+      "status": "active",
+      "assignee": "郑鑫裕",
+      "startDate": "2026-07-18",
+      "description": "把 datasets/original/ 改名为 datasets/raw/ 作 canonical 原始数据目录,删根下+raw/+contour/ 的 compat symlink,所有 caller 迁移到 raw_dir()/contour_dir(),contour 布局一并迁移,文档同步。\n\n• 背景:reorg 只做了一半,raw_dir() 零调用,server/scripts 全 hardcode 旧路径\n• 分阶段:① config+caller 迁移(不删 symlink) ② 磁盘重命名+删 symlink+contour ③ 文档\n• 风险:server 路径错断只读 API;contour 真实数据迁移需逐项核实\n• 非目标:不改 D:/data 物理数据,不新增数据集",
+      "children": [
+        {
+          "id": "t19-1",
+          "title": "config + caller 迁移到 raw_dir/contour_dir(代码层)",
+          "status": "active",
+          "assignee": "郑鑫裕",
+          "description": "config.py raw_dir 改 original→raw;server/config.py 加 raw_dir/contour_dir;~15 scripts + server 3 router 路径字面改用函数。不删 symlink。\n\n• import 策略:scripts 统一 sys.path+from benchmark.video.config import raw_dir\n• server evaluation/training/benchmark 路径最高风险\n• train_model.py osu_color_thermal_frames 核实是否存在",
+          "children": []
+        },
+        {
+          "id": "t19-2",
+          "title": "磁盘重命名 original→raw + 删冗余 symlink + contour 迁移",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "description": "rm datasets/raw/ compat junction;mv original→raw;删根下 4 symlink;contour/<src>/<method> 真实数据搬到 <method>/<src>,删 contour/。\n\n• 依赖 t19-1 代码迁移完\n• contour 真实数据逐项核实,可重跑 stage1 兜底",
+          "children": []
+        },
+        {
+          "id": "t19-3",
+          "title": "文档同步: AGENTS/skills/README/tasks.json 路径改 raw",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "description": "AGENTS.md、dataset-management/evaluation/difftok skill、datasets/README、management README+tasks.json 里 datasets/original/、contour/<src>/<method>/ 旧路径描述改新布局。",
           "children": []
         }
       ]
