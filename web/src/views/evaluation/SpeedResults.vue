@@ -34,7 +34,7 @@
                 </template>
               </n-button>
               <div class="cell-title">{{ r.sequence_name }} · crf{{ r.crf }}</div>
-              <div class="videos">
+              <div v-if="isExpanded(r.id)" class="videos">
                 <div class="v">
                   <span class="vlabel">原始</span>
                   <video v-if="r.original_video && !isImage(r.original_video)" :src="getOutputUrl(r.original_video)" preload="none" controls playsinline class="cell-video" />
