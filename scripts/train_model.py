@@ -614,6 +614,7 @@ def main() -> int:
     ap.add_argument("--viz-split", dest="viz_split", default=None, help="可视化用的 split（默认 difftok=val，其他=eval-split）")
     ap.add_argument("--eval-samples", dest="eval_samples", type=int, default=512, help="每次 eval 的固定 val 图数")
     ap.add_argument("--viz-samples", dest="viz_samples", type=int, default=6, help="可视化固定图数（每 epoch 同一批，看重建演变）")
+    ap.add_argument("--viz-every", dest="viz_every", type=int, default=1, help="每 N epoch 存一次可视化（默认 1=每 epoch；与 eval-every 独立）")
     # imagenet 预提取（自动开启；skip-if-exists per split via manifest；per-frame skip 允许续跑）
     ap.add_argument("--preextract", dest="preextract", action="store_true", default=None,
                     help="预提取 imagenet 轮廓到 PNG（默认 imagenet-* 自动开启）")
@@ -795,16 +796,22 @@ def main() -> int:
             log(run_id, f"[train] epoch {epoch} ({ep_i}/{args.epochs}) loss={avg['loss']:.4f} psnr={avg['psnr']:.2f} bpp={avg['bpp']:.3f}")
             if scheduler is not None:
                 scheduler.step()
-            # 训练中 eval + 可视化（每 eval_every epoch）
+            # 可视化：每 viz_every epoch（与 eval 独立；看重建演变）
+            if eval_on and args.viz_every and (epoch % args.viz_every == 0):
+                try:
+                    vpaths = _save_viz(model, viz_sample, originals, device, run_id, epoch, model_id=args.model)
+                    viz.extend(vpaths)
+                    log(run_id, f"[train]   viz epoch {epoch}: {len(vpaths)} panels -> viz/{run_id}/")
+                except Exception as ee:
+                    log(run_id, f"[train]   viz error epoch {epoch}: {ee}")
+            # 测试 eval：每 eval_every epoch（held-out test split）
             if eval_on and (epoch % args.eval_every == 0):
                 try:
                     em = _run_eval(model, eval_sample, device, args.lamb, args.batch, model_id=args.model)
                     em["epoch"] = epoch
                     test_metrics.append(em)
-                    vpaths = _save_viz(model, viz_sample, originals, device, run_id, epoch, model_id=args.model)
-                    viz.extend(vpaths)  # 每 epoch 6 条 {epoch, sample, path}
                     log(run_id, f"[train]   eval epoch {epoch}: test psnr={em['psnr']:.2f} bpp={em['bpp']:.3f} "
-                                f"loss={em['loss']:.4f} | viz {len(vpaths)} panels -> viz/{run_id}/")
+                                f"loss={em['loss']:.4f}")
                     # best checkpoint：test PSNR 创新高时存 <run>.best.pth（覆盖）
                     if em["psnr"] > best_psnr:
                         best_psnr = em["psnr"]
@@ -815,7 +822,7 @@ def main() -> int:
                                      "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
                         log(run_id, f"[train]   new best test psnr={em['psnr']:.2f} @ epoch {epoch} -> {run_id}.best.pth")
                 except Exception as ee:
-                    log(run_id, f"[train]   eval/viz error epoch {epoch}: {ee}")
+                    log(run_id, f"[train]   eval error epoch {epoch}: {ee}")
             # 实时曲线：每 epoch 把当前 loss_series 落盘，前端轮询即可看到曲线增长
             _record_run(args, run_id, started, status="running", loss_series=loss_series,
                         test_metrics=test_metrics, viz=viz)
