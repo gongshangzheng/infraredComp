@@ -181,7 +181,8 @@ async function reload() {
         if (datasets.length) filters.value.dataset = datasets[0]
       }
       if (!filters.value.method) {
-        filters.value.method = methods.value.includes('canny') ? 'canny' : (methods.value[0] || null)
+        const dsMethods = methodOptions.value
+        filters.value.method = dsMethods.length ? dsMethods[0].value : (methods.value[0] || null)
       }
       defaultsApplied = true
     } else if (filters.value.method && !methods.value.includes(filters.value.method)) {
