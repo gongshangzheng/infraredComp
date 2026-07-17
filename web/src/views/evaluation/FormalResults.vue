@@ -136,7 +136,7 @@ function rdOption(metric) {
   })
   return {
     legend: { type: 'scroll', bottom: 0, textStyle: { fontSize: 11 } },
-    grid: { left: 58, right: 24, top: 16, bottom: 48 },
+    grid: { left: 58, right: 24, top: 16, bottom: 72 },
     tooltip: { trigger: 'axis', confine: true, valueFormatter: (v) => (Array.isArray(v) ? `bpp=${v[0]} ${yName.split(' ')[0]}=${v[1]}` : v) },
     xAxis: { type: 'value', name: 'bpp', nameLocation: 'middle', nameGap: 28, scale: true },
     yAxis: { type: 'value', name: yName, scale: true },
