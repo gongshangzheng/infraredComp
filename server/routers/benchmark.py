@@ -36,7 +36,8 @@ async def get_results(
     sequence: Optional[str] = None,
     crf: Optional[int] = None,
 ):
-    """List benchmark runs, optionally filtered by codec / sequence / crf."""
+    """List benchmark runs, optionally filtered by codec / sequence / crf.
+    Strips per_frame_psnr/ssim arrays (300+ floats each) to keep response small."""
     data = _load_results()
     runs = data.get("runs", [])
     if codec:
@@ -45,6 +46,8 @@ async def get_results(
         runs = [r for r in runs if r.get("sequence_name") == sequence]
     if crf is not None:
         runs = [r for r in runs if r.get("crf") == crf]
+    runs = [{k: v for k, v in r.items() if k not in ("per_frame_psnr", "per_frame_ssim")}
+            for r in runs]
     return {"generated_at": data.get("generated_at"), "total": len(runs), "runs": runs}
 
 
