@@ -1,57 +1,57 @@
 <template>
-  <div class="page-container">
+  <div class=”page-container”>
     <!-- 筛选:数据集/方法/序列/codec/crf -->
-    <n-card size="small">
-      <n-space align="center" size="small" wrap>
-        <span class="lbl">数据集</span>
-        <n-select v-model:value="filters.dataset" :options="datasetOptions" placeholder="全部" clearable size="small" style="width:150px" />
-        <span class="lbl">方法</span>
-        <n-select v-model:value="filters.method" :options="methodOptions" placeholder="全部" clearable size="small" style="width:130px" />
-        <span class="lbl">序列</span>
-        <n-select v-model:value="filters.sequence" :options="sequenceOptions" placeholder="全部" clearable size="small" style="width:140px" />
-        <span class="lbl">codec</span>
-        <n-select v-model:value="filters.codec" :options="codecOptions" placeholder="全部" clearable size="small" style="width:120px" />
-        <span class="lbl">CRF</span>
-        <n-select v-model:value="filters.crf" :options="crfOptions" placeholder="全部" clearable size="small" style="width:100px" />
-        <n-button size="small" @click="load">刷新</n-button>
+    <n-card size=”small”>
+      <n-space align=”center” size=”small” wrap>
+        <span class=”lbl”>数据集</span>
+        <n-select v-model:value=”filters.dataset” :options=”datasetOptions” placeholder=”全部” clearable size=”small” style=”width:150px” />
+        <span class=”lbl”>方法</span>
+        <n-select v-model:value=”filters.method” :options=”methodOptions” placeholder=”全部” clearable size=”small” style=”width:130px” />
+        <span class=”lbl”>序列</span>
+        <n-select v-model:value=”filters.sequence” :options=”sequenceOptions” placeholder=”全部” clearable size=”small” style=”width:140px” />
+        <span class=”lbl”>codec</span>
+        <n-select v-model:value=”filters.codec” :options=”codecOptions” placeholder=”全部” clearable size=”small” style=”width:120px” />
+        <span class=”lbl”>CRF</span>
+        <n-select v-model:value=”filters.crf” :options=”crfOptions” placeholder=”全部” clearable size=”small” style=”width:100px” />
+        <n-button size=”small” @click=”reload”>刷新</n-button>
       </n-space>
     </n-card>
 
-    <n-spin :show="loading">
-      <div v-if="filteredResults.length === 0" class="empty">
-        无结果。先在"评测运行"跑一次 speed run,或调整筛选。
+    <n-spin :show=”loading”>
+      <div v-if=”allFiltered.length === 0 && !loading” class=”empty”>
+        无结果。先在”评测运行”跑一次 speed run,或调整筛选。
       </div>
       <div v-else>
-        <div v-for="codec in codecGroups" :key="codec" class="codec-row">
-          <div class="codec-label">{{ codec }}</div>
-          <div class="grid">
-            <div v-for="r in runsByCodec[codec]" :key="r.id" class="cell"
-                 :class="{ 'cell-expanded': isExpanded(r.id) }">
-              <n-button class="expand-btn" size="tiny" quaternary
-                        @click="toggleExpand(r.id)">
+        <div v-for=”codec in codecGroups” :key=”codec” class=”codec-row”>
+          <div class=”codec-label”>{{ codec }}</div>
+          <div class=”grid”>
+            <div v-for=”r in runsByCodec[codec]” :key=”r.id” class=”cell”
+                 :class=”{ 'cell-expanded': isExpanded(r.id) }”>
+              <n-button class=”expand-btn” size=”tiny” quaternary
+                        @click=”toggleExpand(r.id)”>
                 <template #icon>
-                  <n-icon :component="isExpanded(r.id) ? ContractOutline : ExpandOutline" />
+                  <n-icon :component=”isExpanded(r.id) ? ContractOutline : ExpandOutline” />
                 </template>
               </n-button>
-              <div class="cell-title">{{ r.sequence_name }} · crf{{ r.crf }}</div>
-              <div class="videos">
-                <div class="v">
-                  <span class="vlabel">原始</span>
-                  <video v-if="r.original_video" :src="getOutputUrl(r.original_video)" preload="none" controls playsinline class="cell-video" />
-                  <div v-else class="no-video">无</div>
+              <div class=”cell-title”>{{ r.sequence_name }} · crf{{ r.crf }}</div>
+              <div class=”videos”>
+                <div class=”v”>
+                  <span class=”vlabel”>原始</span>
+                  <video v-if=”r.original_video” :src=”getOutputUrl(r.original_video)” preload=”none” controls playsinline class=”cell-video” />
+                  <div v-else class=”no-video”>无</div>
                 </div>
-                <div class="v">
-                  <span class="vlabel">边缘</span>
-                  <video v-if="r.contour_video" :src="getOutputUrl(r.contour_video)" preload="none" controls playsinline class="cell-video" />
-                  <div v-else class="no-video">无</div>
+                <div class=”v”>
+                  <span class=”vlabel”>边缘</span>
+                  <video v-if=”r.contour_video” :src=”getOutputUrl(r.contour_video)” preload=”none” controls playsinline class=”cell-video” />
+                  <div v-else class=”no-video”>无</div>
                 </div>
-                <div class="v">
-                  <span class="vlabel">重建</span>
-                  <video v-if="r.output_video" :src="getOutputUrl(r.output_video)" preload="none" controls playsinline class="cell-video" />
-                  <div v-else class="no-video">无码流</div>
+                <div class=”v”>
+                  <span class=”vlabel”>重建</span>
+                  <video v-if=”r.output_video” :src=”getOutputUrl(r.output_video)” preload=”none” controls playsinline class=”cell-video” />
+                  <div v-else class=”no-video”>无码流</div>
                 </div>
               </div>
-              <div class="cell-meta">
+              <div class=”cell-meta”>
                 PSNR {{ fmt(r.psnr) }} · SSIM {{ fmt(r.ssim) }} · bpp {{ fmt(r.bpp) }}
                 · enc {{ fmt(r.enc_fps) }}fps · dec {{ fmt(r.dec_fps) }}fps
               </div>
@@ -60,6 +60,12 @@
         </div>
       </div>
     </n-spin>
+
+    <!-- 加载更多 -->
+    <div v-if=”hasMore” class=”load-more”>
+      <n-button size=”small” :loading=”loadingMore” @click=”loadMore”>加载更多（{{ allFiltered.length }} / {{ total }}）</n-button>
+    </div>
+    <div v-else-if=”total > 0” class=”load-more-hint”>已加载全部 {{ total }} 条结果</div>
   </div>
 </template>
 
@@ -74,10 +80,13 @@ const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
+const loadingMore = ref(false)
 const results = ref([])
 const methods = ref([])
+const total = ref(0)
 const expanded = ref(new Set())
-// 筛选器初始值从 URL query 恢复（F5 刷新不再清空）；crf 是数字需 Number()。
+const PAGE_SIZE = 24
+
 const numQ = (v) => (v == null || v === '' ? null : Number(v))
 const filters = ref({
   dataset: route.query.dataset || null,
@@ -87,7 +96,6 @@ const filters = ref({
   crf: numQ(route.query.crf),
 })
 
-// 当前筛选写回 URL query（replace 不堆历史）；客户端筛选是响应式的，watch 即时同步。
 function syncQuery() {
   const q = {}
   for (const k of ['dataset', 'method', 'sequence', 'codec']) {
@@ -111,7 +119,7 @@ const codecOptions = computed(() => [...new Set(results.value.map(r => r.codec))
 const crfOptions = computed(() => [...new Set(results.value.map(r => r.crf))].sort((a, b) => a - b).map(c => ({ label: 'crf' + c, value: c })))
 const datasetOptions = computed(() => [...new Set(results.value.map(r => r.dataset_name).filter(Boolean))].map(d => ({ label: d, value: d })))
 
-const filteredResults = computed(() => {
+const allFiltered = computed(() => {
   let list = results.value
   if (filters.value.dataset) list = list.filter(r => r.dataset_name === filters.value.dataset)
   if (filters.value.method) list = list.filter(r => r.method === filters.value.method)
@@ -121,10 +129,12 @@ const filteredResults = computed(() => {
   return list
 })
 
-const codecGroups = computed(() => [...new Set(filteredResults.value.map(r => r.codec))].sort())
+const hasMore = computed(() => allFiltered.value.length < total.value)
+
+const codecGroups = computed(() => [...new Set(allFiltered.value.map(r => r.codec))].sort())
 const runsByCodec = computed(() => {
   const m = {}
-  for (const r of filteredResults.value) {
+  for (const r of allFiltered.value) {
     (m[r.codec] = m[r.codec] || []).push(r)
   }
   return m
@@ -135,15 +145,23 @@ function fmt(v) {
   return typeof v === 'number' ? v.toFixed(2) : v
 }
 
-let defaultsApplied = false   // 默认值只在首次挂载填一次，之后刷新/切换都保留用户选择
-async function load() {
+let defaultsApplied = false
+
+async function fetchPage(offset, limit) {
+  return getEvalResults({ mode: 'speed', offset, limit })
+}
+
+async function reload() {
   loading.value = true
   try {
-    const [res, meth] = await Promise.all([getEvalResults({ mode: 'speed' }), getMethods()])
-    results.value = res
+    const [res, meth] = await Promise.all([
+      fetchPage(0, PAGE_SIZE),
+      getMethods()
+    ])
+    const data = res.runs !== undefined ? res : { runs: res, total: Array.isArray(res) ? res.length : 0 }
+    results.value = data.runs || []
+    total.value = data.total ?? results.value.length
     methods.value = meth.methods || []
-    // 仅首次进入填默认值（首个数据集 + canny）；用户手动改过或清空过都不覆盖。
-    // sequence/codec/crf 仍默认“全部”（多值，全选更合理）。客户端筛选响应式，切换自动重过滤。
     if (!defaultsApplied) {
       if (!filters.value.dataset) {
         const datasets = [...new Set(results.value.map(r => r.dataset_name).filter(Boolean))]
@@ -160,10 +178,26 @@ async function load() {
     loading.value = false
   }
 }
-onMounted(load)
+
+async function loadMore() {
+  loadingMore.value = true
+  try {
+    const res = await fetchPage(results.value.length, PAGE_SIZE)
+    if (res.runs !== undefined) {
+      results.value.push(...res.runs)
+      total.value = res.total ?? total.value
+    } else if (Array.isArray(res)) {
+      results.value.push(...res)
+    }
+  } finally {
+    loadingMore.value = false
+  }
+}
+
+onMounted(reload)
 </script>
 
-<style scoped lang="scss">
+<style scoped lang=”scss”>
 .codec-row { margin-bottom: 20px; }
 .codec-label { font-weight: 700; margin-bottom: 8px; color: var(--color-text-primary); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; }
@@ -181,4 +215,6 @@ onMounted(load)
 .no-video { height: 80px; display: flex; align-items: center; justify-content: center; color: var(--color-text-dim); background: var(--color-bg); font-size: 11px; }
 .cell-meta { font-size: 11px; color: var(--color-text-dim); margin-top: 6px; }
 .empty { padding: 40px; text-align: center; color: var(--color-text-dim); }
+.load-more { text-align: center; padding: 16px; }
+.load-more-hint { text-align: center; padding: 12px; font-size: 12px; color: var(--color-text-dim); }
 </style>

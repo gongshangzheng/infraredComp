@@ -34,10 +34,13 @@
       <n-card v-if="run" size="small" class="block" title="重建可视化（每 epoch 一个 carousel：左原图 | 中输入边缘 | 右重建，‹ › 切样本）">
         <div v-if="epochGroups.length" class="viz-grid">
           <VizEpochCard
-            v-for="g in epochGroups" :key="g.epoch"
+            v-for="g in visibleEpochs" :key="g.epoch"
             :epoch="g.epoch" :samples="g.samples"
             @preview="(src, title) => { previewSrc = src; previewTitle = title; previewVisible = true }"
           />
+        </div>
+        <div v-if="epochGroups.length > vizLimit" class="viz-load-more">
+          <n-button size="small" @click="vizLimit += 12">加载更多（{{ visibleEpochs.length }} / {{ epochGroups.length }}）</n-button>
         </div>
         <EmptyState v-else description="暂无可视化（首个 epoch viz 还没生成）" />
       </n-card>
@@ -76,6 +79,7 @@ const run = ref(null)
 const previewVisible = ref(false)
 const previewSrc = ref('')
 const previewTitle = ref('')
+const vizLimit = ref(12)
 
 const RUNNING = new Set(['running', 'started'])
 const isLive = computed(() => run.value && RUNNING.has(run.value.status))
@@ -90,6 +94,7 @@ const epochGroups = computed(() => {
   }
   return [...map.values()].sort((a, b) => a.epoch - b.epoch)
 })
+const visibleEpochs = computed(() => epochGroups.value.slice(0, vizLimit.value))
 const statusType = computed(() => {
   const s = run.value?.status
   return s === 'completed' ? 'success' : s === 'failed' ? 'error' : s === 'running' ? 'info' : 'default'
@@ -166,5 +171,6 @@ onUnmounted(stopPolling)
 .viz-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px;
 }
+.viz-load-more { text-align: center; padding: 12px; }
 .preview-img { width: 100%; display: block; border-radius: 8px; }
 </style>

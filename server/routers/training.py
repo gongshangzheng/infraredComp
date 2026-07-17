@@ -253,7 +253,8 @@ _STRIP_FIELDS = ("test_metrics", "viz")
 
 
 @router.get("/runs")
-async def get_runs(model: str = None, dataset: str = None, status: str = None):
+async def get_runs(model: str = None, dataset: str = None, status: str = None,
+                   offset: int = None, limit: int = None):
     data = _load_metrics()
     runs = data.get("runs", [])
     if model:
@@ -264,6 +265,11 @@ async def get_runs(model: str = None, dataset: str = None, status: str = None):
         runs = [r for r in runs if r.get("status") == status]
     runs = [{k: v for k, v in _attach_ckpt_meta(r).items() if k not in _STRIP_FIELDS}
             for r in runs]
+    if offset is not None or limit is not None:
+        off = offset or 0
+        lim = limit or 50
+        page = runs[off:off + lim]
+        return {"total": len(runs), "offset": off, "limit": lim, "runs": page}
     return {"generated_at": data.get("generated_at"), "total": len(runs), "runs": runs}
 
 

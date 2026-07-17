@@ -199,6 +199,22 @@
               "note": "[完成] .git 移除 + gitlink 清除 + force push 解除 secret scanning；difftok/SKILL.md 就位，涵盖 ContourVQAE 架构图、BSDS500 数据准备、训练/评测命令、关键文件表、FAQ"
             }
           ]
+        },
+        {
+          "id": "t9-5",
+          "title": "difftok imagenet 全量训练：预提取 + 每 3 epoch 测试",
+          "status": "completed",
+          "assignee": "郑鑫裕",
+          "startDate": "2026-07-17",
+          "endDate": "2026-07-17",
+          "description": "改动 train_model.py 支持 ImageNet 全量 train/test/val 三 split 训练流程。\n\n• 预提取阶段：imagenet-* 自动触发，canny 方法，skip-if-exists（manifest 判全量完成，per-frame skip 续跑部分提取）\n• difftok 默认：eval-every=3、eval-split=test、viz-split=val\n• 新增 --preextract/--no-preextract/--preextract-splits/--preextract-workers/--preextract-extract-size flags",
+          "children": [],
+          "progress": [
+            {
+              "date": "2026-07-17",
+              "note": "[完成] _preextract_imagenet_splits 函数复用 extract_imagenet_contour 的 build_groups/_init/_one_group（per-frame skip-if-exists）；manifest 判全量跳过；difftok 默认 eval_every=3/eval_split=test/viz_split=val；imagenet-* 自动开启预提取（--no-preextract 可关）"
+            }
+          ]
         }
       ],
       "progress": [

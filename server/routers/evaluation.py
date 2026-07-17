@@ -822,9 +822,11 @@ async def run_evaluation(data: dict = Body(...)):
 # ---- results -------------------------------------------------------------- #
 
 @router.get("/results")
-async def get_results(model: str = None, dataset: str = None, metric: str = None, mode: str = None):
+async def get_results(model: str = None, dataset: str = None, metric: str = None, mode: str = None,
+                      offset: int = None, limit: int = None):
     """列 contour-video 评测结果（每条附 output_video 供按需播放）。
-    mode=formal/speed 过滤(formal→xiph_cif.json,speed→xiph_cif_speed.json 分文件)。"""
+    mode=formal/speed 过滤(formal→xiph_cif.json,speed→xiph_cif_speed.json 分文件)。
+    offset/limit 分页：提供时返回 {total, offset, limit, runs}，不提供时返回裸数组（向后兼容）。"""
     data = _load_results()
     runs = data.get("runs", [])
     if mode:
@@ -865,6 +867,12 @@ async def get_results(model: str = None, dataset: str = None, metric: str = None
         out = [r for r in out if r.get("model_name") == model]
     if dataset:
         out = [r for r in out if r.get("dataset_name") == dataset]
+    # Pagination
+    if offset is not None or limit is not None:
+        off = offset or 0
+        lim = limit or 50
+        page = out[off:off + lim]
+        return {"total": len(out), "offset": off, "limit": lim, "runs": page}
     return out
 
 
@@ -913,8 +921,9 @@ async def get_result_detail(result_id: str):
 # ---- outputs（按需服务输出视频/码流，防穿越）------------------------------- #
 
 @router.get("/outputs")
-async def list_outputs():
-    """列 OUTPUTS_DIR 下可查看的输出文件（bitstreams 压缩码流 + recon 重建帧）。"""
+async def list_outputs(offset: int = None, limit: int = None):
+    """列 OUTPUTS_DIR 下可查看的输出文件（bitstreams 压缩码流 + recon 重建帧）。
+    offset/limit 分页：提供时返回 {total, offset, limit, outputs}。"""
     if not os.path.isdir(OUTPUTS_DIR):
         return {"outputs": []}
     out = []
@@ -931,6 +940,11 @@ async def list_outputs():
                 "size_bytes": os.path.getsize(full),
             })
     out.sort(key=lambda x: x["path"])
+    if offset is not None or limit is not None:
+        off = offset or 0
+        lim = limit or 100
+        page = out[off:off + lim]
+        return {"total": len(out), "offset": off, "limit": lim, "outputs": page}
     return {"outputs": out}
 
 

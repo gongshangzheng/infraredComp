@@ -157,6 +157,44 @@ def _ensure_contour_dir(dataset_id: str, method: str) -> Path:
     return Path(artifact.frames_dir)
 
 
+def _preextract_imagenet_splits(
+    splits: list[str], method: str, workers: int, size: int,
+    extract_size: int, shards: int, run_id: str,
+) -> None:
+    """Pre-extract imagenet contours for each split (skip-if-exists per split via manifest check).
+    Per-frame skip-if-exists in _one_group allows resuming partial extractions."""
+    from multiprocessing import Pool
+    from scripts.extract_imagenet_contour import build_groups, _init, _one_group, _gen_tasks
+    from scripts.imagenet_contour_dataset import preextracted_contour_dir
+
+    for split in splits:
+        out_dir = preextracted_contour_dir(split, method)
+        if (out_dir / "manifest.json").is_file():
+            log(run_id, f"[preextract] {split} already has manifest, skip ({out_dir})")
+            continue
+        out_dir.mkdir(parents=True, exist_ok=True)
+        file_paths, groups, total = build_groups(split, shards)
+        log(run_id, f"[preextract] {split}: extracting {total} rows -> {out_dir} "
+                    f"(method={method}, workers={workers}, size={size})")
+        done = 0
+        tasks = list(_gen_tasks(groups, str(out_dir), size, limit=0))
+        with Pool(processes=workers, initializer=_init,
+                  initargs=(file_paths, method, size, extract_size)) as pool:
+            for new in pool.imap_unordered(_one_group, tasks, chunksize=1):
+                done += new
+                if done and done % 5000 == 0:
+                    log(run_id, f"[preextract] {split}: {done}/{total} ({100*done/max(1,total):.1f}%)")
+        manifest = {
+            "source_name": f"imagenet_{split}",
+            "method": method,
+            "size": size,
+            "frame_count": total,
+            "frames_dir": str(out_dir),
+        }
+        (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
+        log(run_id, f"[preextract] {split}: done ({done} new frames, total {total})")
+
+
 def resolve_training_dataset(dataset_id: str, method: str, max_images: int, size: int,
                              shards: int, *, is_video: bool, seq_len: int = 4,
                              max_sequences: int = 64, num_workers: int = 0,
@@ -569,11 +607,24 @@ def main() -> int:
     ap.add_argument("--load", default=None, help="checkpoint 路径/run_id：加载权重 warm-start，fresh optimizer，epoch 1..N")
     ap.add_argument("--resume", default=None, help="checkpoint 路径/run_id：加载权重+继承旧 run 曲线，epoch 从 last+1 续跑 N 个")
     # 训练中定期 eval + 可视化（held-out val）
-    ap.add_argument("--eval-every", dest="eval_every", type=int, default=1, help="每 N epoch 跑一次 test eval+可视化（0=关）")
-    ap.add_argument("--eval-split", dest="eval_split", default="val", help="eval 用的 held-out split（imagenet:val；BSDS:test）")
-    ap.add_argument("--viz-split", dest="viz_split", default=None, help="可视化用的 split（默认 = --eval-split；BSDS 用 val）")
+    ap.add_argument("--eval-every", dest="eval_every", type=int, default=None,
+                    help="每 N epoch 跑一次 test eval+可视化（0=关；默认 difftok=3，其他=1）")
+    ap.add_argument("--eval-split", dest="eval_split", default=None,
+                    help="eval 用的 held-out split（默认 difftok=test，其他=val；imagenet:val；BSDS:test）")
+    ap.add_argument("--viz-split", dest="viz_split", default=None, help="可视化用的 split（默认 difftok=val，其他=eval-split）")
     ap.add_argument("--eval-samples", dest="eval_samples", type=int, default=512, help="每次 eval 的固定 val 图数")
     ap.add_argument("--viz-samples", dest="viz_samples", type=int, default=6, help="可视化固定图数（每 epoch 同一批，看重建演变）")
+    # imagenet 预提取（自动开启；skip-if-exists per split via manifest；per-frame skip 允许续跑）
+    ap.add_argument("--preextract", dest="preextract", action="store_true", default=None,
+                    help="预提取 imagenet 轮廓到 PNG（默认 imagenet-* 自动开启）")
+    ap.add_argument("--no-preextract", dest="preextract", action="store_false",
+                    help="跳过预提取（直接用在线流式或已有 PNG）")
+    ap.add_argument("--preextract-splits", dest="preextract_splits", default="train,test,val",
+                    help="预提取的 splits（逗号分隔；默认 train,test,val）")
+    ap.add_argument("--preextract-workers", dest="preextract_workers", type=int, default=16,
+                    help="预提取工作进程数")
+    ap.add_argument("--preextract-extract-size", dest="preextract_extract_size", type=int, default=256,
+                    help="预提取时输入图 max 边长（bounds canny/hed 成本；最终存 --size）")
     # video (ssf2020) 专用
     ap.add_argument("--seq-len", type=int, default=4, help="视频序列长度（ssf2020）")
     ap.add_argument("--max-sequences", type=int, default=64, help="最大序列数（ssf2020）")
@@ -586,6 +637,25 @@ def main() -> int:
         help="关闭 warm-start（ssf2020 从 scratch 训练）",
     )
     args = ap.parse_args()
+
+    # difftok 默认：每 3 epoch 测试（test split）、val 用于可视化
+    if args.model == "difftok":
+        if args.eval_every is None:
+            args.eval_every = 3
+        if args.eval_split is None:
+            args.eval_split = "test"
+        if args.viz_split is None:
+            args.viz_split = "val"
+    else:
+        if args.eval_every is None:
+            args.eval_every = 1
+        if args.eval_split is None:
+            args.eval_split = "val"
+        if args.viz_split is None:
+            args.viz_split = args.eval_split
+    # imagenet 数据集默认自动开启预提取（除非显式 --no-preextract）
+    if args.preextract is None:
+        args.preextract = args.dataset.startswith("imagenet-")
 
     is_video = _is_video_model(args.model)
     device = args.device if torch.cuda.is_available() or args.device == "cpu" else "cpu"
@@ -612,6 +682,22 @@ def main() -> int:
     # 训练中可见：立即记一条 running（resume 时带继承的曲线，不 wipe）
     _record_run(args, run_id, started, status="running", loss_series=resumed_ls,
                 test_metrics=resumed_tm, viz=resumed_viz)
+
+    # 0. imagenet 预提取（自动开启；skip-if-exists per split via manifest；per-frame skip 允许续跑）
+    if args.preextract and args.dataset.startswith("imagenet-"):
+        splits = [s.strip() for s in args.preextract_splits.split(",") if s.strip()]
+        log(run_id, f"[preextract] phase start: splits={splits} method={args.method} "
+                    f"workers={args.preextract_workers} size={args.size}")
+        try:
+            _preextract_imagenet_splits(
+                splits=splits, method=args.method, workers=args.preextract_workers,
+                size=args.size, extract_size=args.preextract_extract_size,
+                shards=args.shards, run_id=run_id,
+            )
+            log(run_id, f"[preextract] phase done — training will use preextracted PNGs")
+        except Exception as e:
+            log(run_id, f"[preextract] phase failed: {e} — falling back to streaming extraction")
+            # 预提取失败不阻断训练：resolve_training_dataset 会回退到在线流式提取
 
     # 1. 数据
     try:
