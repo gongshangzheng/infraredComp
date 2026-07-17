@@ -83,3 +83,8 @@ mobileclip2_*.pt
 models/nevc/models/*.pth.tar
 models/nevc/models/*.pth
 models/lsmc/*.exe
+
+# Frontend error log (runtime, occupied by dev server — never track)
+frontend-err.log
+# Root results pngs (generated comparison charts)
+results/*.png
