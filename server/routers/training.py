@@ -246,6 +246,12 @@ def _attach_ckpt_meta(run: dict) -> dict:
     return run
 
 
+# Fields stripped from /runs list responses to keep them lightweight.
+# viz can be 6×epochs entries (7776+); test_metrics mirrors loss_series length.
+# loss_series is kept — the frontend training curve overlay needs it.
+_STRIP_FIELDS = ("test_metrics", "viz")
+
+
 @router.get("/runs")
 async def get_runs(model: str = None, dataset: str = None, status: str = None):
     data = _load_metrics()
@@ -256,7 +262,8 @@ async def get_runs(model: str = None, dataset: str = None, status: str = None):
         runs = [r for r in runs if r.get("dataset") == dataset]
     if status:
         runs = [r for r in runs if r.get("status") == status]
-    runs = [_attach_ckpt_meta(r) for r in runs]
+    runs = [{k: v for k, v in _attach_ckpt_meta(r).items() if k not in _STRIP_FIELDS}
+            for r in runs]
     return {"generated_at": data.get("generated_at"), "total": len(runs), "runs": runs}
 
 

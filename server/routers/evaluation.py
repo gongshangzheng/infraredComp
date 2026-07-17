@@ -15,6 +15,7 @@ import os
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, Body
@@ -72,10 +73,33 @@ def _dataset_from_filename(name: str) -> str:
     return "default" if stem == "results" else stem
 
 
+_RESULTS_CACHE: dict = {}  # {mtime: float, ts: float, value: dict}
+
+
 def _load_results() -> dict:
     """读 results/video/ 下所有 *.json(多数据集共存),聚合 runs。
     每条 run 带 dataset 字段(envelope dataset 优先,否则从文件名推断) +
-    mode 字段(envelope mode 优先,否则按文件名/speed 推断:含 _speed -> speed,否则 formal)。"""
+    mode 字段(envelope mode 优先,否则按文件名/speed 推断:含 _speed -> speed,否则 formal)。
+
+    5s TTL + mtime 感知缓存：文件没变就直接返回缓存的解析结果。
+    """
+    now = time.monotonic()
+    # Compute the newest mtime among *.json files (0 if dir missing)
+    newest_mtime = 0.0
+    if os.path.isdir(RESULTS_VIDEO_DIR):
+        for jf in Path(RESULTS_VIDEO_DIR).glob("*.json"):
+            try:
+                mt = jf.stat().st_mtime
+                if mt > newest_mtime:
+                    newest_mtime = mt
+            except OSError:
+                continue
+    cached = _RESULTS_CACHE.get("value")
+    if (cached is not None
+            and _RESULTS_CACHE.get("mtime") == newest_mtime
+            and (now - _RESULTS_CACHE.get("ts", 0)) < 5.0):
+        return cached
+
     all_runs: list = []
     latest_gen = None
     if os.path.isdir(RESULTS_VIDEO_DIR):
@@ -110,7 +134,10 @@ def _load_results() -> dict:
                     r.pop("per_frame_psnr", None)  # strip: per-frame 数组占大头（300帧×2），前端聚合视图不需要
                     r.pop("per_frame_ssim", None)
                     all_runs.append(r)
-    return {"generated_at": latest_gen, "runs": all_runs}
+    result = {"generated_at": latest_gen, "runs": all_runs}
+    _RESULTS_CACHE.clear()
+    _RESULTS_CACHE.update(value=result, mtime=newest_mtime, ts=now)
+    return result
 
 
 def _bitstream_for(run: dict) -> str | None:
@@ -802,18 +829,28 @@ async def get_results(model: str = None, dataset: str = None, metric: str = None
     runs = data.get("runs", [])
     if mode:
         runs = [r for r in runs if r.get("mode") == mode]
-    # 给每条 run 附 output_video（若码流存在）
+    # Per-request dedup caches: avoid repeated os.listdir / ffmpeg probes
+    # for the same (seq, method) across different codec/crf runs.
+    src_cache: dict[str, str | None] = {}
+    con_cache: dict[str, str | None] = {}
     out = []
     for r in runs:
         vid = _bitstream_for(r)
         row = dict(r)
         row["output_video"] = vid
-        # 3-video cell on the speed page: original + edge + reconstruction.
         seq = r.get("sequence_name") or ""
         method = r.get("method") or "canny"
-        row["original_video"] = _ensure_source_video(seq) if seq else None
-        row["contour_video"] = _ensure_contour_video(seq, method) if seq else None
-        # 兼容上游契约：model_name / dataset_name / metrics
+        if seq:
+            if seq not in src_cache:
+                src_cache[seq] = _ensure_source_video(seq)
+            row["original_video"] = src_cache[seq]
+            con_key = f"{seq}/{method}"
+            if con_key not in con_cache:
+                con_cache[con_key] = _ensure_contour_video(seq, method)
+            row["contour_video"] = con_cache[con_key]
+        else:
+            row["original_video"] = None
+            row["contour_video"] = None
         row["model_name"] = r.get("codec")
         row["dataset_name"] = r.get("dataset") or r.get("sequence_name")
         row["metrics"] = {
