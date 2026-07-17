@@ -1,0 +1,324 @@
+# =============================================================================
+# Poet Stage 1 Mask Base Configuration
+# =============================================================================
+# Based on ViT5-Base architecture:
+# - img_size=224, patch_size=16, embed_dim=768, depth=12, num_heads=12
+# - mlp_ratio=4, qkv_bias=False, num_registers=4, flash=False
+# - RMSNorm(eps=1e-6), Block, rope=True, rope_reg=True, reg_theta=100, qk_norm=True
+# - Decoder uses mask initialization mode (no noise/timestep)
+# =============================================================================
+# Project Configuration
+project_name: diffTok_stage1_mask_base_4096
+# =============================================================================
+# Model Configuration
+# =============================================================================
+model:
+  # === Shared Parameters ===
+  img_size: 224
+  patch_size: 16
+  num_latent_tokens: 192
+  num_classes: 1000  # ImageNet classes
+  inout_chans: 3  # Input/output channels (RGB=3)
+  # === Encoder Configuration (ViT5-Base) ===
+  encoder:
+    # Core Architecture
+    embed_dim: 768
+    depth: 12
+    num_heads: 12
+    mlp_ratio: 4.0
+    num_registers: 4
+    # Attention Configuration
+    qkv_bias: false
+    flash: false  # Flash Attention disabled
+    qk_norm: true  # Normalize QK
+    # Position Encoding
+    rope: true  # RoPE enabled
+    rope_reg: true  # RoPE for register tokens
+    reg_theta: 100  # RoPE theta for register tokens
+    latent_theta: 1000  # RoPE theta for latent tokens
+    # Dropout
+    drop_rate: 0.0
+    attn_drop_rate: 0.0
+    # Absolute Position Encoding
+    ape: true  # Use Absolute Position Encoding
+    latent_ape: true  # Use APE for latent tokens
+  # === Decoder Configuration (ViT5-Base) ===
+  decoder:
+    # Core Architecture
+    embed_dim: 768
+    depth: 12
+    num_heads: 12
+    mlp_ratio: 4.0
+    num_registers: 4
+    # Attention Configuration
+    qkv_bias: false
+    flash: false
+    qk_norm: true
+    # Position Encoding
+    rope: true
+    rope_reg: true
+    reg_theta: 100
+    latent_theta: 1000
+    # Dropout
+    drop_rate: 0.0
+    attn_drop_rate: 0.0
+    # Absolute Position Encoding
+    ape: true
+    latent_ape: true  # Use APE for latent tokens
+    predict_codewords: true  # Predict proxy VQ codewords instead of RGB pixels
+    proxy_codebook_size: 1024  # Proxy tokenizer codebook size
+    # Initialization Mode
+  # === Quantizer Configuration ===
+  quantizer:
+    token_dim: 64  # VQ token dimension (projected from encoder_embed_dim=768)
+    commitment_cost: 0.25  # VQ commitment cost (beta)
+    codebook_size: 4096  # Codebook size (4K)
+    reservoir_size: 40960  # 10x codebook_size for initialization
+    dead_code_threshold: 5  # Threshold for resetting unused codebook entries
+    decay: 0.99  # EMA decay for codebook updates
+    eps: 1.0e-5  # Small epsilon for numerical stability
+    use_l2_norm: true  # Whether to use L2 normalization (cosine VQ)
+  # === Generator Configuration ===
+  generator:
+    # Core Architecture
+    embed_dim: 768
+    depth: 12
+    num_heads: 12
+    mlp_ratio: 4.0
+    num_registers: 4
+    # Attention Configuration
+    qkv_bias: false
+    flash: false
+    qk_norm: true
+    # Position Encoding
+    rope_reg: true
+    reg_theta: 100
+    latent_theta: 1000
+    num_condition_encoder_blocks: 8
+    # Dropout
+    drop_rate: 0.0
+    attn_drop_rate: 0.0
+    # Absolute Position Encoding
+  # === Checkpoint Paths ===
+  # Uncomment and set paths if loading pretrained ViT5 weights
+  # encoder_checkpoint_path: "path/to/vit5_encoder.pt"
+  # decoder_checkpoint_path: "path/to/vit5_decoder.pt"
+  # generator_checkpoint_path: "path/to/vit5_generator.pt"
+  encoder_checkpoint_path: null
+  decoder_checkpoint_path: null
+  generator_checkpoint_path: null
+  # === Freeze Settings ===
+  freeze_encoder: false  # Freeze encoder during training
+  freeze_decoder: false  # Freeze decoder during training
+  freeze_generator: false  # Freeze generator during training
+  # === EMA Settings ===
+  ema_decay1: 0.9999  # Main EMA decay
+  ema_decay2: 0.9996  # Secondary EMA decay
+  # === REPA Projection Layer Dimensions ===
+  # Projection layers are always created (trained regardless of REPA usage)
+  repa_proj_hidden_dim: 1024  # Hidden dimension for projection layers
+  repa_proj_embed_dim: 768    # Embedding dimension for projection layers (should match DINOv2 dim)
+  # === Data Shards (for ImageNet dataset) ===
+  # train_shards_path: "path/to/train_shards"
+  # eval_shards_path: "path/to/eval_shards"
+# =============================================================================
+# Training Configuration
+# =============================================================================
+training:
+  # === Basic Training Settings ===
+  max_train_steps: 1000000  # Total training steps
+  # === Checkpointing ===
+  checkpoint_dir: checkpoints/stage1/B_V_4096_RERD  # Training checkpoints (model weights, optimizer states)
+  log_dir: logs/stage1/B_V_4096_RERD  # TensorBoard logs and training logs
+  resume_mode: latest  # Resume mode: 'latest' or 'best' (which checkpoint to load when resuming)
+  resume_optimizer: true  # Load optimizer state when resuming (gracefully skips if config mismatch)
+  save_latest: true  # Save latest checkpoint during training
+  save_best: true  # Save best checkpoint during training (when loss improves)
+  # === Training Control ===
+  warmup_steps: 0  # Codebook warmup steps (quantizer disabled during warmup)
+  save_before_training: true  # Save checkpoint once before training starts
+  save_every_n_steps: 5000  # Save checkpoint every N steps
+  log_every_n_steps: 100  # Log metrics every N steps
+  max_grad_norm: 1.0  # Gradient clipping max norm
+  timestep_sampling_strategy: linear  # Warmup strategy: linear or sinusoidal
+  proxy_tokenizer_checkpoint: "checkpoints/proxy_tokenizer/maskgit-vqgan-imagenet-f16-256.bin"  # Path to pretrained proxy VQ tokenizer checkpoint
+  # === Codebook Re-estimation ===
+  reestim_steps: 10000  # Re-estimation steps after warmup (0 = disabled)
+  reestim_frequency: 1000  # Re-initialize codebook every N steps during re-estimation
+  # === Main Optimizer + Scheduler ===
+  main_optimizer:
+    # Optimizer type selection: adamw or muon
+    optimizer_type: adamw  # adamw (default) or muon
+    # === Common Optimizer Settings ===
+    # Used for AdamW (all params) and Muon (auxiliary params: biases, embeddings, etc.)
+    learning_rate: 3.0e-4  # lr for AdamW; lr for Muon auxiliary params
+    beta1: 0.9
+    beta2: 0.95
+    weight_decay: 0.01
+    # === Muon-Specific Settings ===
+    # Only used when optimizer_type: muon
+    muon_hidden_lr: 0.02  # Learning rate for hidden weights (2D+ parameters) with Muon
+    muon_hidden_weight_decay: 0.01  # Weight decay for hidden weights with Muon
+    # === Learning Rate Scheduler Settings ===
+    scheduler_type: cosine  # constant, cosine
+    warmup_steps: 10000
+  # === Quantizer Optimizer + Scheduler ===
+  quantizer_optimizer:
+    enable: false
+    # Optimizer settings
+    momentum: 0.9
+    weight_decay: 0.0
+    # Learning rate scheduler settings
+    learning_rate: 1.0e-3
+    scheduler_type: cosine  # constant, cosine
+    warmup_steps: 10000
+  # === Noise Scheduler ===
+  noise_scheduler:
+    schedule_type: linear  # linear, cosine, polynomial, sigmoid
+    sigma: 1.0  # Noise schedule sigma
+    polynomial_power: 2.0  # For polynomial schedule
+    sigmoid_steepness: 10.0  # For sigmoid schedule
+  # === Timestep Sampler ===
+  timestep_sampler:
+    mode: logit_normal  # uniform, logit_normal, cosine
+    P_mean: -0.8  # Mean of normal distribution for logit_normal
+    P_std: 0.8    # Standard deviation of normal distribution for logit_normal
+  # === Mask Token Sampler ===
+  mask_token_sampler:
+    mode: logit_normal  # uniform, logit_normal, two_stage
+    P_mean: -0.8  # Mean of normal distribution for logit_normal
+    P_std: 0.8    # Standard deviation of normal distribution for logit_normal
+# =============================================================================
+# Dataset Configuration
+# =============================================================================
+dataset:
+  # Dataset name: "imagenet" (WebDataset), "local_imagenet" (parquet files)
+  name: local_imagenet
+  # Image settings
+  image_size: 224  # Should match model img_size
+  # Data loading
+  batch_size: 24  # Per-GPU batch size (reduced to save VRAM)
+  num_workers_per_gpu: 4  # Number of data loading workers per GPU (reduced from 8)
+  gradient_accumulation_steps: 4  # Gradient accumulation steps (increased from 2 to maintain effective batch size of 64)
+  # Dataset path for local_imagenet
+  # Should point to directory containing train-*.parquet, validation-*.parquet, test-*.parquet
+  # Example: ./data/imagenet/data (contains train-00000-of-00294.parquet, etc.)
+  data_path: "./data/imagenet/data"
+  # HuggingFace datasets cache directory (for local_imagenet)
+  # Stores processed indices (~40GB for ImageNet-1k)
+  # Set to null to disable caching (slower, but saves disk space)
+  cache_dir: "./data/.cache"
+  # Number of classes (ImageNet-1k)
+  num_classes: 1000
+  # === WebDataset shards (only used when name: "imagenet") ===
+  # Uncomment these if using WebDataset format instead of local parquet files
+  # train_shards_path: "path/to/train_shards-{00000..00293}.tar"
+  # eval_shards_path: "path/to/eval_shards-{00000..00013}.tar"
+# =============================================================================
+# Loss Configuration
+# =============================================================================
+losses:
+  # === Reconstruction Loss ===
+  reconstruction_loss_type: x-loss  # v-loss (velocity) or x-loss (image)
+  # === Perceptual Loss (LPIPS) ===
+  lpips:
+    use_lpips: true  # Enable LPIPS perceptual loss
+    perceptual_weight: 1.0  # LPIPS loss weight
+  # === Quantization Loss ===
+  # VQ loss is automatically computed by the quantizer
+  quantization_weight: 0.45  # VQ commitment loss weight
+  # === Discriminator (GAN Loss) ===
+  discriminator:
+    use_discriminator: true  # Enable discriminator for adversarial training
+    disc_start: 20000  # Start discriminator training after N steps
+    disc_factor: 1.0  # Discriminator loss factor
+    disc_weight: 0.5  # Discriminator weight for adaptive loss weighting
+    adaptive_max_weight: 10.0  # Upper bound for adaptive GAN weight before scaling by disc_weight
+    disc_loss: hinge  # hinge or vanilla
+    # Discriminator architecture (used when creating discriminator in trainer)
+    disc_in_channels: 3  # Input channels
+    disc_num_layers: 3  # Number of discriminator layers
+    disc_ndf: 64  # Number of discriminator filters (reduced)
+    use_actnorm: true  # Use ActNorm in discriminator
+  # === REPA Loss (Representation Alignment) ===
+  repa:
+    use_repa: true  # Enable REPA loss for feature alignment
+    loss_weight: 1.0  # Overall REPA loss weight
+    encoder_use_repa: true  # Enable REPA for encoder
+    decoder_use_repa: true  # Enable REPA for decoder
+    encoder_repa_weight: 0.8  # Encoder REPA weight
+    decoder_repa_weight: 1.0  # Decoder REPA weight
+    align_layer_encoder: 12  # Which encoder layer to align (1-indexed, null = middle layer)
+    align_layer_decoder: 8  # Which decoder layer to align (1-indexed, null = middle layer)
+    # DINOv2 encoder for REPA
+    repa_encoder_path: "checkpoints/dinov2_vitb14.pt"  # Path to DINOv2 pretrained encoder
+# =============================================================================
+# Evaluation Configuration (Metrics Only)
+# =============================================================================
+evaluation:
+  # === Directory for evaluation outputs ===
+  evaluation_dir: evaluations/stage1/B_V_4096_RERD  # Metrics outputs
+  # === Evaluation Control ===
+  eval_before_training: true  # Run evaluation once before training starts
+  eval_every_n_epochs: 10  # Compute metrics every N epochs
+  # =============================================================================
+  # Metrics Configuration (computed on entire validation set)
+  # =============================================================================
+  metrics:
+    enabled: true
+    # === Progress Logging ===
+    log_frequency: 100  # Print progress every N samples during metrics computation
+    # === Sample Limit ===
+    max_samples: null  # Maximum number of validation samples for metrics (set to null for all)
+    types:
+      - mse    # Mean Squared Error
+      - psnr   # Peak Signal-to-Noise Ratio
+      - fid    # Fréchet Inception Distance
+    # Metrics evaluation modes
+    multi_steps:
+      enabled: true
+      method: maskgit
+      num_steps: 4  # Number of forward passes for reconstruction
+      mask_schedule: arccos
+    timestep_sweep:
+      enabled: false
+      initial_timesteps: [0.25, 0.5, 0.75, 1.0]
+    attn_mask_sweep:
+      enabled: true  # Enabled in mask mode
+      mask_token_nums: [0, 64, 128, 160, 176, 184, 188, 192]
+# =============================================================================
+# Visualization Configuration (Independent from Metrics)
+# =============================================================================
+visualization:
+  enabled: true  # Global visualization enable/disable
+  visualization_dir: visualizations/stage1/B_V_4096_RERD  # Visualization outputs
+  visualize_before_training: true  # Generate visualization before training starts
+  vis_every_n_epochs: 1  # Generate visualization every N epochs
+  # Visualization type 1: Noise recovery (n-step reconstruction from pure noise)
+  multi_steps:
+    enabled: true
+    method: maskgit
+    num_steps: 4  # Number of forward passes for reconstruction
+    mask_schedule: arccos
+    num_vis_samples: 8  # Number of images to display vertically
+  # Visualization type 2: Timestep sweep (single reconstruction at different timesteps)
+  timestep_sweep:
+    enabled: false
+    initial_timesteps: [0.25, 0.5, 0.75, 1.0]
+    num_vis_samples: 8  # Number of images to display vertically
+  # Visualization type 3: Attention mask sweep (varying masked token counts)
+  attn_mask_sweep:
+    enabled: true  # Enabled in mask mode
+    mask_token_nums: [0, 64, 128, 160, 176, 192]
+    num_vis_samples: 8  # Number of images to display vertically
+# =============================================================================
+# Multi-GPU & Distributed Training Notes
+# =============================================================================
+# These are typically set via command line or environment variables.
+# Accelerate will handle distributed training automatically.
+#
+# Example command:
+#   torchrun --nproc_per_node=4 scripts/train_stage1.py -c configs/stage1/base.yaml
+#
+# Or with accelerate:
+#   accelerate launch --num_processes=4 scripts/train_stage1.py -c configs/stage1/base.yaml

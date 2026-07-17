@@ -1,0 +1,24 @@
+
+# Evaluation dependencies
+torchmetrics
+matplotlib
+timm
+torchmetrics
+lpips
+accelerate 
+diffusers 
+transformers 
+datasets 
+pyarrow 
+timm 
+webdataset 
+einops 
+omegaconf 
+pillow 
+tensorboard 
+scipy 
+scikit-learn 
+ftfy 
+regex
+iopath
+termcolor
