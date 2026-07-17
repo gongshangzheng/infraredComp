@@ -155,9 +155,9 @@ def _ensure_contour_dir(dataset_id: str, method: str) -> Path:
         raw = Path(dataset_id)
         source = raw.stem or raw.name
 
-    out_dir = vconfig.CONTOUR_DIR / source / method
+    out_dir = vconfig.contour_dir(method, source)
     if not (out_dir / "manifest.json").is_file():
-        log("extract", f"[extract] {dataset_id} -> contour/{source}/{method}（method={method}）")
+        log("extract", f"[extract] {dataset_id} -> {method}/{source}（method={method}）")
     artifact = extract_contour_video(raw, method=method, skip_if_exists=True)
     return Path(artifact.frames_dir)
 
@@ -460,7 +460,7 @@ def _run_eval(model, eval_sample: list, device: str, lam: float, batch: int,
             x = torch.stack([t.to(device) for t in chunk], dim=0)
             if model_id == "difftok":
                 logits, commit_loss, indices = model.forward(x)
-                loss, lv, psnr, bpp = rd_loss_difftok(logits, x, commit_loss, indices)
+                loss, lv, psnr, bpp = rd_loss_difftok(logits, x, commit_loss, indices, bce=False)
             else:
                 out = model.forward(x)
                 loss, lv, psnr, bpp = rd_loss(out, x, lam, bce=bce, pos_weight=pos_weight)
@@ -613,7 +613,7 @@ def main() -> int:
     ap.add_argument("--bce", action="store_true", help="BSDS soft edge 用 BCE(pos_weight 加权边缘)替代 MSE")
     ap.add_argument("--bce-pos-weight", dest="bce_pos_weight", type=float, default=10.0, help="BCE 正类权重(边缘稀疏,默认 10)")
     ap.add_argument("--device", default="cuda")
-    ap.add_argument("--run-id", dest="run_id", required=True)
+    ap.add_argument("--run-id", dest="run_id", default=None, help="run ID；--resume 时缺省=resume 的 ID（不变 ID 续写覆盖）")
     ap.add_argument("--max-images", type=int, default=0, help="<=0 = 不采样、全量参与（默认）；>0 则等间隔采样到该数")
     ap.add_argument("--size", type=int, default=128)
     ap.add_argument("--method", default="canny", help="轮廓提取方法 canny/sobel/hed（离线提取与 imagenet 在线共用）")
@@ -679,6 +679,11 @@ def main() -> int:
 
     is_video = _is_video_model(args.model)
     device = args.device if torch.cuda.is_available() or args.device == "cpu" else "cpu"
+    # --resume 时缺省 run_id = resume 的 ID（不变 ID，直接续写覆盖）
+    if not args.run_id and args.resume:
+        args.run_id = args.resume
+    if not args.run_id:
+        ap.error("--run-id required（或传 --resume 自动用其 ID）")
     run_id = args.run_id
     started = time.time()
 
@@ -802,7 +807,7 @@ def main() -> int:
                     optimizer.zero_grad()
                     if args.model == "difftok":
                         logits, commit_loss, indices = model(batch)
-                        loss, lv, psnr, bpp = rd_loss_difftok(logits, batch, commit_loss, indices)
+                        loss, lv, psnr, bpp = rd_loss_difftok(logits, batch, commit_loss, indices, bce=False)
                     else:
                         out = model(batch)
                         loss, lv, psnr, bpp = rd_loss(out, batch, args.lamb, bce=args.bce, pos_weight=args.bce_pos_weight)
