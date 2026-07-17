@@ -46,6 +46,7 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 
 from models.diffTok.src.losses.rd_loss import rd_loss_difftok
+from benchmark.video.config import raw_dir  # noqa: E402
 
 # infraredComp 训练产物路径（与 server.config 一致）
 TRAINING_DIR = REPO / "results" / "training"
@@ -77,9 +78,10 @@ class ThermalFrameDataset(Dataset):
         self.files: list[Path] = []
         if dataset_id.startswith("flir/"):
             split = dataset_id.split("/", 1)[1]
-            root = DATASETS_DIR / "FLIR_ADAS_1_3" / split / "thermal_16_bit"
+            root = raw_dir("FLIR_ADAS_1_3") / split / "thermal_16_bit"
         elif dataset_id == "osu_frames":
             # OSU 是视频；抽帧临时目录（若无则空）
+            # TODO: osu_color_thermal_frames 目录不存在,路径待核实
             root = DATASETS_DIR / "raw" / "osu_color_thermal_frames"
         else:
             root = Path(dataset_id)
@@ -138,14 +140,15 @@ def _ensure_contour_dir(dataset_id: str, method: str) -> Path:
     # raw 数据集 → 定位 raw 输入，提取到 contour/<source>/<method>
     if dataset_id.startswith("flir/"):
         split = dataset_id.split("/", 1)[1]
-        raw = DATASETS_DIR / "FLIR_ADAS_1_3" / split / "thermal_16_bit"
+        raw = raw_dir("FLIR_ADAS_1_3") / split / "thermal_16_bit"
         source = f"flir_{split}"
     elif dataset_id == "osu_frames":
+        # TODO: osu_color_thermal_frames 目录不存在,路径待核实
         raw = DATASETS_DIR / "raw" / "osu_color_thermal_frames"
         source = "osu_frames"
     elif dataset_id.startswith("xiph/"):
         seq = dataset_id.split("/", 1)[1]
-        raw = DATASETS_DIR / "raw" / "xiph_cif" / f"{seq}.y4m"
+        raw = raw_dir("xiph_cif") / f"{seq}.y4m"
         source = seq
     else:
         # 当作字面路径（raw 视频文件或图像目录）
@@ -212,7 +215,7 @@ def resolve_training_dataset(dataset_id: str, method: str, max_images: int, size
         if is_video:
             raise RuntimeError("BSDS GT 仅支持单帧图像压缩模型")
         split = dataset_id.split("-", 1)[1]
-        png_dir = DATASETS_DIR / "contour" / f"bsds_{split}_gt"
+        png_dir = DATASETS_DIR / "gt" / f"bsds_{split}"  # = contour_dir("gt", f"bsds_{split}")
         if not (png_dir / "manifest.json").is_file():
             raise RuntimeError(
                 f"BSDS GT 目录无 manifest：{png_dir}。先跑 python scripts/convert_bsds_gt.py --splits {split}"
@@ -329,8 +332,12 @@ def build_model(model_id: str, quality: int, device: str, warm_start: bool = Tru
 
 # ---- RD loss ------------------------------------------------------------ #
 
-def rd_loss(out, x, lam: float) -> tuple[torch.Tensor, float, float, float]:
-    """rate-distortion: loss = λ·bpp + MSE。返回 (loss, loss_val, psnr, bpp)。"""
+def rd_loss(out, x, lam: float, bce: bool = False, pos_weight: float = 10.0) -> tuple[torch.Tensor, float, float, float]:
+    """rate-distortion: loss = λ·bpp + (MSE | BCE)。返回 (loss, loss_val, psnr, bpp)。
+
+    bce=True 用 BCE(pos_weight 加权边缘像素)替代 MSE——适合 BSDS soft edge
+    (类二值、边缘稀疏 5-15%)。PSNR 始终用 MSE（跨 codec 可比）。
+    """
     x_hat = out["x_hat"]
     likelihoods = out["likelihoods"]
     ll_iter = likelihoods.values() if isinstance(likelihoods, dict) else likelihoods
@@ -340,8 +347,16 @@ def rd_loss(out, x, lam: float) -> tuple[torch.Tensor, float, float, float]:
     for ll in ll_iter:
         rate = rate + (-torch.log(ll + 1e-10) / math.log(2)).sum()
     bpp = (rate / num_pixels).item()
-    dist = torch.mean((x_hat - x) ** 2)
-    mse = dist.item()
+    if bce:
+        # BCE for soft edge [0,1]; pos_weight 加权正类(边缘像素),负类 weight=1
+        import torch.nn.functional as F
+        pw = torch.tensor([pos_weight], dtype=x_hat.dtype, device=x_hat.device)
+        w = torch.where(x > 0.5, pw.expand_as(x), torch.ones_like(x))
+        x_hat_c = x_hat.clamp(1e-6, 1 - 1e-6)  # BCE 要求 pred ∈(0,1)
+        dist = F.binary_cross_entropy(x_hat_c, x, weight=w, reduction="mean")
+    else:
+        dist = torch.mean((x_hat - x) ** 2)
+    mse = torch.mean((x_hat - x) ** 2).item()  # PSNR 始终用 MSE
     loss = lam * (rate / num_pixels) + dist
     psnr = 10.0 * math.log10(1.0 / (mse + 1e-10))
     return loss, loss.item(), psnr, bpp
@@ -388,7 +403,7 @@ VIZ_DIR = TRAINING_DIR / "viz"  # results/training/viz/<run_id>/epoch_XXX.png
 def _eval_png_dir(dataset_id: str, split: str, method: str) -> Path:
     """数据集感知的 held-out PNG 目录：BSDS GT → bsds_<split>_gt；imagenet → imagenet_<split>_<method>。"""
     if dataset_id.startswith("bsds-"):
-        return DATASETS_DIR / "contour" / f"bsds_{split}_gt"
+        return DATASETS_DIR / "gt" / f"bsds_{split}"  # = contour_dir("gt", f"bsds_{split}")
     from scripts.imagenet_contour_dataset import preextracted_contour_dir
     return preextracted_contour_dir(split, method)
 
@@ -434,7 +449,7 @@ def _load_originals(dataset_id: str, split: str, n: int, size: int):
 
 
 def _run_eval(model, eval_sample: list, device: str, lam: float, batch: int,
-              model_id: str = "") -> dict:
+              model_id: str = "", bce: bool = False, pos_weight: float = 10.0) -> dict:
     """model.eval() + no_grad，在固定 val 样本上算 loss + psnr。"""
     model.eval()
     tot_loss = tot_psnr = tot_bpp = 0.0
@@ -448,7 +463,7 @@ def _run_eval(model, eval_sample: list, device: str, lam: float, batch: int,
                 loss, lv, psnr, bpp = rd_loss_difftok(logits, x, commit_loss, indices)
             else:
                 out = model.forward(x)
-                loss, lv, psnr, bpp = rd_loss(out, x, lam)
+                loss, lv, psnr, bpp = rd_loss(out, x, lam, bce=bce, pos_weight=pos_weight)
             tot_loss += lv; tot_psnr += psnr; tot_bpp += bpp; n += 1
     model.train()
     return {"loss": tot_loss / max(n, 1), "psnr": tot_psnr / max(n, 1), "bpp": tot_bpp / max(n, 1)}
@@ -595,6 +610,8 @@ def main() -> int:
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--lambda", dest="lamb", type=float, default=0.01)
+    ap.add_argument("--bce", action="store_true", help="BSDS soft edge 用 BCE(pos_weight 加权边缘)替代 MSE")
+    ap.add_argument("--bce-pos-weight", dest="bce_pos_weight", type=float, default=10.0, help="BCE 正类权重(边缘稀疏,默认 10)")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--run-id", dest="run_id", required=True)
     ap.add_argument("--max-images", type=int, default=0, help="<=0 = 不采样、全量参与（默认）；>0 则等间隔采样到该数")
@@ -788,7 +805,7 @@ def main() -> int:
                         loss, lv, psnr, bpp = rd_loss_difftok(logits, batch, commit_loss, indices)
                     else:
                         out = model(batch)
-                        loss, lv, psnr, bpp = rd_loss(out, batch, args.lamb)
+                        loss, lv, psnr, bpp = rd_loss(out, batch, args.lamb, bce=args.bce, pos_weight=args.bce_pos_weight)
                     loss.backward()
                     optimizer.step()
                     ep_loss += lv; ep_psnr += psnr; ep_bpp += bpp; n += 1
@@ -809,7 +826,7 @@ def main() -> int:
             # 测试 eval：每 eval_every epoch（held-out test split）
             if eval_on and (epoch % args.eval_every == 0):
                 try:
-                    em = _run_eval(model, eval_sample, device, args.lamb, args.batch, model_id=args.model)
+                    em = _run_eval(model, eval_sample, device, args.lamb, args.batch, model_id=args.model, bce=args.bce, pos_weight=args.bce_pos_weight)
                     em["epoch"] = epoch
                     test_metrics.append(em)
                     log(run_id, f"[train]   eval epoch {epoch}: test psnr={em['psnr']:.2f} bpp={em['bpp']:.3f} "

@@ -27,7 +27,21 @@ def register_codec(name: str) -> Callable[[type], type]:
     return _wrap
 
 
+_CODEC_MODULE: dict[str, str] = {
+    "x264": ".x264", "x265": ".x265", "svtav1": ".svtav1", "vp9": ".vp9", "mpeg4": ".mpeg4",
+    "ssf2020": ".ssf2020", "dcvc_rt": ".dcvc_rt", "nevc": ".nevc", "dcvc_dc": ".dcvc_dc",
+    "lsmc": ".lsmc", "difftok": ".difftok",
+}
+
+
 def build_codec(name: str, crf: int, preset: str | None = None, checkpoint_path: str | None = None) -> "VideoCodec":
+    # Lazy import: if codec not yet registered, import its module to trigger @register_codec.
+    # Avoids loading torch/compressai/ultralytics at catalog() time (only on actual build).
+    if name not in CODEC_REGISTRY:
+        import importlib
+        mod = _CODEC_MODULE.get(name) or (".learned_image" if name.startswith("img-") else None)
+        if mod:
+            importlib.import_module(mod, __package__)
     if name not in CODEC_REGISTRY:
         avail = ", ".join(sorted(CODEC_REGISTRY)) or "(none)"
         raise KeyError(f"Unknown codec '{name}'. Available: {avail}")
