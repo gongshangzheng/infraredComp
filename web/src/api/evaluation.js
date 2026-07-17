@@ -26,6 +26,7 @@ export const runEvaluation = (data) => request.post('/evaluation/run', data)
 
 // 评测结果
 export const getEvalResults = (params) => request.get('/evaluation/results', { params })
+export const getResultFacets = (params) => request.get('/evaluation/results/facets', { params })
 export const getEvalResultDetail = (id) => request.get(`/evaluation/results/${id}`)
 export const compareResults = (params) => request.get('/evaluation/results/compare', { params })
 export const getAggregatedResults = (params) => request.get('/evaluation/results/aggregate', { params })

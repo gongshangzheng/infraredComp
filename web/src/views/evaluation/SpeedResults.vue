@@ -4,21 +4,21 @@
     <n-card size="small">
       <n-space align="center" size="small" wrap>
         <span class="lbl">数据集</span>
-        <n-select v-model:value="filters.dataset" :options="datasetOptions" placeholder="全部" clearable size="small" style="width:150px" />
+        <n-select v-model:value="filters.dataset" :options="datasetOptions" placeholder="全部" clearable size="small" style="width:150px" @update:value="onFilterChange" />
         <span class="lbl">方法</span>
-        <n-select v-model:value="filters.method" :options="methodOptions" placeholder="全部" clearable size="small" style="width:130px" />
+        <n-select v-model:value="filters.method" :options="methodOptions" placeholder="全部" clearable size="small" style="width:130px" @update:value="onFilterChange" />
         <span class="lbl">序列</span>
-        <n-select v-model:value="filters.sequence" :options="sequenceOptions" placeholder="全部" clearable size="small" style="width:140px" />
+        <n-select v-model:value="filters.sequence" :options="sequenceOptions" placeholder="全部" clearable size="small" style="width:140px" @update:value="onFilterChange" />
         <span class="lbl">codec</span>
-        <n-select v-model:value="filters.codec" :options="codecOptions" placeholder="全部" clearable size="small" style="width:120px" />
+        <n-select v-model:value="filters.codec" :options="codecOptions" placeholder="全部" clearable size="small" style="width:120px" @update:value="onFilterChange" />
         <span class="lbl">CRF</span>
-        <n-select v-model:value="filters.crf" :options="crfOptions" placeholder="全部" clearable size="small" style="width:100px" />
+        <n-select v-model:value="filters.crf" :options="crfOptions" placeholder="全部" clearable size="small" style="width:100px" @update:value="onFilterChange" />
         <n-button size="small" @click="reload">刷新</n-button>
       </n-space>
     </n-card>
 
     <n-spin :show="loading">
-      <div v-if="allFiltered.length === 0 && !loading" class="empty">
+      <div v-if="results.length === 0 && !loading" class="empty">
         无结果。先在"评测运行"跑一次 speed run,或调整筛选。
       </div>
       <div v-else>
@@ -64,11 +64,10 @@
       </div>
     </n-spin>
 
-    <!-- 加载更多 -->
-    <div v-if="hasMore" class="load-more">
-      <n-button size="small" :loading="loadingMore" @click="loadMore">加载更多（{{ allFiltered.length }} / {{ total }}）</n-button>
+    <!-- 页码分页 -->
+    <div v-if="total > 0" class="pagination-wrap">
+      <n-pagination v-model:page="page" :page-count="totalPages" :page-size="PAGE_SIZE" @update:page="fetchPage" />
     </div>
-    <div v-else-if="total > 0" class="load-more-hint">已加载全部 {{ total }} 条结果</div>
   </div>
 </template>
 
@@ -77,18 +76,18 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { NCard, NSpace, NSelect, NButton, NSpin, NIcon } from 'naive-ui'
 import { ExpandOutline, ContractOutline } from '@vicons/ionicons5'
 import { useRoute, useRouter } from 'vue-router'
-import { getEvalResults, getMethods, getOutputUrl, getDatasetMediaUrl } from '../../api/evaluation'
+import { getEvalResults, getResultFacets, getOutputUrl, getDatasetMediaUrl } from '../../api/evaluation'
 
 const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
-const loadingMore = ref(false)
 const results = ref([])
-const methods = ref([])
 const total = ref(0)
-const expanded = ref(new Set())
+const page = ref(1)
 const PAGE_SIZE = 24
+const expanded = ref(new Set())
+const facets = ref({ datasets: [], methods: [], sequences: [], codecs: [], crfs: [] })
 
 const numQ = (v) => (v == null || v === '' ? null : Number(v))
 const filters = ref({
@@ -122,32 +121,18 @@ const getUrl = (path, dataset) => {
   if (path.startsWith('contour/bsds_') || path.startsWith('contour/imagenet_') || path.startsWith('BSDS500/')) return getDatasetMediaUrl(dataset, path)
   return getOutputUrl(path)
 }
-const methodOptions = computed(() => {
-  const ds = filters.value.dataset
-  const rs = ds ? results.value.filter(r => r.dataset_name === ds) : results.value
-  return [...new Set(rs.map(r => r.method).filter(Boolean))].map(m => ({ label: m, value: m }))
-})
-const sequenceOptions = computed(() => [...new Set(results.value.map(r => r.sequence_name))].map(s => ({ label: s, value: s })))
-const codecOptions = computed(() => [...new Set(results.value.map(r => r.codec))].map(c => ({ label: c, value: c })))
-const crfOptions = computed(() => [...new Set(results.value.map(r => r.crf))].sort((a, b) => a - b).map(c => ({ label: 'crf' + c, value: c })))
-const datasetOptions = computed(() => [...new Set(results.value.map(r => r.dataset_name).filter(Boolean))].map(d => ({ label: d, value: d })))
+const methodOptions = computed(() => (facets.value.methods || []).map(m => ({ label: m, value: m })))
+const sequenceOptions = computed(() => (facets.value.sequences || []).map(s => ({ label: s, value: s })))
+const codecOptions = computed(() => (facets.value.codecs || []).map(c => ({ label: c, value: c })))
+const crfOptions = computed(() => (facets.value.crfs || []).map(c => ({ label: 'crf' + c, value: c })))
+const datasetOptions = computed(() => (facets.value.datasets || []).map(d => ({ label: d, value: d })))
 
-const allFiltered = computed(() => {
-  let list = results.value
-  if (filters.value.dataset) list = list.filter(r => r.dataset_name === filters.value.dataset)
-  if (filters.value.method) list = list.filter(r => r.method === filters.value.method)
-  if (filters.value.sequence) list = list.filter(r => r.sequence_name === filters.value.sequence)
-  if (filters.value.codec) list = list.filter(r => r.codec === filters.value.codec)
-  if (filters.value.crf !== null && filters.value.crf !== undefined) list = list.filter(r => r.crf === filters.value.crf)
-  return list
-})
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
 
-const hasMore = computed(() => allFiltered.value.length < total.value)
-
-const codecGroups = computed(() => [...new Set(allFiltered.value.map(r => r.codec))].sort())
+const codecGroups = computed(() => [...new Set(results.value.map(r => r.codec))].sort())
 const runsByCodec = computed(() => {
   const m = {}
-  for (const r of allFiltered.value) {
+  for (const r of results.value) {
     (m[r.codec] = m[r.codec] || []).push(r)
   }
   return m
@@ -160,52 +145,46 @@ function fmt(v) {
 
 let defaultsApplied = false
 
-async function fetchPage(offset, limit) {
-  return getEvalResults({ mode: 'speed', offset, limit })
+function filterParams() {
+  const p = { mode: 'speed', offset: (page.value - 1) * PAGE_SIZE, limit: PAGE_SIZE }
+  if (filters.value.dataset) p.dataset = filters.value.dataset
+  if (filters.value.method) p.method = filters.value.method
+  if (filters.value.sequence) p.sequence = filters.value.sequence
+  if (filters.value.codec) p.codec = filters.value.codec
+  if (filters.value.crf != null) p.crf = filters.value.crf
+  return p
 }
 
-async function reload() {
+async function fetchPage() {
   loading.value = true
   try {
-    const [res, meth] = await Promise.all([
-      fetchPage(0, PAGE_SIZE),
-      getMethods()
-    ])
+    const res = await getEvalResults(filterParams())
     const data = res.runs !== undefined ? res : { runs: res, total: Array.isArray(res) ? res.length : 0 }
     results.value = data.runs || []
     total.value = data.total ?? results.value.length
-    methods.value = meth.methods || []
-    if (!defaultsApplied) {
-      if (!filters.value.dataset) {
-        const datasets = [...new Set(results.value.map(r => r.dataset_name).filter(Boolean))]
-        if (datasets.length) filters.value.dataset = datasets[0]
-      }
-      if (!filters.value.method) {
-        const dsMethods = methodOptions.value
-        filters.value.method = dsMethods.length ? dsMethods[0].value : (methods.value[0] || null)
-      }
-      defaultsApplied = true
-    } else if (filters.value.method && !methods.value.includes(filters.value.method)) {
-      filters.value.method = methods.value[0] || null
-    }
   } finally {
     loading.value = false
   }
 }
 
-async function loadMore() {
-  loadingMore.value = true
-  try {
-    const res = await fetchPage(results.value.length, PAGE_SIZE)
-    if (res.runs !== undefined) {
-      results.value.push(...res.runs)
-      total.value = res.total ?? total.value
-    } else if (Array.isArray(res)) {
-      results.value.push(...res)
-    }
-  } finally {
-    loadingMore.value = false
+async function fetchFacets() {
+  const f = await getResultFacets({ mode: 'speed' })
+  facets.value = f || {}
+}
+
+async function reload() {
+  await fetchFacets()
+  if (!defaultsApplied) {
+    if (!filters.value.dataset && facets.value.datasets?.length) filters.value.dataset = facets.value.datasets[0]
+    if (!filters.value.method && facets.value.methods?.length) filters.value.method = facets.value.methods[0]
+    defaultsApplied = true
   }
+  await fetchPage()
+}
+
+function onFilterChange() {
+  page.value = 1
+  fetchPage()
 }
 
 onMounted(reload)
@@ -229,6 +208,5 @@ onMounted(reload)
 .no-video { height: 80px; display: flex; align-items: center; justify-content: center; color: var(--color-text-dim); background: var(--color-bg); font-size: 11px; }
 .cell-meta { font-size: 11px; color: var(--color-text-dim); margin-top: 6px; }
 .empty { padding: 40px; text-align: center; color: var(--color-text-dim); }
-.load-more { text-align: center; padding: 16px; }
-.load-more-hint { text-align: center; padding: 12px; font-size: 12px; color: var(--color-text-dim); }
+.pagination-wrap { display: flex; justify-content: center; padding: 16px; }
 </style>

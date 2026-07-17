@@ -879,9 +879,11 @@ async def run_evaluation(data: dict = Body(...)):
 
 @router.get("/results")
 async def get_results(model: str = None, dataset: str = None, metric: str = None, mode: str = None,
+                      method: str = None, sequence: str = None, codec: str = None, crf: int = None,
                       offset: int = None, limit: int = None):
     """列 contour-video 评测结果（每条附 output_video 供按需播放）。
     mode=formal/speed 过滤(formal→xiph_cif.json,speed→xiph_cif_speed.json 分文件)。
+    method/sequence/codec/crf 服务端过滤（与 offset/limit 分页组合，total=过滤后总数）。
     offset/limit 分页：提供时返回 {total, offset, limit, runs}，不提供时返回裸数组（向后兼容）。"""
     data = _load_results()
     runs = data.get("runs", [])
@@ -924,6 +926,14 @@ async def get_results(model: str = None, dataset: str = None, metric: str = None
         out = [r for r in out if r.get("model_name") == model]
     if dataset:
         out = [r for r in out if r.get("dataset_name") == dataset]
+    if method:
+        out = [r for r in out if r.get("method") == method]
+    if sequence:
+        out = [r for r in out if r.get("sequence_name") == sequence]
+    if codec:
+        out = [r for r in out if r.get("codec") == codec]
+    if crf is not None:
+        out = [r for r in out if r.get("crf") == crf]
     # Pagination
     if offset is not None or limit is not None:
         off = offset or 0
@@ -931,6 +941,37 @@ async def get_results(model: str = None, dataset: str = None, metric: str = None
         page = out[off:off + lim]
         return {"total": len(out), "offset": off, "limit": lim, "runs": page}
     return out
+
+
+@router.get("/results/facets")
+async def results_facets(mode: str = None):
+    """speed/formal 结果的筛选维度 distinct 值（供下拉填充）。
+    返回 {datasets, methods, sequences, codecs, crfs}。crfs 升序。"""
+    data = _load_results()
+    runs = data.get("runs", [])
+    if mode:
+        runs = [r for r in runs if r.get("mode") == mode]
+    datasets, methods, sequences, codecs, crfs = [], [], [], [], []
+    seen_crf = set()
+    for r in runs:
+        ds = r.get("dataset") or r.get("sequence_name")
+        for val, bucket in (
+            (ds, datasets),
+            (r.get("method"), methods),
+            (r.get("sequence_name"), sequences),
+            (r.get("codec"), codecs),
+        ):
+            if val and val not in bucket:
+                bucket.append(val)
+        c = r.get("crf")
+        if c is not None and c not in seen_crf:
+            seen_crf.add(c)
+            crfs.append(c)
+    crfs.sort(key=lambda x: (isinstance(x, str), x))
+    return {
+        "datasets": datasets, "methods": methods, "sequences": sequences,
+        "codecs": codecs, "crfs": crfs,
+    }
 
 
 @router.get("/results/compare")

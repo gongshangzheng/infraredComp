@@ -39,10 +39,10 @@
             @preview="(src, title) => { previewSrc = src; previewTitle = title; previewVisible = true }"
           />
         </div>
-        <div v-if="epochGroups.length > vizLimit" class="viz-load-more">
-          <n-button size="small" @click="vizLimit += 12">加载更多（{{ visibleEpochs.length }} / {{ epochGroups.length }}）</n-button>
-        </div>
         <EmptyState v-else description="暂无可视化（首个 epoch viz 还没生成）" />
+        <div v-if="vizPageCount > 1" class="viz-pagination">
+          <n-pagination v-model:page="vizPage" :page-count="vizPageCount" :page-size="vizPageSize" size="small" />
+        </div>
       </n-card>
 
       <EmptyState v-else-if="!loading" description="未找到该训练 run" />
@@ -57,7 +57,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NCard, NSpin, NSpace, NTag, NButton, NModal, useMessage } from 'naive-ui'
+import { NCard, NSpin, NSpace, NTag, NButton, NModal, NPagination, useMessage } from 'naive-ui'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -79,7 +79,8 @@ const run = ref(null)
 const previewVisible = ref(false)
 const previewSrc = ref('')
 const previewTitle = ref('')
-const vizLimit = ref(12)
+const vizPage = ref(1)
+const vizPageSize = 12
 
 const RUNNING = new Set(['running', 'started'])
 const isLive = computed(() => run.value && RUNNING.has(run.value.status))
@@ -94,7 +95,11 @@ const epochGroups = computed(() => {
   }
   return [...map.values()].sort((a, b) => a.epoch - b.epoch)
 })
-const visibleEpochs = computed(() => epochGroups.value.slice(0, vizLimit.value))
+const visibleEpochs = computed(() => {
+  const start = (vizPage.value - 1) * vizPageSize
+  return epochGroups.value.slice(start, start + vizPageSize)
+})
+const vizPageCount = computed(() => Math.ceil(epochGroups.value.length / vizPageSize))
 const statusType = computed(() => {
   const s = run.value?.status
   return s === 'completed' ? 'success' : s === 'failed' ? 'error' : s === 'running' ? 'info' : 'default'
@@ -171,6 +176,6 @@ onUnmounted(stopPolling)
 .viz-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px;
 }
-.viz-load-more { text-align: center; padding: 12px; }
+.viz-pagination { display: flex; justify-content: center; padding: 12px; }
 .preview-img { width: 100%; display: block; border-radius: 8px; }
 </style>
