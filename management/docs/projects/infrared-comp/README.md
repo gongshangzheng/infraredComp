@@ -25,11 +25,11 @@ participants:
 |---|---|---|
 | Xiph derf CIF | 自然视频 baseline | `datasets/raw/xiph_cif` |
 | OSU Color-Thermal | 热红外视频 baseline | `datasets/raw/osu_color_thermal` |
-| FLIR ADAS 1.3 | 红外图像(legacy) | `datasets/FLIR_ADAS_1_3` |
-| **BSDS500** | 边缘检测 gt + diffTok 训练 | `D:/data/BSDS500` → `datasets/BSDS500`(junction) |
-| **SA-Co-VEval** | 视频分割评测(Meta,~31GB) | `D:/data/SACo-VEval` → `datasets/SACo-VEval`(junction) |
+| FLIR ADAS 1.3 | 红外图像(legacy) | `datasets/raw/FLIR_ADAS_1_3` |
+| **BSDS500** | 边缘检测 gt + diffTok 训练 | `D:/data/BSDS500` → `datasets/raw/BSDS500`(junction) |
+| **SA-Co-VEval** | 视频分割评测(Meta,~31GB) | `D:/data/SACo-VEval` → `datasets/raw/SACo-VEval`(junction) |
 
-大数据集(BSDS500 / SA-Co)走 `D:/data + symlink` 策略:真实数据在 `D:/data`(仓库外、不进 git),junction 到 `datasets/`(见 `dataset-management` skill)。
+大数据集(BSDS500 / SA-Co)走 `D:/data + symlink` 策略:真实数据在 `D:/data`(仓库外、不进 git),junction 到 `datasets/raw/`(见 `dataset-management` skill)。
 
 ## 当前任务方向(详见 `tasks.json`)
 
@@ -43,4 +43,4 @@ participants:
 
 ## 仓库结构
 
-`benchmark/video/`(评测库)+ `server/`(FastAPI)+ `web/`(Vue3)+ `management/`(项目数据)+ `datasets/`(junction 到 `D:/data` 大数据集)+ `models/`(权重 / vendor 模型)+ `scripts/`(下载 / baseline / 预览)。
+`benchmark/video/`(评测库)+ `server/`(FastAPI)+ `web/`(Vue3)+ `management/`(项目数据)+ `datasets/raw/`(junction 到 `D:/data` 大数据集)+ `models/`(权重 / vendor 模型)+ `scripts/`(下载 / baseline / 预览)。

@@ -13,7 +13,7 @@ description: |
 
 ```text
 infraredComp/benchmark/video/
-├── config.py            # 路径常量(datasets/raw|contour, results/video, bitstreams/recon/source/contour_mp4)
+├── config.py            # 路径常量(datasets/raw + <method>/<source>, results/video, bitstreams/recon/source/contour_mp4)
 ├── ffmpeg_util.py       # ffmpeg/ffprobe 发现(INFRACOMP_FFMPEG_BIN → PATH → static_ffmpeg fallback)
 ├── data.py              # ContourArtifact(带 video_path)/ VideoCompressionResult(含 dataset 字段)
 ├── extractors/          # 阶段1 可插拔提取器(canny/sobel/hed/pidinet,@register)
@@ -41,7 +41,7 @@ uv sync                                   # 安装依赖(含 torch/compressai/op
 #       也可直接用 .venv/Scripts/python.exe(Windows)绕过 uv 的网络解析。
 ```
 
-数据目录:`datasets/raw/`(原始视频)、`datasets/contour/<source>/<method>/`(阶段1 产物,按方法分目录,只含 `contour.mp4` + `manifest.json`)、`results/video/`(阶段2 产物 + 按需展示 mp4 缓存)。`datasets/` 大数据 + `results/video/` 运行产物均不入 git(见 `.gitignore`)。
+数据目录:`datasets/raw/`(原始视频)、`datasets/<method>/<source>/`(阶段1 产物,按方法分目录,只含 `contour.mp4` + `manifest.json`)、`results/video/`(阶段2 产物 + 按需展示 mp4 缓存)。`datasets/` 大数据 + `results/video/` 运行产物均不入 git(见 `.gitignore`)。
 
 ## 0. 数据集准备
 
@@ -49,7 +49,7 @@ uv sync                                   # 安装依赖(含 torch/compressai/op
 |------|--------|------|
 | `scripts/download_xiph_natural.py` | **Xiph derf CIF**(自然视频,6 段 352×288 y4m,可达) | `datasets/raw/xiph_cif/<name>_cif.y4m` + `manifest.json` |
 | `scripts/download_osu_color_thermal.py` | OTCBVS Dataset 03(OSU Color-Thermal)热红外(**vcipl-okstate.org 对部分网络 403**) | `datasets/raw/osu_color_thermal/seq{1..6}.mp4` + `manifest.json` |
-| `scripts/download_dataset.py` | FLIR ADAS(红外,via kagglehub) | `datasets/FLIR_ADAS_1_3/` |
+| `scripts/download_dataset.py` | FLIR ADAS(红外,via kagglehub) | `datasets/raw/FLIR_ADAS_1_3/` |
 
 ```bash
 # Xiph CIF(推荐,自然视频,公开可达):
@@ -86,7 +86,7 @@ uv run python -m benchmark.video --input datasets/raw/xiph_cif/akiyo_cif.y4m --m
 uv run python -m benchmark.video --input datasets/raw/xiph_cif --method canny --extract-only
 ```
 
-**产物**:`datasets/contour/<source>/<method>/contour.mp4` + `manifest.json`。**不产出 PNG 帧**。
+**产物**:`datasets/<method>/<source>/contour.mp4` + `manifest.json`。**不产出 PNG 帧**。
 
 管线细节:
 - `extract_contour_video(raw_input, method, frames=None)`:默认 `frames=None` 不截断。
@@ -106,7 +106,7 @@ uv run python -m benchmark.video --input datasets/raw/xiph_cif \
   --method canny --crfs 18,23,28,33 --codecs x264,x265,svtav1,vp9
 
 # 仅阶段2(复用 contour.mp4 产物;--input 指向 contour 目录而非 raw)
-uv run python -m benchmark.video --input datasets/contour/akiyo_cif/canny --skip-extract \
+uv run python -m benchmark.video --input datasets/canny/akiyo_cif --skip-extract \
   --crfs 23,28 --codecs x264,vp9
 ```
 

@@ -23,20 +23,20 @@ export INFRACOMP_DATASETS_DIR=/data/infrared   # 把大数据集放到仓库外(
 
 ## 大数据集:D:/data + symlink(本机策略)
 
-大数据集(BSDS500、SA-Co-VEval 等,**数十 MB ~ 数十 GB**)的**真实数据物理存放在本机 `D:/data/<dataset>/`(仓库外、不进 git)**,再以**目录 junction**软链接到项目 `datasets/<dataset>/`,代码统一经 `datasets/<dataset>/...` 访问。好处:数据不占仓库体积、换盘/备份只动 `D:/data`、多项目可共享同一份 `D:/data`。
+大数据集(BSDS500、SA-Co-VEval 等,**数十 MB ~ 数十 GB**)的**真实数据物理存放在本机 `D:/data/<dataset>/`(仓库外、不进 git)**,再以**目录 junction**软链接到项目 `datasets/raw/<dataset>/`,代码统一经 `datasets/raw/<dataset>/...` 访问。好处:数据不占仓库体积、换盘/备份只动 `D:/data`、多项目可共享同一份 `D:/data`。
 
 - 存放:`D:/data/<dataset>/`(真实数据,git clone / modelscope 下载 / 手动均可)
-- 软链接:`datasets/<dataset>/` → `D:/data/<dataset>/.../<data-root>`(Windows 用 **junction**,**不需管理员**;symlink /D 需开发者模式)
-- git:`.gitignore` 忽略 `datasets/<dataset>/` 整个 junction 目录(git 不 traverse 真实数据),只在 `datasets/README.md` 记索引
+- 软链接:`datasets/raw/<dataset>/` → `D:/data/<dataset>/.../<data-root>`(Windows 用 **junction**,**不需管理员**;symlink /D 需开发者模式)
+- git:`.gitignore` 忽略 `datasets/raw/<dataset>/` 整个 junction 目录(git 不 traverse 真实数据),只在 `datasets/README.md` 记索引
 
 ```bash
 # 1. 数据落到 D:/data(以 BSDS500 为例)
 git clone --depth 1 https://github.com/BIDS/BSDS500.git /d/data/BSDS500
 
-# 2. junction 到项目 datasets/(PowerShell,无需管理员)
-powershell -Command "New-Item -ItemType Junction -Path 'D:\code\infraredComp\datasets\BSDS500' -Target 'D:\data\BSDS500\BSDS500\data'"
+# 2. junction 到项目 datasets/raw/(PowerShell,无需管理员)
+powershell -Command "New-Item -ItemType Junction -Path 'D:\code\infraredComp\datasets\raw\BSDS500' -Target 'D:\data\BSDS500\BSDS500\data'"
 
-# 3. .gitignore 加 datasets/BSDS500/,datasets/README.md 记索引
+# 3. .gitignore 加 datasets/raw/BSDS500/,datasets/README.md 记索引
 ```
 
 **ModelScope 数据集**(如 SA-Co-VEval)用 modelscope python SDK 下到 `D:/data/`(库已装:`uv add modelscope`):
@@ -47,7 +47,7 @@ ds = MsDataset.load('facebook/SACo-VEval', cache_dir='D:/data/SACo-VEval/.cache'
 ```
 
 已落地:
-- `D:/data/BSDS500/`(BSDS500,389MB,images+groundTruth+ucm2)→ junction `datasets/BSDS500/` ✅
+- `D:/data/BSDS500/`(BSDS500,389MB,images+groundTruth+ucm2)→ junction `datasets/raw/BSDS500/` ✅
 - SA-Co-VEval(`facebook/SACo-VEval`,~32GB)待下,已记 task,计划同样落 `D:/data/SACo-VEval/` + junction
 
 ## 三个数据域(勿混为一谈)
@@ -70,9 +70,9 @@ ds = MsDataset.load('facebook/SACo-VEval', cache_dir='D:/data/SACo-VEval/.cache'
 
 ### 3. raw / contour 视频(通用 contour-video 输入)
 - raw = 用户自备输入,接受**视频文件**(`.mp4/.avi/.mov/.mkv/.m4v/.webm/.y4m`)或**帧目录**(`.png/.jpg/.jpeg/.tif/.tiff/.bmp`);位置不固定,运行时由 `--input` 指定
-- contour = 阶段1 提取产物:**无损 `contour.mp4`(`libx264 -qp 0 -pix_fmt yuv420p`)+ `manifest.json`**,按方法分目录(`datasets/contour/<source>/<method>/`,canny/sobel 不互相覆盖),**不再保留 PNG 帧**。阶段2 从 contour.mp4 解码出临时帧跑评测,跑完清理。
+- contour = 阶段1 提取产物:**无损 `contour.mp4`(`libx264 -qp 0 -pix_fmt yuv420p`)+ `manifest.json`**,按方法分目录(`datasets/<method>/<source>/`,canny/sobel 不互相覆盖),**不再保留 PNG 帧**。阶段2 从 contour.mp4 解码出临时帧跑评测,跑完清理。
 - `--input` 接受视频或帧目录,目录会 glob VIDEO_EXTS(`benchmark/video/stage1_extract.py::expand_inputs`)
-- 路径:`${INFRACOMP_DATASETS_DIR}/contour/<source>/<method>/contour.mp4`(如 `contour/akiyo_cif/canny/contour.mp4`)+ 同目录 `manifest.json`
+- 路径:`${INFRACOMP_DATASETS_DIR}/<method>/<source>/contour.mp4`(如 `canny/akiyo_cif/contour.mp4`)+ 同目录 `manifest.json`
 - 迁移旧目录(从 PNG 帧格式转 contour.mp4 格式):`ffmpeg -y -framerate <fps> -i frame_%06d.png -vf pad=ceil(iw/2)*2:ceil(ih/2)*2:color=black -c:v libx264 -qp 0 -pix_fmt yuv420p contour.mp4` → 删 PNG → manifest 加 `"video_path"`。
 
 ### 4. Xiph derf CIF(自然视频,contour-video baseline 用)
@@ -129,7 +129,7 @@ ds = MsDataset.load('facebook/SACo-VEval', cache_dir='D:/data/SACo-VEval/.cache'
 uv run python -m benchmark.video --input /path/to/video.mp4 --method canny --crfs 18,23,28,33
 
 # 帧目录(如 FLIR thermal_8_bit) — 注意:帧目录输入会先生成 contour.mp4 再评测
-uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/FLIR_ADAS_1_3/video/thermal_8_bit --method canny --extract-only
+uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/raw/FLIR_ADAS_1_3/video/thermal_8_bit --method canny --extract-only
 
 # Y4M(自然视频,如 Xiph)
 uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/raw/xiph_cif/akiyo_cif.y4m --method canny
@@ -138,7 +138,7 @@ uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/raw/xiph_cif/
 uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/raw/xiph_cif --method canny
 
 # 仅阶段 2(复用已有 contour 产物,按方法分子目录)
-uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/contour/demo/canny --skip-extract
+uv run python -m benchmark.video --input ${INFRACOMP_DATASETS_DIR}/canny/demo --skip-extract
 
 # speed run(少量视频子集,**全帧不截断**;speed 靠 --sequences 加速,不靠 --frames)
 uv run python scripts/run_natural_baseline.py --sequences akiyo_cif,bus_cif --codecs x264 --crfs 23
@@ -161,7 +161,7 @@ uv run python scripts/run_natural_baseline.py --codecs x264,x265,vp9
 
 ## git 策略
 
-`datasets/` 下按媒体扩展名忽略(`*.mp4 *.png *.jpg *.tif ...`),不依赖固定目录名;`datasets/README.md`、`datasets/manifest.json`、`datasets/contour/*/manifest.json` 等小文件被追踪。**运行产物**(`results/video/xiph_cif.json`、`bitstreams/`、`recon/`、`source/`、`contour_mp4/`、`_raw_frames/`、`*.png` 帧)也不进 git,各 baseline 脚本每次跑覆盖或写独立文件。
+`datasets/` 下按媒体扩展名忽略(`*.mp4 *.png *.jpg *.tif ...`),不依赖固定目录名;`datasets/README.md`、`datasets/manifest.json`、`datasets/*/*/manifest.json`(各 `<method>/<source>/` 产物目录)等小文件被追踪。**运行产物**(`results/video/xiph_cif.json`、`bitstreams/`、`recon/`、`source/`、`contour_mp4/`、`_raw_frames/`、`*.png` 帧)也不进 git,各 baseline 脚本每次跑覆盖或写独立文件。
 
 ## Windows 已知坑
 

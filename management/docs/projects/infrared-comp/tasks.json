@@ -533,6 +533,10 @@
       "progress": [
         {
           "date": "2026-07-18",
+          "note": "取画面成功(里程碑):copy frame_src_data 全帧 2621440 字节(1280*1024 Y16),uint16 reshape (1024,1280),归一化渲染 PNG 经图像分析确认是真实热成像(拍植物枝条/墙/地,明暗合理无伪像)。关键实测:frame_src_data_length 报像素数非字节数,copy 须用 width*height*2;Y16 range 0x8000~0x80E8 窄动态需百分位归一化;setpalette 不填 rgb_data(YUV模式),走自写渲染。下一步:Y16->伪彩RGB+MJPEG HTTP 桥接,浏览器实时看画面。"
+        },
+        {
+          "date": "2026-07-18",
           "note": "openStreamByDevID 开流成功:rc=1,status=CONNECT_OK,6s 收 151 帧(25fps)。帧回调 frame_data_t 实测:width/height=1280/1024 对;frame_src_data 才是真实 Y16 热数据指针(值~0x80xx 典型红外灰度,length=1310720=像素数);rgb_data/yuv_data 在 YUV 模式空(待 setpalette 或改 mode 填充);param_data 非空=测温ParamLine。画面 Y16 数据流已拿到。下一步:Y16->RGB24 渲染(y16torgb24 或伪彩LUT)起 MJPEG 桥接到浏览器。"
         },
         {
@@ -602,7 +606,13 @@
           "status": "active",
           "assignee": "郑鑫裕",
           "description": "rm datasets/raw/ compat junction;mv original→raw;删根下 4 symlink;contour/<src>/<method> 真实数据搬到 <method>/<src>,删 contour/。\n\n• 依赖 t19-1 代码迁移完\n• contour 真实数据逐项核实,可重跑 stage1 兜底",
-          "children": []
+          "children": [],
+          "progress": [
+            {
+              "date": "2026-07-18",
+              "note": "[进度] 删 contour/ 下 14 compat junction(hed/sobel/pidinet/yoloe26 的 + bsds_*_gt + imagenet_train_*);CONFLICT canny(旧新大小不同,akiyo 新14KB疑坏)+ imagenet sharded 留 TODO 不删;benchmark.py list_runs 保留遍历 contour/ 兼容,/api/benchmark/runs 200"
+            }
+          ]
         },
         {
           "id": "t19-3",
