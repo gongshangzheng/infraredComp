@@ -119,7 +119,7 @@ function toggleExpand(id) {
 const isImage = (path) => /\.(png|jpg|jpeg|bmp|tif|tiff)$/i.test(path || '')
 const getUrl = (path, dataset) => {
   if (!path) return ''
-  if (path.startsWith('contour/bsds_') || path.startsWith('contour/imagenet_')) return getDatasetMediaUrl(dataset, path)
+  if (path.startsWith('contour/bsds_') || path.startsWith('contour/imagenet_') || path.startsWith('BSDS500/')) return getDatasetMediaUrl(dataset, path)
   return getOutputUrl(path)
 }
 const methodOptions = computed(() => {

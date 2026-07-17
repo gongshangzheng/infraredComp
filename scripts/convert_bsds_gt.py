@@ -55,17 +55,20 @@ def convert_split(src: Path, out_root: Path, split: str, save_size: int) -> int:
         return 0
     out_dir = out_root / f"bsds_{split}_gt"
     out_dir.mkdir(parents=True, exist_ok=True)
+    source_images = []  # [{stem, image}] 供 _ensure_source 映射 BSDS 原图
     n = 0
     for i, mp in enumerate(mats):
-        out = out_dir / f"frame_{i:07d}.png"
+        out = out_dir / f"{mp.stem}.png"  # 用原始 BSDS image 名(101085.png)
         if out.exists():
             n += 1
+            source_images.append({"stem": mp.stem, "image": f"{mp.stem}.jpg"})
             continue  # skip-if-exists
         edge = _mat_to_soft_edge(mp)           # HxW uint8
         img = Image.fromarray(edge, mode="L")
         if save_size and save_size > 0 and img.size != (save_size, save_size):
             img = img.resize((save_size, save_size), Image.BILINEAR)
         img.save(out)
+        source_images.append({"stem": mp.stem, "image": f"{mp.stem}.jpg"})
         n += 1
     manifest = {
         "source_name": f"bsds_{split}",
@@ -73,6 +76,7 @@ def convert_split(src: Path, out_root: Path, split: str, save_size: int) -> int:
         "size": save_size,
         "frame_count": n,
         "frames_dir": str(out_dir),
+        "source_images": source_images,  # [{stem, image}] 供 _ensure_source 映射原图
     }
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"[bsds-gt] {split}: {n} frames -> {out_dir}", flush=True)

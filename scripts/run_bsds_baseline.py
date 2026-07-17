@@ -53,7 +53,7 @@ def load_bsds_val_artifacts(max_images: int | None = None, sequences: str | None
         )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     frames_dir = Path(manifest.get("frames_dir") or str(gt_dir))
-    pngs = sorted(frames_dir.glob("frame_*.png"))
+    pngs = sorted(frames_dir.glob("*.png"))
     if sequences:
         want = {s.strip() for s in sequences.split(",") if s.strip()}
         pngs = [p for p in pngs if p.stem in want]

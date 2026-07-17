@@ -213,13 +213,30 @@ def _run_ffmpeg(args: list[str]) -> None:
     run_ffmpeg(args)
 
 
-def _ensure_source_video(seq: str) -> str | None:
+def _ensure_source_video(seq: str, dataset: str | None = None) -> str | None:
     """Lazy-generate a viewable mp4 of the ORIGINAL video, capped to the contour
     frame window so it lines up with the edge/recon clips in the 3-video cell.
     Returns relative path under OUTPUTS_DIR (e.g. 'source/akiyo_cif.mp4')."""
-    key = ("source", seq)
+    key = ("source", seq, dataset)
     if key in _VIDEO_CACHE:
         return _VIDEO_CACHE[key]
+    # BSDS 图片数据集:用 manifest source_images 映射原始 BSDS image,直接返 datasets 相对 path
+    ds_lower = (dataset or "").lower()
+    if "bsds" in ds_lower:
+        split = "val" if "val" in ds_lower else ("test" if "test" in ds_lower else "val")
+        mpath = os.path.join(DATASETS_DIR, "contour", f"bsds_{split}_gt", "manifest.json")
+        if os.path.isfile(mpath):
+            try:
+                m = json.loads(read_file(mpath) or "{}")
+                for si in m.get("source_images", []):
+                    if si.get("stem") == seq:
+                        img = os.path.join(DATASETS_DIR, "BSDS500", "images", split, si["image"])
+                        if os.path.isfile(img):
+                            rel = os.path.relpath(img, DATASETS_DIR).replace(os.sep, "/")
+                            _VIDEO_CACHE[key] = rel
+                            return rel
+            except Exception:  # noqa: BLE001
+                pass
     raw = _find_raw_video(seq)
     out_rel = f"source/{seq}.mp4"
     out = os.path.join(SOURCE_VIDEO_DIR, f"{seq}.mp4")
@@ -877,9 +894,10 @@ async def get_results(model: str = None, dataset: str = None, metric: str = None
         seq = r.get("sequence_name") or ""
         method = r.get("method") or "canny"
         if seq:
-            if seq not in src_cache:
-                src_cache[seq] = _ensure_source_video(seq)
-            row["original_video"] = src_cache[seq]
+            src_key = f"{seq}/{r.get('dataset')}"
+            if src_key not in src_cache:
+                src_cache[src_key] = _ensure_source_video(seq, r.get("dataset"))
+            row["original_video"] = src_cache[src_key]
             con_key = f"{seq}/{method}/{r.get('dataset')}"
             if con_key not in con_cache:
                 con_cache[con_key] = _ensure_contour_video(seq, method, r.get("dataset"))

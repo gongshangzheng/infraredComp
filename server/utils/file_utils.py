@@ -3,14 +3,19 @@ import re
 
 
 def safe_resolve(base_dir, *parts):
-    """安全地拼接并解析路径，确保结果位于 base_dir 内部（含符号链接解析）。"""
+    """安全地拼接并解析路径，确保结果位于 base_dir 内部。
+
+    用 abspath（不解析 junction/symlink 的 reparse point）而非 realpath，
+    这样 datasets/ 下的 junction（如 BSDS500 → D:/data/BSDS500）不会被
+    解析到 base 之外而误拒；../ 等路径穿越仍被 abspath 归一 + startswith 拦截。
+    """
     if not isinstance(base_dir, str):
         return None
     try:
-        base = os.path.realpath(base_dir)
+        base = os.path.abspath(base_dir)
         if not os.path.isdir(base):
             return None
-        path = os.path.realpath(os.path.join(base, *parts))
+        path = os.path.abspath(os.path.join(base, *parts))
         # 允许等于 base 目录，或位于 base 之下
         if path != base and not path.startswith(base + os.sep):
             return None

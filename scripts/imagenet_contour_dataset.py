@@ -171,7 +171,7 @@ class ContourPNGDataset(Dataset):
         root = Path(frames_dir)
         files = sorted(
             p for p in root.rglob("*")
-            if p.name.lower().startswith("frame_") and p.suffix.lower() in _IMAGE_EXTS
+            if p.suffix.lower() in _IMAGE_EXTS
         )
         if max_images and max_images > 0:
             files = files[: max_images]
