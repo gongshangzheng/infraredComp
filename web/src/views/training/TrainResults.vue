@@ -139,11 +139,11 @@ const curveOption = computed(() => {
   return {
     tooltip: { trigger: 'axis' },
     legend: { data: series.map(s => s.name), type: 'scroll', top: 0 },
-    grid: { top: 40, bottom: 50 },
+    grid: { top: 40, bottom: 70 },
     xAxis: { type: 'value', name: 'epoch', minInterval: 1 },
     yAxis: { type: 'value', name: yname, scale: true },
     dataZoom: [
-      { type: 'slider', xAxisIndex: 0, bottom: 8 },
+      { type: 'slider', xAxisIndex: 0, bottom: 12, height: 20 },
       { type: 'inside', xAxisIndex: 0 },
     ],
     series,
@@ -167,11 +167,11 @@ const testCurveOption = computed(() => {
   return {
     tooltip: { trigger: 'axis' },
     legend: { data: series.map(s => s.name), type: 'scroll', top: 0 },
-    grid: { top: 40, bottom: 50 },
+    grid: { top: 40, bottom: 70 },
     xAxis: { type: 'value', name: 'epoch', minInterval: 1 },
     yAxis: { type: 'value', name: yname, scale: true },
     dataZoom: [
-      { type: 'slider', xAxisIndex: 0, bottom: 8 },
+      { type: 'slider', xAxisIndex: 0, bottom: 12, height: 20 },
       { type: 'inside', xAxisIndex: 0 },
     ],
     series,
