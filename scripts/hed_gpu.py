@@ -2,7 +2,7 @@
 """GPU 版 HED（PyTorch）—— 复刻 s9xie/hed 架构，权重从 caffemodel 转移，跑在 CUDA。
 
 本机 cv2.dnn 无 CUDA，CPU 跑 1.28M 张 imagenet ≈ 20h；此模块用 torch 在 5090 上
-批量推理（~30min）。权重沿用 third_party/hed 的 deploy.prototxt + caffemodel
+批量推理（~30min）。权重沿用 models/hed 的 deploy.prototxt + caffemodel
 （经 cv2.dnn 读 blobs 转成 torch，无需 caffe）。
 
 输出与 cv2 版 hed 对齐（同模型同权重，仅推理后端不同），可直接作为 'hed' 边缘。
@@ -23,7 +23,7 @@ import torch.nn as nn  # noqa: E402
 import torch.nn.functional as F  # noqa: E402
 from PIL import Image  # noqa: E402
 
-_HED_DIR = REPO / "third_party" / "hed"
+_HED_DIR = REPO / "models" / "hed"
 PROTOTXT = str(_HED_DIR / "deploy.prototxt")
 CAFFEMODEL = str(_HED_DIR / "hed_pretrained_bsds.caffemodel")
 # ImageNet per-channel means (BGR) —— s9xie/hed recipe

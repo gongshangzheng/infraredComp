@@ -1,5 +1,5 @@
 ---
-name: contour-video-evaluation
+name: evaluation
 description: |
   Contour-Video 轮廓视频压缩评测库(benchmark/video/)使用指南。管线产物是**无损 contour.mp4**(libx264 -qp 0 yuv420p),**不保留 PNG 帧**;阶段2 从视频解码出临时帧跑评测。两模式评测(speed run 视频网格 / formal test 平均指标),**默认不截断帧**(speed 靠 --sequences 子集加速)。
   触发场景:(1) 从原始视频提取轮廓视频(阶段1,产出 contour.mp4) (2) 跑视频 codec 压缩评测(阶段2,从视频起) (3) speed run(少量视频,视频网格看主观,不截断帧) (4) formal test(全量,per-(codec,crf) 平均指标,不截断帧) (5) 跑 verify 端到端自检 (6) 查看/调整 results 结果格式 / aggregate 端点 (7) 重跑评测(删旧 results JSON 强制刷新)

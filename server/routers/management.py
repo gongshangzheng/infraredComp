@@ -3,7 +3,8 @@ import os
 import re
 from fastapi import APIRouter, HTTPException
 from server.config import MANAGEMENT_DIR
-from server.utils.file_utils import read_file, safe_resolve, scan_directory
+from server.utils.file_utils import safe_resolve, scan_directory
+from server.cache import file_cached, timed_cached
 from server.parsers.team_parser import parse_team_list, parse_member_profile
 from server.parsers.report_parser import get_report_list, get_report_detail
 from server.parsers.tasks_parser import parse_tasks
@@ -31,21 +32,47 @@ def _safe_report_path(base_dir, *parts):
     return filepath
 
 
+@timed_cached(ttl=30.0)
+def _get_team():
+    readme = file_cached(os.path.join(MANAGEMENT_DIR, 'team', 'README.md'), ttl=30.0)
+    return parse_team_list(readme)
+
+
+@timed_cached(ttl=30.0)
+def _list_meetings():
+    meetings_dir = os.path.join(MANAGEMENT_DIR, 'docs', 'meetings')
+    files = scan_directory(meetings_dir, pattern=r'.*\.md$')
+    files = [f for f in files if 'template' not in os.path.basename(f).lower()]
+    meetings = []
+    for f in files:
+        content = file_cached(f, ttl=30.0)
+        if content:
+            date_match = re.search(r'(\d{4}-\d{2}-\d{2})', os.path.basename(f))
+            date = date_match.group(1) if date_match else os.path.basename(f)
+            participants = ''
+            recorder = ''
+            for line in content.split('\n'):
+                if '参会人' in line:
+                    participants = line.split('：')[-1].strip() if '：' in line else ''
+                if '记录人' in line:
+                    recorder = line.split('：')[-1].strip() if '：' in line else ''
+            meetings.append({'date': date, 'participants': participants, 'recorder': recorder})
+    return meetings
+
+
 @router.get("/team")
 async def get_team():
     """获取团队成员列表"""
-    readme = read_file(os.path.join(MANAGEMENT_DIR, 'team', 'README.md'))
-    return parse_team_list(readme)
+    return _get_team()
 
 
 @router.get("/team/{member_id}")
 async def get_team_member(member_id: str):
     """获取成员档案详情"""
     team_dir = os.path.join(MANAGEMENT_DIR, 'team')
-    # 遍历 .md 文件，找到英文标识匹配的成员
     for f in os.listdir(team_dir):
         if f.endswith('.md') and f != 'README.md':
-            content = read_file(os.path.join(team_dir, f))
+            content = file_cached(os.path.join(team_dir, f), ttl=30.0)
             if content:
                 profile = parse_member_profile(content)
                 if profile and profile['id'] == member_id:
@@ -62,7 +89,6 @@ async def get_daily_list():
 @router.get("/daily/{date}/{author}")
 async def get_daily_detail(date: str, author: str):
     """获取指定日报内容"""
-    # 从 date 解析年月日
     parts = date.split('-')
     if len(parts) != 3:
         raise HTTPException(status_code=400, detail="Invalid date")
@@ -72,7 +98,6 @@ async def get_daily_detail(date: str, author: str):
     if not _FILENAME_PART_RE.match(author):
         raise HTTPException(status_code=400, detail="Invalid author")
 
-    # 尝试 YYYY/MM/DD-姓名.md
     filepath = _safe_report_path(
         os.path.join(MANAGEMENT_DIR, 'daily', year, month),
         f"{day}-{author}.md",
@@ -159,34 +184,7 @@ async def get_milestones():
 @router.get("/meetings")
 async def get_meetings():
     """获取会议纪要列表"""
-    meetings_dir = os.path.join(MANAGEMENT_DIR, 'docs', 'meetings')
-    files = scan_directory(meetings_dir, pattern=r'.*\.md$')
-    files = [f for f in files if 'template' not in os.path.basename(f).lower()]
-
-    meetings = []
-    for f in files:
-        content = read_file(f)
-        if content:
-            import re
-            # 提取日期
-            date_match = re.search(r'(\d{4}-\d{2}-\d{2})', os.path.basename(f))
-            date = date_match.group(1) if date_match else os.path.basename(f)
-
-            # 从内容中提取参会人和记录人
-            participants = ''
-            recorder = ''
-            for line in content.split('\n'):
-                if '参会人' in line:
-                    participants = line.split('：')[-1].strip() if '：' in line else ''
-                if '记录人' in line:
-                    recorder = line.split('：')[-1].strip() if '：' in line else ''
-
-            meetings.append({
-                'date': date,
-                'participants': participants,
-                'recorder': recorder,
-            })
-    return meetings
+    return _list_meetings()
 
 
 @router.get("/meetings/{date}")
@@ -198,7 +196,7 @@ async def get_meeting_detail(date: str):
     meetings_dir = os.path.join(MANAGEMENT_DIR, 'docs', 'meetings')
     filepath = _safe_report_path(meetings_dir, f"{date}.md")
     if filepath:
-        content = read_file(filepath)
+        content = file_cached(filepath, ttl=30.0)
         if content:
             return {'date': date, 'content': content}
     raise HTTPException(status_code=404, detail="Meeting not found")

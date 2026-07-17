@@ -42,14 +42,25 @@
     <!-- 评测结果表 -->
     <n-card size="small" title="评测结果" style="margin-top: 12px">
       <n-spin :show="loading">
-        <n-data-table v-if="filteredResults.length" :columns="resultColumns" :data="filteredResults" :bordered="false" size="small" striped />
+        <n-data-table
+          v-if="results.length"
+          :columns="resultColumns"
+          :data="results"
+          :bordered="false"
+          size="small"
+          striped
+          remote
+          :pagination="resultPagination"
+          :row-key="(r) => r.id"
+          @update:page="onResultPageChange"
+        />
         <EmptyState v-else description="暂无结果。运行评测后此处列出各 codec×CRF 的指标。" />
       </n-spin>
     </n-card>
 
     <!-- 方法对比矩阵（同一操作点不同方法的 baseline） -->
     <n-card size="small" title="方法对比 — 不同轮廓提取方法下的 baseline" style="margin-top: 12px">
-      <template #header-extra><span class="hint">点单元格播放该方法输出</span></template>
+      <template #header-extra><span class="hint">点单元格播放该方法输出（基于当前页数据）</span></template>
       <table v-if="matrixRows.length && methods.length" class="matrix">
         <thead>
           <tr><th>序列</th><th>codec</th><th>CRF</th><th v-for="m in methods" :key="m">{{ m }}</th></tr>
@@ -76,7 +87,18 @@
     <!-- 输出文件 -->
     <n-card size="small" title="输出文件（bitstreams 压缩码流 / recon 重建帧）" style="margin-top: 12px">
       <n-spin :show="outputsLoading">
-        <n-data-table v-if="outputs.length" :columns="outputColumns" :data="outputs" :bordered="false" size="small" striped />
+        <n-data-table
+          v-if="outputs.length"
+          :columns="outputColumns"
+          :data="outputs"
+          :bordered="false"
+          size="small"
+          striped
+          remote
+          :pagination="outputPagination"
+          :row-key="(r) => r.path"
+          @update:page="onOutputPageChange"
+        />
         <EmptyState v-else description="暂无输出文件。评测产物在 results/video/{bitstreams,recon}/。" />
       </n-spin>
     </n-card>
@@ -97,26 +119,27 @@ const methods = ref([])
 const outputs = ref([])
 const filters = ref({ dataset: null, method: null, sequence: null, codec: null })
 
-// 常驻播放器状态
+const RESULT_PAGE_SIZE = 50
+const OUTPUT_PAGE_SIZE = 100
+
+const resultPagination = ref({
+  page: 1, pageSize: RESULT_PAGE_SIZE, itemCount: 0,
+  prefix: ({ itemCount }) => `共 ${itemCount} 条`,
+})
+const outputPagination = ref({
+  page: 1, pageSize: OUTPUT_PAGE_SIZE, itemCount: 0,
+  prefix: ({ itemCount }) => `共 ${itemCount} 条`,
+})
+
 const playerSrc = ref('')
 const playerTitle = ref('')
 const currentRun = ref(null)
 
 const methodOptions = computed(() => methods.value.map(m => ({ label: m, value: m })))
+const datasetOptions = computed(() => [...new Set(results.value.map(r => r.dataset_name).filter(Boolean))].map(d => ({ label: d, value: d })))
 const sequenceOptions = computed(() => [...new Set(results.value.map(r => r.sequence_name))].map(s => ({ label: s, value: s })))
 const codecOptions = computed(() => [...new Set(results.value.map(r => r.codec))].map(c => ({ label: c, value: c })))
-const datasetOptions = computed(() => [...new Set(results.value.map(r => r.dataset_name).filter(Boolean))].map(d => ({ label: d, value: d })))
 
-const filteredResults = computed(() => {
-  let list = results.value
-  if (filters.value.dataset) list = list.filter(r => r.dataset_name === filters.value.dataset)
-  if (filters.value.method) list = list.filter(r => r.method === filters.value.method)
-  if (filters.value.sequence) list = list.filter(r => r.sequence_name === filters.value.sequence)
-  if (filters.value.codec) list = list.filter(r => r.codec === filters.value.codec)
-  return list
-})
-
-// 方法对比矩阵：行 = (sequence, codec, crf) 操作点，列 = 方法
 const matrixRows = computed(() => {
   let list = results.value
   if (filters.value.dataset) list = list.filter(r => r.dataset_name === filters.value.dataset)
@@ -168,7 +191,6 @@ function fmtSize(b) {
   return `${v.toFixed(1)} ${u[i]}`
 }
 
-// 选择一条结果 -> 常驻播放框加载（preload=none：按 play 才取字节）
 function play(run) {
   if (!run.output_video) { message.warning('该结果暂无输出视频'); return }
   currentRun.value = run
@@ -181,18 +203,68 @@ function playOutput(o) {
   playerTitle.value = o.path
 }
 
+async function fetchResults(page) {
+  const offset = (page - 1) * RESULT_PAGE_SIZE
+  const params = { offset, limit: RESULT_PAGE_SIZE }
+  return getEvalResults(params)
+}
+
+async function fetchOutputs(page) {
+  const offset = (page - 1) * OUTPUT_PAGE_SIZE
+  return listOutputs({ offset, limit: OUTPUT_PAGE_SIZE })
+}
+
+async function onResultPageChange(page) {
+  loading.value = true
+  try {
+    resultPagination.value.page = page
+    const res = await fetchResults(page)
+    if (res.runs !== undefined) {
+      results.value = res.runs
+      resultPagination.value.itemCount = res.total ?? 0
+    } else if (Array.isArray(res)) {
+      results.value = res
+    }
+  } finally { loading.value = false }
+}
+
+async function onOutputPageChange(page) {
+  outputsLoading.value = true
+  try {
+    outputPagination.value.page = page
+    const res = await fetchOutputs(page)
+    if (res.outputs !== undefined) {
+      outputs.value = res.outputs
+      outputPagination.value.itemCount = res.total ?? 0
+    }
+  } finally { outputsLoading.value = false }
+}
+
 async function load() {
   loading.value = true
   outputsLoading.value = true
   try {
+    resultPagination.value.page = 1
+    outputPagination.value.page = 1
     const [res, meth, out] = await Promise.all([
-      getEvalResults().catch(() => []),
+      fetchResults(1).catch(() => ({ runs: [], total: 0 })),
       getMethods().catch(() => ({ methods: [] })),
-      listOutputs().catch(() => ({ outputs: [] })),
+      fetchOutputs(1).catch(() => ({ outputs: [], total: 0 })),
     ])
-    results.value = res || []
+    if (res.runs !== undefined) {
+      results.value = res.runs
+      resultPagination.value.itemCount = res.total ?? 0
+    } else if (Array.isArray(res)) {
+      results.value = res
+      resultPagination.value.itemCount = res.length
+    }
     methods.value = meth?.methods || []
-    outputs.value = out?.outputs || []
+    if (out.outputs !== undefined) {
+      outputs.value = out.outputs
+      outputPagination.value.itemCount = out.total ?? 0
+    } else {
+      outputs.value = out?.outputs || []
+    }
   } catch (e) { message.error('加载失败') }
   loading.value = false
   outputsLoading.value = false

@@ -13,7 +13,7 @@ BGR frames and lets each extractor decide gray-vs-color (see
 ``integrate-third-party-model`` skill).
 
 Code via ``pip install ultralytics`` (used as-is, not vendored — we don't modify
-its internals); only the ~32 MB weight is vendored under ``third_party/yoloe26/``
+its internals); only the ~32 MB weight is vendored under ``models/yoloe26/``
 (gitignored). Same ``extract(frame) -> uint8 HxW`` contract.
 """
 from __future__ import annotations
@@ -26,7 +26,7 @@ import numpy as np
 
 from .base import ContourExtractor, register
 
-_YOLOE_DIR = Path(__file__).resolve().parents[3] / "third_party" / "yoloe26"
+_YOLOE_DIR = Path(__file__).resolve().parents[3] / "models" / "yoloe26"
 DEFAULT_WEIGHTS = str(_YOLOE_DIR / "yoloe-26s-seg-pf.pt")
 
 # device -> YOLOE model; cached so build_extractor doesn't reload the 32 MB pth.
@@ -58,7 +58,7 @@ class Yoloe26Extractor(ContourExtractor):
         if not os.path.isfile(weights):
             raise FileNotFoundError(
                 "YOLOE-26 weights not found. Fetch with:\n"
-                "    curl -L -o third_party/yoloe26/yoloe-26s-seg-pf.pt "
+                "    curl -L -o models/yoloe26/yoloe-26s-seg-pf.pt "
                 "https://github.com/ultralytics/assets/releases/download/v8.4.0/yoloe-26s-seg-pf.pt\n"
                 "  (also needs `pip install ultralytics`; ~32 MB, prompt-free seg)\n"
                 f"  expected: {weights}"

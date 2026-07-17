@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_serena_serena__read_file",
+      "mcp__plugin_serena_serena__search_for_pattern",
+      "mcp__plugin_serena_serena__find_symbol",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(git restore:*)"
+    ]
+  }
+}

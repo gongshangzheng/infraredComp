@@ -1,5 +1,5 @@
 ---
-name: contour-video-management
+name: management
 description: |
   infraredComp 项目管理模块操作指南。用于团队成员管理、日报/周报/月报、任务（看板+项目树）、里程碑、会议纪要等 CRUD 操作（脚本直接改文件，后端只读）。
   触发场景：(1) 添加/修改/删除团队成员，(2) 创建/更新/删除报表，(3) 管理任务(增删改查+改状态跨段移动)，(4) 创建/更新/删除会议纪要，(5) 了解项目结构
@@ -13,7 +13,7 @@ description: |
 
 > **任务数据单源**：任务（看板 + 项目树）的唯一来源是 **per-project `management/docs/projects/{slug}/tasks.json`**（层级树）。看板（TaskBoard）是它的**派生视图**——按 status 展平成 3 桶，按项目切换。`tasks.md` 已废弃删除。成员/报表/会议/里程碑仍是 markdown。
 
-## 脚本一览（`.claude/skills/contour-video-management/scripts/`）
+## 脚本一览（`.claude/skills/management/scripts/`）
 
 脚本 **self-locating**（用 `parents[4]` 解析仓库根），同一份文件在 infraredComp 与 ProjFlow 都能跑（两库 `tasks.json` schema 一致）。纯标准库，**推荐用 `uv run python` 运行**（项目是 uv 管理）。
 
@@ -61,16 +61,24 @@ management/
   "startDate": "2026-07-08", "endDate": "2026-07-10", "assignee": "张三",
   "description": "...", "notePath": "notes/01.md", "priority": "P1",
   "hidden": true,
-  "progress": [ { "date": "2026-07-16", "note": "完成了 X" } ],
+  "progress": [
+    { "date": "2026-07-17", "note": "[完成] 修复分页 bug——offset 未重置，加 resetPage() 解决" },
+    { "date": "2026-07-16", "note": "完成 API 对接，数据可正常加载" }
+  ],
   "children": [ ... ]
 }
 ```
 
 字段说明补充：
 - `hidden: true` — 项目树默认不展示此节点（前端眼睛图标可切换显示，节点以半透明斜体呈现）。子任务会随父任务一起隐藏。用法：`add_task.py --hidden` / `update_task.py --hidden` 或 `--no-hidden`。
+- `progress` — 进展记录数组，**新条目在前**（unshift）。每条 `{ "date": "YYYY-MM-DD", "note": "..." }`。
+  - 推进时：`update_task.py --progress "完成 X，下一步 Y"`（日期自动填今天）。
+  - 完成时：`update_task.py --status completed --progress "[完成] 方法总结"`（`[完成]` 前缀标识完成条目）。
+  - **UI 渲染**：项目树 hover-card 展示最近 3 条；任务详情页用 Cornell 布局——左列上半为描述面板、下半为完成总结面板（`[完成]` 条目），右列通栏为完整进展时间线（`[完成]` 条目绿色高亮）。
+  - **不要手写 progress**：始终通过 `--progress` 脚本追加，不要直接编辑 tasks.json 的 progress 数组（日期格式、unshift 顺序容易出错）。
 
 ```bash
-SD=.claude/skills/contour-video-management/scripts
+SD=.claude/skills/management/scripts
 
 # 新增根级任务（id 自动生成 tN）
 uv run python $SD/add_task.py --slug infrared-comp --title "轮廓提取优化" --status active \
@@ -129,6 +137,7 @@ uv run python $SD/list_tasks.py --slug infrared-comp --id t2-3    # 单个任务
 5. **禁止**：HTML 标签、emoji、markdown 链接、`TODO:` 前缀、"详见 notePath" 这种占位废话。
 6. 中文语境下英文专有名词首字母大写（PyTorch 不是 pytorch），且左右各留一个半角空格。
 7. 如果任务已经挂了 `notePath`，description 仍要独立可读（用户不点进笔记也能看懂）。
+8. **进度/状态放 `progress` 字段，不要塞进 description**。description 只写"做什么"（静态定位 + 范围 + 非目标），不写"当前进度/做到哪了/遇到什么 bug/链接"。当前进度用 `update_task --progress` 追加（见 §1.2）。description 里出现"当前进度@日期"、"【进度@...】"、"(1) X: ... (2) Y: ..."这种长进度块、或 OneDrive/curl 链接，就是反模式——把进度/链接移到 progress（或 notePath），description 重写成首行+要点。
 
 **好例子**（tasks.json 中的 description 值）：
 ```json
@@ -153,7 +162,12 @@ uv run python $SD/list_tasks.py --slug infrared-comp --id t2-3    # 单个任务
 
 ### 1.2 工作流公约（任务状态同步）
 
-每完成一个用户请求，检查是否有对应的任务需要更新状态或进展。**铁律**：做了事就要记到任务树上，不要只做事不更新。
+每完成一个用户请求，先检查是否有对应的任务需要更新状态或进展。**铁律**：做了事就要记到任务树上，不要只做事不更新；但也不要把鸡毛蒜皮的事硬塞进任务树。
+
+**任务树边界（建任务 / 更新任务二选一）**：
+- **进任务树**：独立交付物、能单独验收、预计耗时 > 15–30 分钟、需要跨步骤推进或后续回顾的工作。
+- **不进任务树**：一行 CSS/文案调整、拼写修正、commit 后随手修、依附于当前任务的微调。这些直接记到当前任务的 `progress` 里即可，不必新建 task。
+- **判断标准**：如果用户不说"帮我记下来"，这件事又不值得单独 review，就别建 task。
 
 **开始工作时**（把任务从 planned → active）：
 ```bash
@@ -262,9 +276,11 @@ uv run python $SD/delete_meeting.py --date 2026-07-11
 ## 常用命令
 
 ```bash
-SD=.claude/skills/contour-video-management/scripts
+SD=.claude/skills/management/scripts
 uv run python $SD/list_tasks.py --slug infrared-comp          # 看任务树
 uv run python $SD/list_tasks.py --slug infrared-comp --flat  # 看展平看板桶
+uv run python $SD/list_tasks.py --slug infrared-comp --id t2-3  # 按 ID 精确定位任务详情
 uv run python $SD/add_task.py --slug infrared-comp --title "X" --status active --assignee Y --start 2026-07-11 --end 2026-07-18
+uv run python $SD/update_task.py --slug infrared-comp --id t2-3 --progress "完成 X，下一步 Y"  # 追加进展
 curl --noproxy '*' "http://localhost:8091/api/management/tasks?slug=infrared-comp"   # 前端所见看板
 ```

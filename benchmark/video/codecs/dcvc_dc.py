@@ -7,7 +7,7 @@ as NEVC (bytedance/NEVC-1.0 = EHVC): ``IntraNoAR`` (I-frame) + ``DMC`` (P-frame)
 
 Checkpoints: ``cvpr2023_image_psnr.pth.tar`` + ``cvpr2023_video_psnr.pth.tar``
 on OneDrive (blocked here — download manually per t10-1 description). Vendor
-src under ``third_party/DCVC/DCVC-family/DCVC-DC/`` (in the submodule).
+src under ``models/DCVC/DCVC-family/DCVC-DC/`` (in the submodule).
 
 This wrapper is a near-copy of ``nevc.py`` with src + checkpoint paths adapted.
 NEVC proved the ``encode_decode`` + ``decode_i``/``decode_p`` path works
@@ -35,7 +35,7 @@ _HDR = struct.Struct("<III")      # n, h, w
 _FREC = struct.Struct("<BiI")     # type, q_index, blen
 _LEN = struct.Struct("<I")        # stats_pickle length
 
-_DCVC_DC_DIR = Path(__file__).resolve().parents[3] / "third_party" / "DCVC" / "DCVC-family" / "DCVC-DC"
+_DCVC_DC_DIR = Path(__file__).resolve().parents[3] / "models" / "DCVC" / "DCVC-family" / "DCVC-DC"
 DEFAULT_CKPT_I = str(_DCVC_DC_DIR / "checkpoints" / "cvpr2023_image_psnr.pth.tar")
 DEFAULT_CKPT_P = str(_DCVC_DC_DIR / "checkpoints" / "cvpr2023_video_psnr.pth.tar")
 
@@ -75,7 +75,7 @@ class DcvcDcCodec(VideoCodec):
     def _setup_error(self, reason: str) -> RuntimeError:
         return RuntimeError(
             f"DCVC-DC setup incomplete: {reason}\n"
-            "  1. src: third_party/DCVC/DCVC-family/DCVC-DC/src/ (git submodule)\n"
+            "  1. src: models/DCVC/DCVC-family/DCVC-DC/src/ (git submodule)\n"
             "  2. checkpoints: download cvpr2023_image_psnr.pth.tar + cvpr2023_video_psnr.pth.tar\n"
             f"     from OneDrive (see t10-1 in tasks.json for URLs) -> {_DCVC_DC_DIR}/checkpoints/\n"
             "  3. rans ext: MLCodec_rans + MLCodec_CXX .pyd in src/models/ (built from src/cpp, cp312)\n"

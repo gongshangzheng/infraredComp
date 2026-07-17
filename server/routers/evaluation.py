@@ -15,6 +15,7 @@ import os
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, Body
@@ -72,10 +73,33 @@ def _dataset_from_filename(name: str) -> str:
     return "default" if stem == "results" else stem
 
 
+_RESULTS_CACHE: dict = {}  # {mtime: float, ts: float, value: dict}
+
+
 def _load_results() -> dict:
     """读 results/video/ 下所有 *.json(多数据集共存),聚合 runs。
     每条 run 带 dataset 字段(envelope dataset 优先,否则从文件名推断) +
-    mode 字段(envelope mode 优先,否则按文件名/speed 推断:含 _speed -> speed,否则 formal)。"""
+    mode 字段(envelope mode 优先,否则按文件名/speed 推断:含 _speed -> speed,否则 formal)。
+
+    5s TTL + mtime 感知缓存：文件没变就直接返回缓存的解析结果。
+    """
+    now = time.monotonic()
+    # Compute the newest mtime among *.json files (0 if dir missing)
+    newest_mtime = 0.0
+    if os.path.isdir(RESULTS_VIDEO_DIR):
+        for jf in Path(RESULTS_VIDEO_DIR).glob("*.json"):
+            try:
+                mt = jf.stat().st_mtime
+                if mt > newest_mtime:
+                    newest_mtime = mt
+            except OSError:
+                continue
+    cached = _RESULTS_CACHE.get("value")
+    if (cached is not None
+            and _RESULTS_CACHE.get("mtime") == newest_mtime
+            and (now - _RESULTS_CACHE.get("ts", 0)) < 5.0):
+        return cached
+
     all_runs: list = []
     latest_gen = None
     if os.path.isdir(RESULTS_VIDEO_DIR):
@@ -107,8 +131,35 @@ def _load_results() -> dict:
                 if isinstance(r, dict):
                     r.setdefault("dataset", ds)
                     r.setdefault("mode", file_mode)
+                    r.pop("per_frame_psnr", None)  # strip: per-frame 数组占大头（300帧×2），前端聚合视图不需要
+                    r.pop("per_frame_ssim", None)
                     all_runs.append(r)
-    return {"generated_at": latest_gen, "runs": all_runs}
+    result = {"generated_at": latest_gen, "runs": all_runs}
+    _RESULTS_CACHE.clear()
+    _RESULTS_CACHE.update(value=result, mtime=newest_mtime, ts=now)
+    return result
+
+
+_BITSTREAM_INDEX: dict[str, str] = {}
+_BITSTREAM_MTIME: float | None = None
+
+
+def _bitstream_index() -> dict[str, str]:
+    """扫一次 bitstreams/ (mtime-aware) -> {stem: 'bitstreams/{fn}'}。
+    避免每 run os.listdir（3900× → 1×）。"""
+    global _BITSTREAM_INDEX, _BITSTREAM_MTIME
+    if not os.path.isdir(BITSTREAMS_DIR):
+        _BITSTREAM_INDEX = {}; _BITSTREAM_MTIME = None
+        return _BITSTREAM_INDEX
+    mt = os.stat(BITSTREAMS_DIR).st_mtime
+    if _BITSTREAM_INDEX and _BITSTREAM_MTIME == mt:
+        return _BITSTREAM_INDEX
+    idx = {}
+    for fn in os.listdir(BITSTREAMS_DIR):
+        if os.path.splitext(fn)[1].lower() in VIDEO_EXTS:
+            idx[fn.rsplit(".", 1)[0]] = f"bitstreams/{fn}"
+    _BITSTREAM_INDEX = idx; _BITSTREAM_MTIME = mt
+    return idx
 
 
 def _bitstream_for(run: dict) -> str | None:
@@ -123,12 +174,13 @@ def _bitstream_for(run: dict) -> str | None:
     method = run.get("method") or "canny"
     if not seq or not codec or crf is None:
         return None
-    if not os.path.isdir(BITSTREAMS_DIR):
-        return None
     prefix = f"{seq}_{method}_{codec}_crf{crf}"
-    for fn in os.listdir(BITSTREAMS_DIR):
-        if fn.startswith(prefix) and os.path.splitext(fn)[1].lower() in VIDEO_EXTS:
-            return f"bitstreams/{fn}"
+    idx = _bitstream_index()
+    if prefix in idx:
+        return idx[prefix]
+    for stem, path in idx.items():
+        if stem.startswith(prefix):
+            return path
     return None
 
 
@@ -188,14 +240,25 @@ def _ensure_source_video(seq: str) -> str | None:
     return _VIDEO_CACHE[key]
 
 
-def _ensure_contour_video(seq: str, method: str) -> str | None:
+def _ensure_contour_video(seq: str, method: str, dataset: str | None = None) -> str | None:
     """Lazy-generate a viewable lossy mp4 from the stage-1 lossless
     ``contour.mp4``. Returns relative path under OUTPUTS_DIR
     (e.g. 'contour_mp4/akiyo_cif_canny.mp4'). Returns None if the contour dir
     has no contour.mp4 (e.g. not yet extracted)."""
-    key = ("contour", seq, method)
+    key = ("contour", seq, method, dataset)
     if key in _VIDEO_CACHE:
         return _VIDEO_CACHE[key]
+    # 图片数据集(BSDS/imagenet):method=gt → 直接返 datasets 下 gt png 相对路径,前端走 /datasets/{id}/media serve,不 copy
+    if method == "gt":
+        import glob
+        ds_lower = (dataset or "").lower()
+        gt_pattern = "bsds_val_gt" if "val" in ds_lower else ("bsds_test_gt" if "test" in ds_lower else "bsds_*_gt")
+        for gt_dir in glob.glob(os.path.join(DATASETS_DIR, "contour", gt_pattern)):
+            src = os.path.join(gt_dir, f"{seq}.png")
+            if os.path.isfile(src):
+                rel = os.path.relpath(src, DATASETS_DIR).replace(os.sep, "/")
+                _VIDEO_CACHE[key] = rel
+                return rel
     cdir = os.path.join(DATASETS_DIR, "contour", seq, method)
     out_rel = f"contour_mp4/{seq}_{method}.mp4"
     out = os.path.join(CONTOUR_VIDEO_DIR, f"{seq}_{method}.mp4")
@@ -536,16 +599,35 @@ def _imagenet_image_datasets() -> list[dict]:
     ]
 
 
+def _bsds_datasets() -> list[dict]:
+    """BSDS500 val 轮廓 GT（已落地为 PNG），每张图视为 1 帧伪序列。
+
+    需先运行 `python scripts/convert_bsds_gt.py --splits val` 生成
+    datasets/contour/bsds_val_gt/frame_*.png + manifest.json。
+    """
+    return [{
+        "id": "bsds-val",
+        "name": "BSDS-val",
+        "kind": "contour",
+        "split": "val",
+        "usage": "both",
+        "sequences": [],
+        "contour_methods": ["gt"],
+        "description": "BSDS500 val 的 ground-truth 软边缘图，每张作为 1 帧伪序列跑视频 codec。",
+    }]
+
+
 # 已下线、不再注册到评测的数据集（raw 目录仍在但不展示）
 _EVAL_HIDDEN_RAW = {"osu_color_thermal"}
 
 
 @router.get("/datasets")
 async def get_datasets():
-    """列出数据集家族（Xiph-CIF-natural / imagenet val·test）及下属序列、轮廓方法。"""
+    """列出数据集家族（Xiph-CIF-natural / imagenet val·test / BSDS val）及下属序列、轮廓方法。"""
     datasets = [d for d in _load_raw_datasets() if d["id"] not in _EVAL_HIDDEN_RAW]
     _attach_contour(datasets)
     datasets += _imagenet_image_datasets()
+    datasets += _bsds_datasets()
     return datasets
 
 
@@ -554,6 +636,7 @@ async def get_dataset_detail(dataset_id: str):
     datasets = [d for d in _load_raw_datasets() if d["id"] not in _EVAL_HIDDEN_RAW]
     _attach_contour(datasets, with_previews=True)
     datasets += _imagenet_image_datasets()
+    datasets += _bsds_datasets()
     ds = next((d for d in datasets if d["id"] == dataset_id), None)
     if not ds:
         return {"detail": "Dataset not found"}, 404
@@ -702,7 +785,21 @@ async def run_evaluation(data: dict = Body(...)):
 
     checkpoint = data.get("checkpoint")
 
-    if "osu_color_thermal" in dataset_id:
+    if dataset_id == "bsds-val":
+        script = os.path.join(scripts_dir, "run_bsds_baseline.py")
+        cmd = [_bench_python(), "-u", script, "--mode", mode]
+        if codecs:
+            cmd += ["--codecs", _join_list(codecs)]
+        if data.get("crfs"):
+            cmd += ["--crfs", _join_list(data["crfs"])]
+        if mode == "speed" and data.get("sequences"):
+            cmd += ["--sequences", _join_list(data["sequences"])]
+        elif mode == "speed":
+            # speed run 默认只跑前 50 张，快速出结果
+            cmd += ["--max-images", "50"]
+        if checkpoint:
+            cmd += ["--checkpoint", checkpoint]
+    elif "osu_color_thermal" in dataset_id:
         if has_learned:
             return {"status": "error", "config": data, "output_video": None, "metrics": None,
                     "note": "osu 数据集暂不支持学习式 codec（无 runner）；用 xiph_cif。"}
@@ -759,25 +856,37 @@ async def run_evaluation(data: dict = Body(...)):
 # ---- results -------------------------------------------------------------- #
 
 @router.get("/results")
-async def get_results(model: str = None, dataset: str = None, metric: str = None, mode: str = None):
+async def get_results(model: str = None, dataset: str = None, metric: str = None, mode: str = None,
+                      offset: int = None, limit: int = None):
     """列 contour-video 评测结果（每条附 output_video 供按需播放）。
-    mode=formal/speed 过滤(formal→xiph_cif.json,speed→xiph_cif_speed.json 分文件)。"""
+    mode=formal/speed 过滤(formal→xiph_cif.json,speed→xiph_cif_speed.json 分文件)。
+    offset/limit 分页：提供时返回 {total, offset, limit, runs}，不提供时返回裸数组（向后兼容）。"""
     data = _load_results()
     runs = data.get("runs", [])
     if mode:
         runs = [r for r in runs if r.get("mode") == mode]
-    # 给每条 run 附 output_video（若码流存在）
+    # Per-request dedup caches: avoid repeated os.listdir / ffmpeg probes
+    # for the same (seq, method) across different codec/crf runs.
+    src_cache: dict[str, str | None] = {}
+    con_cache: dict[str, str | None] = {}
     out = []
     for r in runs:
         vid = _bitstream_for(r)
         row = dict(r)
         row["output_video"] = vid
-        # 3-video cell on the speed page: original + edge + reconstruction.
         seq = r.get("sequence_name") or ""
         method = r.get("method") or "canny"
-        row["original_video"] = _ensure_source_video(seq) if seq else None
-        row["contour_video"] = _ensure_contour_video(seq, method) if seq else None
-        # 兼容上游契约：model_name / dataset_name / metrics
+        if seq:
+            if seq not in src_cache:
+                src_cache[seq] = _ensure_source_video(seq)
+            row["original_video"] = src_cache[seq]
+            con_key = f"{seq}/{method}/{r.get('dataset')}"
+            if con_key not in con_cache:
+                con_cache[con_key] = _ensure_contour_video(seq, method, r.get("dataset"))
+            row["contour_video"] = con_cache[con_key]
+        else:
+            row["original_video"] = None
+            row["contour_video"] = None
         row["model_name"] = r.get("codec")
         row["dataset_name"] = r.get("dataset") or r.get("sequence_name")
         row["metrics"] = {
@@ -792,6 +901,12 @@ async def get_results(model: str = None, dataset: str = None, metric: str = None
         out = [r for r in out if r.get("model_name") == model]
     if dataset:
         out = [r for r in out if r.get("dataset_name") == dataset]
+    # Pagination
+    if offset is not None or limit is not None:
+        off = offset or 0
+        lim = limit or 50
+        page = out[off:off + lim]
+        return {"total": len(out), "offset": off, "limit": lim, "runs": page}
     return out
 
 
@@ -840,8 +955,9 @@ async def get_result_detail(result_id: str):
 # ---- outputs（按需服务输出视频/码流，防穿越）------------------------------- #
 
 @router.get("/outputs")
-async def list_outputs():
-    """列 OUTPUTS_DIR 下可查看的输出文件（bitstreams 压缩码流 + recon 重建帧）。"""
+async def list_outputs(offset: int = None, limit: int = None):
+    """列 OUTPUTS_DIR 下可查看的输出文件（bitstreams 压缩码流 + recon 重建帧）。
+    offset/limit 分页：提供时返回 {total, offset, limit, outputs}。"""
     if not os.path.isdir(OUTPUTS_DIR):
         return {"outputs": []}
     out = []
@@ -858,6 +974,11 @@ async def list_outputs():
                 "size_bytes": os.path.getsize(full),
             })
     out.sort(key=lambda x: x["path"])
+    if offset is not None or limit is not None:
+        off = offset or 0
+        lim = limit or 100
+        page = out[off:off + lim]
+        return {"total": len(out), "offset": off, "limit": lim, "outputs": page}
     return {"outputs": out}
 
 

@@ -413,7 +413,7 @@ onMounted(loadProjects)
 
 .content-grid {
   display: grid; gap: 24px;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 420px 1fr;
   flex: 1; min-height: 0;
 }
 @media (max-width: 900px) { .content-grid { grid-template-columns: 1fr; } }
@@ -476,7 +476,7 @@ onMounted(loadProjects)
 
 .cornell-body {
   display: grid; gap: 20px; padding: 20px 0;
-  grid-template-columns: 1fr 220px;
+  grid-template-columns: 1fr 440px;
   flex: 1; min-height: 0;
   @media (max-width: 900px) { grid-template-columns: 1fr; }
 }

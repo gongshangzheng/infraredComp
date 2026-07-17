@@ -5,7 +5,7 @@ InterDigitalInc/LosslessSegmentationMapCompression is a **pure C++17 CLI codec**
 arithmetic coding on raw YUV segmentation maps. **No torch, no weights, no rate
 points — lossless → single RD point, PSNR=inf.** Built from source (cmake+MSVC,
 CMakeLists needed 2 fixes: arithmetic_codec path + missing acodec.cpp) →
-``third_party/lsmc/{encoder,decoder}.exe`` (gitignored binaries).
+``models/lsmc/{encoder,decoder}.exe`` (gitignored binaries).
 
 Integration: ``is_neural=True`` (in-process bytes-in/bytes-out contract) but
 internally subprocesses the C++ binaries (not torch). Encode = frames → temp
@@ -25,7 +25,7 @@ import numpy as np
 
 from .base import VideoCodec, register_codec
 
-_LSMC_DIR = Path(__file__).resolve().parents[3] / "third_party" / "lsmc"
+_LSMC_DIR = Path(__file__).resolve().parents[3] / "models" / "lsmc"
 DEFAULT_ENCODER = str(_LSMC_DIR / "encoder.exe")
 DEFAULT_DECODER = str(_LSMC_DIR / "decoder.exe")
 

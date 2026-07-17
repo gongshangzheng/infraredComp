@@ -43,7 +43,7 @@
             {{ task.assignee }}
           </span>
 
-          <span v-if="task.startDate" class="date-text">{{ task.startDate.slice(5) }}</span>
+          <span class="date-text">{{ task.startDate ? task.startDate.slice(5) : '待定' }}</span>
         </div>
       </div>
 
@@ -223,6 +223,7 @@ function onClick() {
 .node-title {
   font-size: 13px; color: var(--color-text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0; flex: 1 1 auto;
   display: inline-flex; align-items: center; gap: 4px;
   &.done { color: var(--color-text-dim); text-decoration: line-through; }
   &.title-selected { color: var(--color-text-heading); font-weight: 500; }
@@ -236,12 +237,12 @@ function onClick() {
 }
 .progress-text { flex-shrink: 0; font-size: 10px; color: var(--color-text-dim); }
 .assignee {
-  flex-shrink: 0; margin-left: auto;
+  flex-shrink: 0;
   display: inline-flex; align-items: center; gap: 2px;
   background: var(--color-primary-soft); color: var(--color-primary);
   padding: 1px 6px; border-radius: 999px; font-size: 10px;
 }
-.date-text { flex-shrink: 0; font-size: 10px; color: var(--color-text-dim); }
+.date-text { flex-shrink: 0; font-size: 10px; color: var(--color-text-dim); min-width: 34px; text-align: right; }
 .priority-badge {
   flex-shrink: 0; font-size: 9px; font-weight: 700; letter-spacing: 0.03em;
   padding: 1px 5px; border-radius: 3px;
@@ -252,7 +253,7 @@ function onClick() {
 
 .hover-card {
   position: absolute; left: 32px; top: 100%; z-index: 50;
-  width: 240px; padding: 12px;
+  width: 480px; padding: 12px;
   background: var(--color-card); border: 1px solid var(--color-border);
   border-radius: 8px; box-shadow: 0 8px 24px var(--color-shadow);
   word-break: break-word; overflow-wrap: anywhere;

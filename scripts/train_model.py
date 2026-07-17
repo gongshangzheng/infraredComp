@@ -45,6 +45,8 @@ import torch.nn as nn
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 
+from models.diffTok.src.losses.rd_loss import rd_loss_difftok
+
 # infraredComp 训练产物路径（与 server.config 一致）
 TRAINING_DIR = REPO / "results" / "training"
 CHECKPOINTS_DIR = TRAINING_DIR / "checkpoints"
@@ -55,9 +57,11 @@ DATASETS_DIR = Path(os.environ.get("INFRACOMP_DATASETS_DIR", str(REPO / "dataset
 
 def log(run_id: str, msg: str) -> None:
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    ts = time.strftime("%m-%d %H:%M:%S")
+    line = f"[{ts}] {msg}"
     with open(LOGS_DIR / f"{run_id}.log", "a", encoding="utf-8") as f:
-        f.write(msg + "\n")
-    print(msg)
+        f.write(line + "\n")
+    print(line)
 
 
 # ---- 数据集（thermal 帧 -> [0,1] 3 通道张量）---------------------------- #
@@ -153,6 +157,44 @@ def _ensure_contour_dir(dataset_id: str, method: str) -> Path:
         log("extract", f"[extract] {dataset_id} -> contour/{source}/{method}（method={method}）")
     artifact = extract_contour_video(raw, method=method, skip_if_exists=True)
     return Path(artifact.frames_dir)
+
+
+def _preextract_imagenet_splits(
+    splits: list[str], method: str, workers: int, size: int,
+    extract_size: int, shards: int, run_id: str,
+) -> None:
+    """Pre-extract imagenet contours for each split (skip-if-exists per split via manifest check).
+    Per-frame skip-if-exists in _one_group allows resuming partial extractions."""
+    from multiprocessing import Pool
+    from scripts.extract_imagenet_contour import build_groups, _init, _one_group, _gen_tasks
+    from scripts.imagenet_contour_dataset import preextracted_contour_dir
+
+    for split in splits:
+        out_dir = preextracted_contour_dir(split, method)
+        if (out_dir / "manifest.json").is_file():
+            log(run_id, f"[preextract] {split} already has manifest, skip ({out_dir})")
+            continue
+        out_dir.mkdir(parents=True, exist_ok=True)
+        file_paths, groups, total = build_groups(split, shards)
+        log(run_id, f"[preextract] {split}: extracting {total} rows -> {out_dir} "
+                    f"(method={method}, workers={workers}, size={size})")
+        done = 0
+        tasks = list(_gen_tasks(groups, str(out_dir), size, limit=0))
+        with Pool(processes=workers, initializer=_init,
+                  initargs=(file_paths, method, size, extract_size)) as pool:
+            for new in pool.imap_unordered(_one_group, tasks, chunksize=1):
+                done += new
+                if done and done % 5000 == 0:
+                    log(run_id, f"[preextract] {split}: {done}/{total} ({100*done/max(1,total):.1f}%)")
+        manifest = {
+            "source_name": f"imagenet_{split}",
+            "method": method,
+            "size": size,
+            "frame_count": total,
+            "frames_dir": str(out_dir),
+        }
+        (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
+        log(run_id, f"[preextract] {split}: done ({done} new frames, total {total})")
 
 
 def resolve_training_dataset(dataset_id: str, method: str, max_images: int, size: int,
@@ -275,7 +317,7 @@ def build_model(model_id: str, quality: int, device: str, warm_start: bool = Tru
         m = ELICModel(N=192, M=320, num_slices=5)
     elif model_id == "difftok":
         from omegaconf import OmegaConf
-        from third_party.diffTok.src.nets.contour_vqae import ContourVQAE
+        from models.diffTok.src.nets.contour_vqae import ContourVQAE
         cfg_path = REPO / "configs" / "difftok" / "bsds_contour.yaml"
         cfg = OmegaConf.load(cfg_path)
         m = ContourVQAE(cfg)
@@ -303,23 +345,6 @@ def rd_loss(out, x, lam: float) -> tuple[torch.Tensor, float, float, float]:
     loss = lam * (rate / num_pixels) + dist
     psnr = 10.0 * math.log10(1.0 / (mse + 1e-10))
     return loss, loss.item(), psnr, bpp
-
-
-def rd_loss_difftok(logits, x0, vq_loss, pos_weight: float = 10.0) -> tuple:
-    """BCE loss for binary contour maps + VQ commitment loss.
-
-    pos_weight upweights edge pixels to compensate class imbalance (~5-15% edges).
-    Returns (loss, loss_val, psnr_proxy, bpp_dummy) matching rd_loss tuple shape.
-    """
-    import torch.nn.functional as F
-    pw = torch.tensor([pos_weight], dtype=logits.dtype, device=logits.device)
-    bce = F.binary_cross_entropy_with_logits(logits, x0, pos_weight=pw)
-    loss = bce + vq_loss
-    with torch.no_grad():
-        x_hat = torch.sigmoid(logits)
-        mse = torch.mean((x_hat - x0) ** 2).item()
-        psnr = 10.0 * math.log10(1.0 / (mse + 1e-10))
-    return loss, loss.item(), psnr, 0.0
 
 
 def video_rd_loss(out, frames: list, lam: float) -> tuple[torch.Tensor, float, float, float]:
@@ -419,8 +444,8 @@ def _run_eval(model, eval_sample: list, device: str, lam: float, batch: int,
             chunk = eval_sample[s:s + batch]
             x = torch.stack([t.to(device) for t in chunk], dim=0)
             if model_id == "difftok":
-                logits, vq_result = model.forward(x)
-                loss, lv, psnr, bpp = rd_loss_difftok(logits, x, vq_result["quantizer_loss"])
+                logits, commit_loss, indices = model.forward(x)
+                loss, lv, psnr, bpp = rd_loss_difftok(logits, x, commit_loss, indices)
             else:
                 out = model.forward(x)
                 loss, lv, psnr, bpp = rd_loss(out, x, lam)
@@ -429,7 +454,7 @@ def _run_eval(model, eval_sample: list, device: str, lam: float, batch: int,
     return {"loss": tot_loss / max(n, 1), "psnr": tot_psnr / max(n, 1), "bpp": tot_bpp / max(n, 1)}
 
 
-def _save_viz(model, viz_sample: list, originals, device: str, run_id: str, epoch: int) -> list:
+def _save_viz(model, viz_sample: list, originals, device: str, run_id: str, epoch: int, model_id: str = "") -> list:
     """每个样本一张三图 RGB PNG（原图 | 输入边缘 | 重建），存 viz/<run>/epoch_XXX_sample_Y.png。
     originals 缺则回退两图（输入 | 重建）。返回 6 条相对路径。"""
     from PIL import Image
@@ -439,15 +464,23 @@ def _save_viz(model, viz_sample: list, originals, device: str, run_id: str, epoc
     paths = []
     with torch.no_grad():
         for k, t in enumerate(viz_sample):
-            x = t.unsqueeze(0).to(device)                  # (1,3,H,W)
-            out = model.forward(x)
-            xhat = out["x_hat"][0].clamp(0, 1)              # (3,H,W)
+            x = t.unsqueeze(0).to(device)
+            if model_id == "difftok":
+                logits, _, _ = model.forward(x)
+                xhat = torch.sigmoid(logits)[0].clamp(0, 1)   # (1,H,W)
+                x_in = x[0].clamp(0, 1)                        # (1,H,W)
+                xhat = xhat.repeat(3, 1, 1)                     # -> (3,H,W) 与彩色原图拼接
+                x_in = x_in.repeat(3, 1, 1)
+            else:
+                out = model.forward(x)
+                xhat = out["x_hat"][0].clamp(0, 1)              # (3,H,W)
+                x_in = x[0].clamp(0, 1)
             panels = []
             if originals is not None and k < len(originals):
                 panels.append(originals[k].to(device).clamp(0, 1))  # 原图（彩色）
-            panels.append(x[0].clamp(0, 1))                # 输入边缘
-            panels.append(xhat)                            # 重建
-            row = torch.cat(panels, dim=2)                 # (3, H, len*W)
+            panels.append(x_in)                              # 输入边缘
+            panels.append(xhat)                              # 重建
+            row = torch.cat(panels, dim=2)                   # (3, H, len*W)
             arr = (row.cpu().numpy() * 255.0).clip(0, 255).astype("uint8")  # (3,H,len*W)
             arr = np.transpose(arr, (1, 2, 0))            # (H, len*W, 3) RGB
             fname = f"epoch_{epoch:03d}_sample_{k}.png"
@@ -570,16 +603,31 @@ def main() -> int:
     ap.add_argument("--shards", type=int, default=0, help="imagenet parquet shard 数；<=0 = 全部 shard（默认，即全量）")
     ap.add_argument("--num-workers", dest="num_workers", type=int, default=0, help="DataLoader 工作进程数（imagenet 全量推荐 4-8，0=主线程）")
     ap.add_argument("--optimizer", default="adamw", choices=["adamw", "adam"], help="优化器（默认 AdamW）")
+    ap.add_argument("--lr-cosine", dest="lr_cosine", action="store_true", help="lr 用 CosineAnnealingLR 衰减到 lr*0.01")
     ap.add_argument("--ckpt-every", dest="ckpt_every", type=int, default=50, help="每 N epoch 存一次 checkpoint（便于挂了 resume；0=只在结束存）")
     # 从 checkpoint 续训（二选一，互斥；都建新 run_id）
     ap.add_argument("--load", default=None, help="checkpoint 路径/run_id：加载权重 warm-start，fresh optimizer，epoch 1..N")
     ap.add_argument("--resume", default=None, help="checkpoint 路径/run_id：加载权重+继承旧 run 曲线，epoch 从 last+1 续跑 N 个")
     # 训练中定期 eval + 可视化（held-out val）
-    ap.add_argument("--eval-every", dest="eval_every", type=int, default=1, help="每 N epoch 跑一次 test eval+可视化（0=关）")
-    ap.add_argument("--eval-split", dest="eval_split", default="val", help="eval 用的 held-out split（imagenet:val；BSDS:test）")
-    ap.add_argument("--viz-split", dest="viz_split", default=None, help="可视化用的 split（默认 = --eval-split；BSDS 用 val）")
+    ap.add_argument("--eval-every", dest="eval_every", type=int, default=None,
+                    help="每 N epoch 跑一次 test eval+可视化（0=关；默认 difftok=3，其他=1）")
+    ap.add_argument("--eval-split", dest="eval_split", default=None,
+                    help="eval 用的 held-out split（默认 difftok=test，其他=val；imagenet:val；BSDS:test）")
+    ap.add_argument("--viz-split", dest="viz_split", default=None, help="可视化用的 split（默认 difftok=val，其他=eval-split）")
     ap.add_argument("--eval-samples", dest="eval_samples", type=int, default=512, help="每次 eval 的固定 val 图数")
     ap.add_argument("--viz-samples", dest="viz_samples", type=int, default=6, help="可视化固定图数（每 epoch 同一批，看重建演变）")
+    ap.add_argument("--viz-every", dest="viz_every", type=int, default=1, help="每 N epoch 存一次可视化（默认 1=每 epoch；与 eval-every 独立）")
+    # imagenet 预提取（自动开启；skip-if-exists per split via manifest；per-frame skip 允许续跑）
+    ap.add_argument("--preextract", dest="preextract", action="store_true", default=None,
+                    help="预提取 imagenet 轮廓到 PNG（默认 imagenet-* 自动开启）")
+    ap.add_argument("--no-preextract", dest="preextract", action="store_false",
+                    help="跳过预提取（直接用在线流式或已有 PNG）")
+    ap.add_argument("--preextract-splits", dest="preextract_splits", default="train,test,val",
+                    help="预提取的 splits（逗号分隔；默认 train,test,val）")
+    ap.add_argument("--preextract-workers", dest="preextract_workers", type=int, default=16,
+                    help="预提取工作进程数")
+    ap.add_argument("--preextract-extract-size", dest="preextract_extract_size", type=int, default=256,
+                    help="预提取时输入图 max 边长（bounds canny/hed 成本；最终存 --size）")
     # video (ssf2020) 专用
     ap.add_argument("--seq-len", type=int, default=4, help="视频序列长度（ssf2020）")
     ap.add_argument("--max-sequences", type=int, default=64, help="最大序列数（ssf2020）")
@@ -592,6 +640,25 @@ def main() -> int:
         help="关闭 warm-start（ssf2020 从 scratch 训练）",
     )
     args = ap.parse_args()
+
+    # difftok 默认：每 3 epoch 测试（test split）、val 用于可视化
+    if args.model == "difftok":
+        if args.eval_every is None:
+            args.eval_every = 3
+        if args.eval_split is None:
+            args.eval_split = "test"
+        if args.viz_split is None:
+            args.viz_split = "val"
+    else:
+        if args.eval_every is None:
+            args.eval_every = 1
+        if args.eval_split is None:
+            args.eval_split = "val"
+        if args.viz_split is None:
+            args.viz_split = args.eval_split
+    # imagenet 数据集默认自动开启预提取（除非显式 --no-preextract）
+    if args.preextract is None:
+        args.preextract = args.dataset.startswith("imagenet-")
 
     is_video = _is_video_model(args.model)
     device = args.device if torch.cuda.is_available() or args.device == "cpu" else "cpu"
@@ -618,6 +685,22 @@ def main() -> int:
     # 训练中可见：立即记一条 running（resume 时带继承的曲线，不 wipe）
     _record_run(args, run_id, started, status="running", loss_series=resumed_ls,
                 test_metrics=resumed_tm, viz=resumed_viz)
+
+    # 0. imagenet 预提取（自动开启；skip-if-exists per split via manifest；per-frame skip 允许续跑）
+    if args.preextract and args.dataset.startswith("imagenet-"):
+        splits = [s.strip() for s in args.preextract_splits.split(",") if s.strip()]
+        log(run_id, f"[preextract] phase start: splits={splits} method={args.method} "
+                    f"workers={args.preextract_workers} size={args.size}")
+        try:
+            _preextract_imagenet_splits(
+                splits=splits, method=args.method, workers=args.preextract_workers,
+                size=args.size, extract_size=args.preextract_extract_size,
+                shards=args.shards, run_id=run_id,
+            )
+            log(run_id, f"[preextract] phase done — training will use preextracted PNGs")
+        except Exception as e:
+            log(run_id, f"[preextract] phase failed: {e} — falling back to streaming extraction")
+            # 预提取失败不阻断训练：resolve_training_dataset 会回退到在线流式提取
 
     # 1. 数据
     try:
@@ -650,6 +733,9 @@ def main() -> int:
     model.train()
     OptCls = torch.optim.AdamW if (args.optimizer or "adamw").lower() == "adamw" else torch.optim.Adam
     optimizer = OptCls(model.parameters(), lr=args.lr)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=args.epochs, eta_min=args.lr * 0.01
+    ) if getattr(args, "lr_cosine", False) else None
     log(run_id, f"[train] model built, params={sum(p.numel() for p in model.parameters())}, optimizer={args.optimizer}")
 
     # 2a. --load 权重（resume 的曲线继承已在 main 开头完成；模型从 checkpoint 加载）
@@ -698,8 +784,8 @@ def main() -> int:
                     batch = batch.to(device)
                     optimizer.zero_grad()
                     if args.model == "difftok":
-                        logits, vq_result = model(batch)
-                        loss, lv, psnr, bpp = rd_loss_difftok(logits, batch, vq_result["quantizer_loss"])
+                        logits, commit_loss, indices = model(batch)
+                        loss, lv, psnr, bpp = rd_loss_difftok(logits, batch, commit_loss, indices)
                     else:
                         out = model(batch)
                         loss, lv, psnr, bpp = rd_loss(out, batch, args.lamb)
@@ -710,16 +796,24 @@ def main() -> int:
             loss_series.append(avg)
             ep_i = epoch - start_epoch + 1
             log(run_id, f"[train] epoch {epoch} ({ep_i}/{args.epochs}) loss={avg['loss']:.4f} psnr={avg['psnr']:.2f} bpp={avg['bpp']:.3f}")
-            # 训练中 eval + 可视化（每 eval_every epoch）
+            if scheduler is not None:
+                scheduler.step()
+            # 可视化：每 viz_every epoch（与 eval 独立；看重建演变）
+            if eval_on and args.viz_every and (epoch % args.viz_every == 0):
+                try:
+                    vpaths = _save_viz(model, viz_sample, originals, device, run_id, epoch, model_id=args.model)
+                    viz.extend(vpaths)
+                    log(run_id, f"[train]   viz epoch {epoch}: {len(vpaths)} panels -> viz/{run_id}/")
+                except Exception as ee:
+                    log(run_id, f"[train]   viz error epoch {epoch}: {ee}")
+            # 测试 eval：每 eval_every epoch（held-out test split）
             if eval_on and (epoch % args.eval_every == 0):
                 try:
                     em = _run_eval(model, eval_sample, device, args.lamb, args.batch, model_id=args.model)
                     em["epoch"] = epoch
                     test_metrics.append(em)
-                    vpaths = _save_viz(model, viz_sample, originals, device, run_id, epoch)
-                    viz.extend(vpaths)  # 每 epoch 6 条 {epoch, sample, path}
                     log(run_id, f"[train]   eval epoch {epoch}: test psnr={em['psnr']:.2f} bpp={em['bpp']:.3f} "
-                                f"loss={em['loss']:.4f} | viz {len(vpaths)} panels -> viz/{run_id}/")
+                                f"loss={em['loss']:.4f}")
                     # best checkpoint：test PSNR 创新高时存 <run>.best.pth（覆盖）
                     if em["psnr"] > best_psnr:
                         best_psnr = em["psnr"]
@@ -730,7 +824,7 @@ def main() -> int:
                                      "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
                         log(run_id, f"[train]   new best test psnr={em['psnr']:.2f} @ epoch {epoch} -> {run_id}.best.pth")
                 except Exception as ee:
-                    log(run_id, f"[train]   eval/viz error epoch {epoch}: {ee}")
+                    log(run_id, f"[train]   eval error epoch {epoch}: {ee}")
             # 实时曲线：每 epoch 把当前 loss_series 落盘，前端轮询即可看到曲线增长
             _record_run(args, run_id, started, status="running", loss_series=loss_series,
                         test_metrics=test_metrics, viz=viz)
@@ -753,6 +847,11 @@ def main() -> int:
     ckpt_path = CHECKPOINTS_DIR / f"{run_id}.pth"
     torch.save(model.state_dict(), ckpt_path)
     log(run_id, f"[train] checkpoint saved: {ckpt_path}")
+    # final: 写 ckpt.json(latest=final epoch + best_meta),EvalRun getTrainRuns 能拿到 latest/best
+    # (没传 --ckpt-every 时定期存没触发,这里兜底写一次,避免 ckpt.json 缺失)
+    latest_meta = {"epoch": epoch, "path": f"checkpoints/{run_id}.pth", "train": avg,
+                   "test": (test_metrics[-1] if test_metrics else None), "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    _write_ckpt_meta(run_id, latest_meta, best_meta)
 
     final_loss = loss_series[-1]["loss"] if loss_series else None
     best_metric = max((p["psnr"] for p in loss_series), default=None)
