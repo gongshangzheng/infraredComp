@@ -666,7 +666,13 @@
           "status": "active",
           "assignee": "郑鑫裕",
           "description": "把 contour 产物从 contour/<src>/<method>/contour.mp4 改成 <method>/<dataset>/<seq>.mp4(xiph_cif 输出一个文件夹),manifest 合并到 <method>/<dataset>/manifest.json。\n\n• stage1_extract: out_dir=contour_dir(method,dataset);mp4=<seq>.mp4;manifest 合并读-改-写;dataset 从 input parent 推断\n• server: _contour_manifest/_ensure_contour_video/list_runs 改读 dataset manifest + <seq>.mp4\n• 重跑 stage1 + 删旧 contour/\n• 非目标: 不改 raw(已 raw/)",
-          "children": []
+          "children": [],
+          "progress": [
+            {
+              "date": "2026-07-18 03:12",
+              "note": "[进度] stage1_extract 输出改 <method>/<dataset>/<seq>.mp4 + 合并 dataset manifest(out_dir 共享不 rmtree, mv <seq>.mp4 + manifest 读-改-写); server _contour_manifest + _ensure_contour_video 改遍历 <method>/ 找 seq; canny/xiph_cif 6 seq 新布局验证(6 mp4+合并 manifest); server 重启 evaluation 全 200。待: benchmark.py list_runs 改 + 删旧 contour/"
+            }
+          ]
         }
       ]
     },

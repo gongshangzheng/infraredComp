@@ -134,13 +134,16 @@ def extract_contour_video(
     kind, src_path = resolve_input(src)
     source_name = src_path.stem or src_path.name
 
+    # dataset = 父目录名(如 raw/xiph_cif/akiyo_cif.y4m -> xiph_cif);无则 fallback source_name
+    _parent = src_path.parent.name
+    dataset = _parent if _parent and _parent not in ("", ".", src_path.name) else source_name
+    # 多 seq 共享 <method>/<dataset>/;每个 seq 一个 <seq>.mp4,manifest 合并
     if out_dir is None:
-        # 按方法分目录: datasets/contour/<source>/<method>/ —— 不同提取方法
-        # (canny/sobel) 不互相覆盖。重建走 temp+原子替换，失败不毁既有产物。
-        out_dir = config.CONTOUR_DIR / source_name / method
+        out_dir = config.contour_dir(method, dataset)
     out_dir = Path(out_dir)
+    seq_mp4 = f"{source_name}.mp4"
 
-    # 训练流程幂等：产物已存在且 method 匹配、contour.mp4 在 → 直接复用。
+    # 训练流程幂等：产物已存在且 method 匹配、<seq>.mp4 在 → 直接复用。
     if skip_if_exists:
         manifest_path = out_dir / "manifest.json"
         if manifest_path.is_file():
@@ -148,21 +151,24 @@ def extract_contour_video(
                 m = json.loads(manifest_path.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
                 m = {}
-            vp = m.get("video_path") or str(out_dir / "contour.mp4")
-            if (m.get("method") == method and (m.get("frame_count") or 0) > 0
-                    and Path(vp).is_file()):
-                return ContourArtifact(
-                    source_name=m.get("source_name", source_name),
-                    method=method,
-                    frames_dir=str(out_dir),
-                    frame_paths=[],  # PNGs not kept; stage 2 materializes from video
-                    frame_count=m.get("frame_count", 0),
-                    fps=m.get("fps", 0.0),
-                    width=m.get("width", 0),
-                    height=m.get("height", 0),
-                    manifest_path=str(manifest_path),
-                    video_path=vp,
-                )
+            seq_entry = next((s for s in m.get("sequences", [])
+                              if s.get("source_name") == source_name), None)
+            if seq_entry:
+                vp = seq_entry.get("video_path") or str(out_dir / seq_mp4)
+                if (seq_entry.get("method") == method and (seq_entry.get("frame_count") or 0) > 0
+                        and Path(vp).is_file()):
+                    return ContourArtifact(
+                        source_name=source_name,
+                        method=method,
+                        frames_dir=str(out_dir),
+                        frame_paths=[],  # PNGs not kept; stage 2 materializes from video
+                        frame_count=seq_entry.get("frame_count", 0),
+                        fps=seq_entry.get("fps", 0.0),
+                        width=seq_entry.get("width", 0),
+                        height=seq_entry.get("height", 0),
+                        manifest_path=str(manifest_path),
+                        video_path=vp,
+                    )
 
     # Build into a temp sibling dir, then atomically swap on success. A
     # failed/interrupted re-extraction never wipes the existing contour frames:
@@ -207,7 +213,7 @@ def extract_contour_video(
     # 3. Stitch the contour PNGs into a LOSSLESS video (the persistent product).
     #    -qp 0 = lossless; yuv420p Y plane is exact for grayscale edges.
     #    pad odd dims to even (libx264 yuv420p requirement); stage 2 crops back.
-    contour_mp4 = work_out / "contour.mp4"
+    contour_mp4 = work_out / seq_mp4
     run_ffmpeg([
         "-y",
         "-framerate", str(src_fps),
@@ -225,9 +231,9 @@ def extract_contour_video(
         except OSError:
             pass
 
-    # 5. Write manifest (frames_dir + video_path point at the final out_dir)
-    final_video = out_dir / "contour.mp4"
-    manifest = {
+    # 5. Build this seq's manifest entry; merge into the shared dataset manifest.
+    final_video = out_dir / seq_mp4
+    seq_entry = {
         "source_name": source_name,
         "method": method,
         "frame_count": len(contour_paths),
@@ -238,14 +244,28 @@ def extract_contour_video(
         "video_path": str(final_video),
         "duration_s": duration,
     }
-    work_manifest = work_out / "manifest.json"
-    work_manifest.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    out_manifest = out_dir / "manifest.json"
+    ds_manifest: dict = {}
+    if out_manifest.is_file():
+        try:
+            ds_manifest = json.loads(out_manifest.read_text(encoding="utf-8")) or {}
+        except (json.JSONDecodeError, OSError):
+            ds_manifest = {}
+    seqs = [s for s in ds_manifest.get("sequences", [])
+            if s.get("source_name") != source_name]
+    seqs.append(seq_entry)
+    ds_manifest["sequences"] = seqs
+    ds_manifest.setdefault("method", method)
+    ds_manifest.setdefault("dataset", dataset)
 
-    # Swap: replace the existing dir only after the new one is fully ready.
-    # (The raw-frame decode temp is owned + cleaned by extractor.extract_video.)
-    if out_dir.exists():
-        shutil.rmtree(out_dir)
-    work_out.rename(out_dir)
+    # 6. Move this seq's mp4 into the shared out_dir (不 rmtree 共享目录,保留其他 seq)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = out_dir / seq_mp4
+    if target.exists():
+        target.unlink()
+    shutil.move(str(contour_mp4), str(target))
+    out_manifest.write_text(json.dumps(ds_manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    shutil.rmtree(work_out, ignore_errors=True)
 
     return ContourArtifact(
         source_name=source_name,

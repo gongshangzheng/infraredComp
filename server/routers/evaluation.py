@@ -203,13 +203,22 @@ def _find_raw_video(seq: str) -> str | None:
 
 
 def _contour_manifest(seq: str, method: str) -> dict:
-    m = os.path.join(contour_dir(method, seq), "manifest.json")
-    if not os.path.isfile(m):
+    # 新布局: <method>/<dataset>/manifest.json (合并 dataset manifest),遍历找 seq entry
+    method_root = os.path.join(DATASETS_DIR, method)
+    if not os.path.isdir(method_root):
         return {}
-    try:
-        return json.loads(read_file(m) or "{}")
-    except json.JSONDecodeError:
-        return {}
+    for ds in sorted(os.listdir(method_root)):
+        mf = os.path.join(method_root, ds, "manifest.json")
+        if not os.path.isfile(mf):
+            continue
+        try:
+            m = json.loads(read_file(mf) or "{}")
+        except json.JSONDecodeError:
+            continue
+        for s in m.get("sequences", []):
+            if isinstance(s, dict) and s.get("source_name") == seq:
+                return s
+    return {}
 
 
 def _run_ffmpeg(args: list[str]) -> None:
@@ -281,11 +290,18 @@ def _ensure_contour_video(seq: str, method: str, dataset: str | None = None) -> 
                 rel = os.path.relpath(src, DATASETS_DIR).replace(os.sep, "/")
                 _VIDEO_CACHE[key] = rel
                 return rel
-    cdir = contour_dir(method, seq)
     out_rel = f"contour_mp4/{seq}_{method}.mp4"
     out = os.path.join(CONTOUR_VIDEO_DIR, f"{seq}_{method}.mp4")
-    contour_mp4 = os.path.join(cdir, "contour.mp4")
-    if not os.path.isfile(contour_mp4):
+    # 新布局: <method>/<dataset>/<seq>.mp4;遍历 method 下找 seq
+    contour_mp4 = ""
+    method_root = os.path.join(DATASETS_DIR, method)
+    if os.path.isdir(method_root):
+        for ds in sorted(os.listdir(method_root)):
+            cand = os.path.join(method_root, ds, f"{seq}.mp4")
+            if os.path.isfile(cand):
+                contour_mp4 = cand
+                break
+    if not contour_mp4:
         _VIDEO_CACHE[key] = None
         return None
     if os.path.isfile(out) and os.path.getsize(out) > 0:
