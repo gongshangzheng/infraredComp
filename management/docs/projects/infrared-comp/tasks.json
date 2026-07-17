@@ -128,7 +128,7 @@
           "title": "LSMC 编译 + 接入 stage2 + BSDS-val 评测",
           "status": "active",
           "assignee": "郑鑫裕",
-          "description": "把 LosslessSegmentationMapCompression 接为 stage2 无损 codec,纳入评测对比。\n\n• 接入:clone repo → cmake+MSVC build encoder/decoder.exe(vendor models/lsmc/) → 写 codecs/lsmc.py(@register_codec,is_neural,encode/decode_inprocess 拼 temp .yuv/.bin) → 注册 catalog qualities=[0](单无损点)\n• 评测:跑 akiyo 出 RD 点(无损 rec==gt,PSNR=inf 前端 cap)+ SA-Co 视频\n• 待解:encoder 多 label 输入 segfault(MSVC UB),需 MinGW g++14+ 重编或 C++ debug;详见 progress\n【最新目标@2026-07-17】编译 encoder/decoder.exe → models/lsmc/ → 跑 bsds-val formal eval（无损 baseline 参照线）。当前阻塞: github clone 网络超时。\n【进度@2026-07-18】encoder.exe + decoder.exe cmake 编译成功（CMakeLists 修 2 处：arithmetic_codec 路径 + 加 acodec.cpp）。但 encoder 运行时 segfault：acodec.encode(first_color, aColor) 调基类 Arithmetic_Codec::encode → crash。根因：Adaptive_Data_Model::update(bool) 非 virtual，AdaptiveDataModel::update() 不覆盖它 → 基类 update 访问子类未初始化的内部状态。试过 virtual fix（ABI 问题）+ 2-param wrapper（forbidden=-1 导致 length=0 → crash）。需 VS Debugger 进一步定位。",
+          "description": "把 LosslessSegmentationMapCompression 接为 stage2 无损 codec,纳入评测对比。\n\n• 接入:clone repo → cmake+MSVC build encoder/decoder.exe(vendor models/lsmc/) → 写 codecs/lsmc.py(@register_codec,is_neural,encode/decode_inprocess 拼 temp .yuv/.bin) → 注册 catalog qualities=[0](单无损点)\n• 评测:跑 akiyo 出 RD 点(无损 rec==gt,PSNR=inf 前端 cap)+ SA-Co 视频\n• 待解:encoder 多 label 输入 segfault(MSVC UB),需 MinGW g++14+ 重编或 C++ debug;详见 progress\n【最新目标@2026-07-17】编译 encoder/decoder.exe → models/lsmc/ → 跑 bsds-val formal eval（无损 baseline 参照线）。当前阻塞: github clone 网络超时。\n【进度@2026-07-18】encoder.exe + decoder.exe cmake 编译成功（CMakeLists 修 2 处：arithmetic_codec 路径 + 加 acodec.cpp）。但 encoder 运行时 segfault：acodec.encode(first_color, aColor) 调基类 Arithmetic_Codec::encode → crash。根因：Adaptive_Data_Model::update(bool) 非 virtual，AdaptiveDataModel::update() 不覆盖它 → 基类 update 访问子类未初始化的内部状态。试过 virtual fix（ABI 问题）+ 2-param wrapper（forbidden=-1 导致 length=0 → crash）。需 VS Debugger 进一步定位。\n\n\n【进度@2026-07-18】git clone 成功 + CMakeLists 修 2 处(arithmetic_codec 路径+加 acodec.cpp) + cmake+MSVC 编译成功(encoder.exe+decoder.exe)。\n运行时 segfault：debug 打印定位到 base class Arithmetic_Codec::encode(unsigned, Adaptive_Data_Model&) 本身完成(S1-S5 全打)，crash 在函数返回后的后续 edge 编码操作里。\n根因：Adaptive_Data_Model::update(bool) 非 virtual → 基类 encode 调 M.update(true) 走基类版 → 不更新 distribution_forbidden → 后续 4-param encode 读 stale distribution_forbidden → 除零/越界。\n尝试修复：virtual update(bool) + override → 编译成功但仍 crash（可能 ABI 不兼容）。\n阻塞：需 VS Debugger 定位后续 edge 编码循环中具体 crash 点。Windows 10 SDK 已补装。",
           "children": [],
           "progress": [
             {
@@ -502,6 +502,10 @@
       "children": [],
       "progress": [
         {
+          "date": "2026-07-18 02:32",
+          "note": "[完成] _load_results strip per_frame 数组 + 5s TTL 缓存 + 评测页分页。响应从 8MB 降到 ~5MB，页面可加载。"
+        },
+        {
           "date": "2026-07-17",
           "note": "[完成] 评测页面从 39s timeout/白屏 → 0.54s 秒开。根因 _bitstream_for 每 run os.listdir（3900×）+ SpeedResults 中文引号 + per_frame 重数组 12MB；修：预扫 cache + strip per_frame 落盘 + 中文引号→ASCII + timeout 15→60s"
         }
@@ -531,6 +535,10 @@
       "priority": "P1",
       "children": [],
       "progress": [
+        {
+          "date": "2026-07-18 01:41",
+          "note": "MJPEG 桥接跑通(交付):ir_mjpeg_server.py 后台跑,浏览器 http://127.0.0.1:8080 看实时红外画面。路径:ctypes initialize+openStreamByDevID 注册帧回调 -> 回调 copy 全帧 Y16(2621440B) -> numpy 百分位归一化[1,99]解窄动态 -> ironbow 伪彩LUT -> JPEG -> HTTP MJPEG 15fps。取帧JPEG经图像分析确认:能看到植物枝条/墙/地,ironbow 温度分布可辨,对比度OK。frame_rgb_data YUV模式恒空(setpalette也空),自渲染方案确立。已更新 skill browser-bridge 指向真实实现。下一步可选:测温(frame_param_data+convertgray2temper)/WebSocket传温度矩阵。"
+        },
         {
           "date": "2026-07-18",
           "note": "取画面成功(里程碑):copy frame_src_data 全帧 2621440 字节(1280*1024 Y16),uint16 reshape (1024,1280),归一化渲染 PNG 经图像分析确认是真实热成像(拍植物枝条/墙/地,明暗合理无伪像)。关键实测:frame_src_data_length 报像素数非字节数,copy 须用 width*height*2;Y16 range 0x8000~0x80E8 窄动态需百分位归一化;setpalette 不填 rgb_data(YUV模式),走自写渲染。下一步:Y16->伪彩RGB+MJPEG HTTP 桥接,浏览器实时看画面。"
@@ -609,6 +617,14 @@
           "children": [],
           "progress": [
             {
+              "date": "2026-07-18 02:32",
+              "note": "datasets 重排脚本 reorg_datasets.py 已跑完(28 个 move+兼容 junction)。Phase①(path helper+reorg script) 完成。Phase②-⑤ 待做。"
+            },
+            {
+              "date": "2026-07-18 02:18",
+              "note": "[进度] C 重跑 stage1 canny 提取到新 canny/<src>/ (akiyo/bus/city/flower 完成, foreman+mobile 跑中); F train_model _ensure_contour_dir 改 contour_dir 完成; 待 stage1 完成删旧 contour/<src>/canny + benchmark.py list_runs 改遍历 method 目录(E); G convert_bsds_gt 产物布局留 TODO"
+            },
+            {
               "date": "2026-07-18",
               "note": "[进度] 删 contour/ 下 14 compat junction(hed/sobel/pidinet/yoloe26 的 + bsds_*_gt + imagenet_train_*);CONFLICT canny(旧新大小不同,akiyo 新14KB疑坏)+ imagenet sharded 留 TODO 不删;benchmark.py list_runs 保留遍历 contour/ 兼容,/api/benchmark/runs 200"
             }
@@ -623,6 +639,15 @@
           "children": []
         }
       ]
+    },
+    {
+      "id": "t20",
+      "title": "普通 VQGAN 模型(2D VQ+GAN,非一维)",
+      "status": "planned",
+      "assignee": "郑鑫裕",
+      "startDate": "2026-07-18",
+      "description": "实现标准 VQGAN 结构模型作为 difftok 1D 的对照组。\n\n• 2D encoder+decoder+VQ（空间 grid 量化，非 1D latent tokens）\n• GAN loss（PatchGAN D + hinge + feature matching），G/D 交替训练\n• 复用 vector_quantize_pytorch + difftok 数据/评测管线\n• 与 difftok 1D 区别：2D 空间 VQ + GAN，非 1D VQ + BCE/MSE recon-only",
+      "children": []
     }
   ]
 }
