@@ -148,7 +148,7 @@ onMounted(async () => {
       getEvalConfigs().catch(() => []),
       getMethods().catch(() => ({ methods: [] })),
       listCheckpoints().catch(() => []),
-      getTrainRuns().catch(() => ({ runs: [] })),
+      getTrainRuns({ lite: true }).catch(() => ({ runs: [] })),
     ])
     codecs.value = c || []
     datasets.value = d || []

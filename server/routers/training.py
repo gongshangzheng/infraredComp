@@ -254,7 +254,7 @@ _STRIP_FIELDS = ("test_metrics", "viz")
 
 @router.get("/runs")
 async def get_runs(model: str = None, dataset: str = None, status: str = None,
-                   offset: int = None, limit: int = None):
+                   offset: int = None, limit: int = None, lite: bool = False):
     data = _load_metrics()
     runs = data.get("runs", [])
     if model:
@@ -263,7 +263,9 @@ async def get_runs(model: str = None, dataset: str = None, status: str = None,
         runs = [r for r in runs if r.get("dataset") == dataset]
     if status:
         runs = [r for r in runs if r.get("status") == status]
-    runs = [{k: v for k, v in _attach_ckpt_meta(r).items() if k not in _STRIP_FIELDS}
+    # lite: 额外 strip loss_series（EvalRun 只需 best/latest + model_id，不需曲线数据）
+    strip = set(_STRIP_FIELDS) | ({"loss_series"} if lite else set())
+    runs = [{k: v for k, v in _attach_ckpt_meta(r).items() if k not in strip}
             for r in runs]
     if offset is not None or limit is not None:
         off = offset or 0
