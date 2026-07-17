@@ -132,6 +132,10 @@
           "children": [],
           "progress": [
             {
+              "date": "2026-07-18 02:41",
+              "note": "编译成功（SDK 10.0.17134 装回，cmake+MSVC 重建 OK）。运行时 segfault：基类 encode(unsigned, Adaptive_Data_Model&) 本身跑完（S1-S5 全通），crash 在返回后的后续 encode/enc_global 调用。根因：Adaptive_Data_Model::update(bool) 非 virtual → M.update(true) 走基类不更新 distribution_forbidden → 4-param encode 除零。试 virtual+override 仍 crash（crash 点在第一个 encode 之后的其他操作）。需 VS Debugger 精确定位。"
+            },
+            {
               "date": "2026-07-17",
               "note": "[进度@2026-07-17] wrapper+catalog 就位(git 2249dd8);encoder/decoder.exe MSVC build OK;但 encoder 多 label 输入 segfault(exit 139,单 label 正常 byteNum:5),根因 MSVC C++ UB(chain-coding 多 label);g++5.3 太老 ICE;待解 MinGW g++14+ 重编或 C++ debug"
             }
@@ -343,6 +347,10 @@
           ],
           "progress": [
             {
+              "date": "2026-07-18 02:41",
+              "note": "import 已通（models/DCVC on sys.path）；但 checkpoints 软链目标空（/d/checkpoints/dcvc-rt/ 没文件），需手动重下 OneDrive cvpr2025_image/video.pth.tar。"
+            },
+            {
               "date": "2026-07-17",
               "note": "[进度@2026-07-17] setup✓(rans ext+CVPR2025 ckpt+stream→default patch);akiyo_cif 8帧 qp30 跑通 psnr12.63/bpp1.80/压缩比4.44/enc2.2fps/dec44.8fps 无 segfault;重建异常 I帧5.41/P帧9-14(轮廓应25-40),_tensor_to_img 反归一化 invalid cast(张量 NaN/inf),疑 DCVC-RT 训于自然视频吃[0,1]RGB vs contour 灰度 min-max 失配,待修(见子 t10-8-1)"
             },
@@ -402,7 +410,13 @@
           "endDate": "2026-07-15"
         }
       ],
-      "endDate": "2026-07-15"
+      "endDate": "2026-07-15",
+      "progress": [
+        {
+          "date": "2026-07-18 02:41",
+          "note": "rans ext .pyd 编译成功（cmake+MSVC）；HF checkpoint 下载成功；bsds-val smoke 跑通 psnr=33.6/bpp=0.26/压缩比=30.3。bsds formal 实际 eval 未单独跑（在 formal2 全量跑中跳过——之前子进程模式没带 nevc）。"
+        }
+      ]
     },
     {
       "id": "t13",
@@ -485,6 +499,10 @@
       ],
       "endDate": "2026-07-17",
       "progress": [
+        {
+          "date": "2026-07-18 02:41",
+          "note": "全链路接通：ckpt.json 富化（model_id/quality/method/dataset）+ EvalRun 选 ckpt 自动填 codec/crfs/checkpoint + /run 透传 --checkpoint + codec 标签带 #ckpt_tag 防覆盖。ELIC trained checkpoint bsds-val smoke psnr=14.9/bpp=0.50 跑通。"
+        },
         {
           "date": "2026-07-17",
           "note": "[完成] 训练 checkpoint 接入验证流程全通:/run 透传(t14-1)+ ckpt.json 富化(t14-2)+ EvalRun 选择器(t14-3)+ 端到端 ELIC ckpt→eval→results 出 checkpoint 行(t14-4)"
@@ -636,6 +654,14 @@
           "status": "planned",
           "assignee": "郑鑫裕",
           "description": "AGENTS.md、dataset-management/evaluation/difftok skill、datasets/README、management README+tasks.json 里 datasets/original/、contour/<src>/<method>/ 旧路径描述改新布局。",
+          "children": []
+        },
+        {
+          "id": "t19-4",
+          "title": "contour 布局重构: <method>/<dataset>/<seq>.mp4 + 合并 manifest",
+          "status": "active",
+          "assignee": "郑鑫裕",
+          "description": "把 contour 产物从 contour/<src>/<method>/contour.mp4 改成 <method>/<dataset>/<seq>.mp4(xiph_cif 输出一个文件夹),manifest 合并到 <method>/<dataset>/manifest.json。\n\n• stage1_extract: out_dir=contour_dir(method,dataset);mp4=<seq>.mp4;manifest 合并读-改-写;dataset 从 input parent 推断\n• server: _contour_manifest/_ensure_contour_video/list_runs 改读 dataset manifest + <seq>.mp4\n• 重跑 stage1 + 删旧 contour/\n• 非目标: 不改 raw(已 raw/)",
           "children": []
         }
       ]
