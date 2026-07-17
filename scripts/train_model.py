@@ -442,8 +442,8 @@ def _run_eval(model, eval_sample: list, device: str, lam: float, batch: int,
             chunk = eval_sample[s:s + batch]
             x = torch.stack([t.to(device) for t in chunk], dim=0)
             if model_id == "difftok":
-                logits, commit_loss = model.forward(x)
-                loss, lv, psnr, bpp = rd_loss_difftok(logits, x, commit_loss)
+                logits, commit_loss, indices = model.forward(x)
+                loss, lv, psnr, bpp = rd_loss_difftok(logits, x, commit_loss, indices)
             else:
                 out = model.forward(x)
                 loss, lv, psnr, bpp = rd_loss(out, x, lam)
@@ -464,7 +464,7 @@ def _save_viz(model, viz_sample: list, originals, device: str, run_id: str, epoc
         for k, t in enumerate(viz_sample):
             x = t.unsqueeze(0).to(device)
             if model_id == "difftok":
-                logits, _ = model.forward(x)
+                logits, _, _ = model.forward(x)
                 xhat = torch.sigmoid(logits)[0].clamp(0, 1)   # (1,H,W)
                 x_in = x[0].clamp(0, 1)                        # (1,H,W)
                 xhat = xhat.repeat(3, 1, 1)                     # -> (3,H,W) 与彩色原图拼接
@@ -782,8 +782,8 @@ def main() -> int:
                     batch = batch.to(device)
                     optimizer.zero_grad()
                     if args.model == "difftok":
-                        logits, commit_loss = model(batch)
-                        loss, lv, psnr, bpp = rd_loss_difftok(logits, batch, commit_loss)
+                        logits, commit_loss, indices = model(batch)
+                        loss, lv, psnr, bpp = rd_loss_difftok(logits, batch, commit_loss, indices)
                     else:
                         out = model(batch)
                         loss, lv, psnr, bpp = rd_loss(out, batch, args.lamb)

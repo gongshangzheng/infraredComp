@@ -12,7 +12,7 @@ class ContourVQAE(nn.Module):
 
     Architecture: ContourEncoder → Linear → VQ → Linear → ContourDecoder
 
-    Forward returns (logits, commit_loss).
+    Forward returns (logits, commit_loss, indices).
     Use encode_indices() / decode_indices() for inference.
     """
 
@@ -71,14 +71,14 @@ class ContourVQAE(nn.Module):
         Args:
             x: [B, C, H, W] input image (C=1 for grayscale), values in [0, 1]
         Returns:
-            (logits [B, C, H, W], commit_loss scalar)
+            (logits [B, C, H, W], commit_loss scalar, indices [B, num_latent])
         """
         z = self.encoder(x)                              # [B, num_latent, enc_dim]
         z = self.pre_quant(z)                            # [B, num_latent, token_dim]
         z_q, indices, commit_loss = self.quantizer(z)   # [B, num_latent, token_dim]
         z_q = self.post_quant(z_q)                       # [B, num_latent, dec_dim]
         logits = self.decoder(z_q)                       # [B, C, H, W]
-        return logits, commit_loss
+        return logits, commit_loss, indices
 
     @torch.no_grad()
     def encode_indices(self, x: torch.Tensor) -> torch.Tensor:
