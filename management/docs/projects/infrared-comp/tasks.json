@@ -294,6 +294,12 @@
               "assignee": "郑鑫裕",
               "children": []
             }
+          ],
+          "progress": [
+            {
+              "date": "2026-07-17",
+              "note": "submodule deinit 丢失的 setup/ext/stream patch 全部重建：setup.py /utf-8 重打、rans ext 源码重编(VS2022 D盘+compression env)、stream→default patch 3处重打(image_model/video_model)；ext roundtrip + DMCI/DMC.update() 验证通过。仅差 CVPR2025 checkpoint(随 deinit 丢,需 OneDrive 重下)后即可端到端复跑。"
+            }
           ]
         }
       ]

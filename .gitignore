@@ -63,6 +63,7 @@ Thumbs.db
 
 # Training run outputs (checkpoints/logs/metrics; reproducible, not committed)
 results/training/checkpoints/*.pth
+results/training/checkpoints/*.ckpt.json
 results/training/logs/*.log
 results/training/metrics.json
 
