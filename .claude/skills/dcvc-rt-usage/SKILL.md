@@ -157,4 +157,4 @@ uv run python -m benchmark.video --input <contour_artifact> --codecs dcvc_rt --c
 ## 相关
 - `learned-codec-install`：集成新学习压缩库的 meta-skill（DCVC-RT 已按此流程装好 + 本 skill 即其产物）。
 - `compressai-usage`：兄弟学习视频 codec ssf2020 的 API（CompressAI，有训练代码，可 finetune）。
-- `contour-video-evaluation`：stage2 benchmark 怎么调 codec（crf grid、recon PNG、PSNR/SSIM/bpp）。
+- `evaluation`：stage2 benchmark 怎么调 codec（crf grid、recon PNG、PSNR/SSIM/bpp）。

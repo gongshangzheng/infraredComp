@@ -147,7 +147,7 @@ uv run python scripts/run_natural_baseline.py --sequences akiyo_cif,bus_cif --co
 uv run python scripts/run_natural_baseline.py --codecs x264,x265,vp9
 ```
 
-两模式评测逻辑统一(一套 stage1+stage2),差异只在 `--sequences` 子集 + 展示页(speed 网格 / formal 平均)。详见 `.claude/skills/contour-video-evaluation/SKILL.md` §3。**默认不截断帧**;speed 加速靠 `--sequences` 子集,不靠 `--frames N` 限帧。
+两模式评测逻辑统一(一套 stage1+stage2),差异只在 `--sequences` 子集 + 展示页(speed 网格 / formal 平均)。详见 `.claude/skills/evaluation/SKILL.md` §3。**默认不截断帧**;speed 加速靠 `--sequences` 子集,不靠 `--frames N` 限帧。
 
 ## ffmpeg 来源
 
@@ -177,4 +177,4 @@ uv run python scripts/run_natural_baseline.py --codecs x264,x265,vp9
 - 后端只读:`/api/benchmark/runs` 列 `contour/` 目录 + manifest;`/api/evaluation/*` 聚合多数据集
 - ffmpeg 统一 `-pix_fmt yuv420p` 编码、`gray` 解码(详见 AGENTS.md)
 - 下载幂等:已下文件 `--force` 才重下;`manifest.json` 记录每条 seq 元数据
-- **contour 产物是 `contour.mp4` 不是 PNG**:所有 contour 目录、stage2 临时物化、`_ensure_contour_video` 输入、manifest `video_path` 字段都指 `contour.mp4`(详见 contour-video-evaluation skill §1-2)
+- **contour 产物是 `contour.mp4` 不是 PNG**:所有 contour 目录、stage2 临时物化、`_ensure_contour_video` 输入、manifest `video_path` 字段都指 `contour.mp4`(详见 evaluation skill §1-2)

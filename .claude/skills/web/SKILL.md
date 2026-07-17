@@ -1,5 +1,5 @@
 ---
-name: contour-video-web
+name: web
 description: |
   infraredComp Web 全栈(FastAPI server/ + Vue3 web/)开发指南。用于后端 API 开发、前端页面开发、服务启动调试等。
   触发场景：(1) 启动后端+前端服务 (2) 开发后端 API 端点 (3) 开发前端页面/视图 (4) 调试 API 与前端联调 (5) 查看日志
@@ -86,7 +86,7 @@ cd web && pnpm dev                                           # 前端(需 Node 2
                                  (旧 /evaluation/results + /evaluation/compare + /evaluation/outputs 重定向到此)
 ```
 
-`mode` 只影响"数据集子集(--sequences)+ 跳哪个展示页",不在跑代码分叉;**speed/formal 默认都不截断帧**。详见 contour-video-evaluation skill §3。
+`mode` 只影响"数据集子集(--sequences)+ 跳哪个展示页",不在跑代码分叉;**speed/formal 默认都不截断帧**。详见 evaluation skill §3。
 
 **EvalRun** 选 DL image codec(CompressAI/ELIC, kind='dl')时出现 checkpoint 选择器(选 trained 不选=pretrained)+ quality;选 learned-video(ssf2020)时同样;DCVC-RT(无 trained checkpoint)显示 setup note。
 
@@ -217,7 +217,7 @@ results/video/
 - **Pages 部署**:`.github/workflows/deploy.yml` 静态部署 `web/dist` 到 GitHub Pages(base `/infraredComp/`)。本地 dev 走 proxy;Pages 上无后端时 API 视图降级 EmptyState。
 - **node 版本**:pnpm 需 Node 22+。`start_services.ps1` 自动选 node@25/24/22;CI 用 Node 24。
 - **数据目录**:management(markdown)/papers(SQLite)/evaluation(results/video/*.json)各模块自带目录。
-- **contour 管线产物是 `contour.mp4`,不是 PNG**;阶段2 从视频解码临时帧(详见 contour-video-evaluation skill §1-2)。
+- **contour 管线产物是 `contour.mp4`,不是 PNG**;阶段2 从视频解码临时帧(详见 evaluation skill §1-2)。
 
 ## 常用命令
 
