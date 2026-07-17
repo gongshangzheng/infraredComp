@@ -414,7 +414,7 @@ def _run_eval(model, eval_sample: list, device: str, lam: float, batch: int,
     return {"loss": tot_loss / max(n, 1), "psnr": tot_psnr / max(n, 1), "bpp": tot_bpp / max(n, 1)}
 
 
-def _save_viz(model, viz_sample: list, originals, device: str, run_id: str, epoch: int) -> list:
+def _save_viz(model, viz_sample: list, originals, device: str, run_id: str, epoch: int, model_id: str = "") -> list:
     """每个样本一张三图 RGB PNG（原图 | 输入边缘 | 重建），存 viz/<run>/epoch_XXX_sample_Y.png。
     originals 缺则回退两图（输入 | 重建）。返回 6 条相对路径。"""
     from PIL import Image
@@ -424,15 +424,23 @@ def _save_viz(model, viz_sample: list, originals, device: str, run_id: str, epoc
     paths = []
     with torch.no_grad():
         for k, t in enumerate(viz_sample):
-            x = t.unsqueeze(0).to(device)                  # (1,3,H,W)
-            out = model.forward(x)
-            xhat = out["x_hat"][0].clamp(0, 1)              # (3,H,W)
+            x = t.unsqueeze(0).to(device)
+            if model_id == "difftok":
+                logits, _ = model.forward(x)
+                xhat = torch.sigmoid(logits)[0].clamp(0, 1)   # (1,H,W)
+                x_in = x[0].clamp(0, 1)                        # (1,H,W)
+                xhat = xhat.repeat(3, 1, 1)                     # -> (3,H,W) 与彩色原图拼接
+                x_in = x_in.repeat(3, 1, 1)
+            else:
+                out = model.forward(x)
+                xhat = out["x_hat"][0].clamp(0, 1)              # (3,H,W)
+                x_in = x[0].clamp(0, 1)
             panels = []
             if originals is not None and k < len(originals):
                 panels.append(originals[k].to(device).clamp(0, 1))  # 原图（彩色）
-            panels.append(x[0].clamp(0, 1))                # 输入边缘
-            panels.append(xhat)                            # 重建
-            row = torch.cat(panels, dim=2)                 # (3, H, len*W)
+            panels.append(x_in)                              # 输入边缘
+            panels.append(xhat)                              # 重建
+            row = torch.cat(panels, dim=2)                   # (3, H, len*W)
             arr = (row.cpu().numpy() * 255.0).clip(0, 255).astype("uint8")  # (3,H,len*W)
             arr = np.transpose(arr, (1, 2, 0))            # (H, len*W, 3) RGB
             fname = f"epoch_{epoch:03d}_sample_{k}.png"
@@ -555,6 +563,7 @@ def main() -> int:
     ap.add_argument("--shards", type=int, default=0, help="imagenet parquet shard 数；<=0 = 全部 shard（默认，即全量）")
     ap.add_argument("--num-workers", dest="num_workers", type=int, default=0, help="DataLoader 工作进程数（imagenet 全量推荐 4-8，0=主线程）")
     ap.add_argument("--optimizer", default="adamw", choices=["adamw", "adam"], help="优化器（默认 AdamW）")
+    ap.add_argument("--lr-cosine", dest="lr_cosine", action="store_true", help="lr 用 CosineAnnealingLR 衰减到 lr*0.01")
     ap.add_argument("--ckpt-every", dest="ckpt_every", type=int, default=50, help="每 N epoch 存一次 checkpoint（便于挂了 resume；0=只在结束存）")
     # 从 checkpoint 续训（二选一，互斥；都建新 run_id）
     ap.add_argument("--load", default=None, help="checkpoint 路径/run_id：加载权重 warm-start，fresh optimizer，epoch 1..N")
@@ -635,6 +644,9 @@ def main() -> int:
     model.train()
     OptCls = torch.optim.AdamW if (args.optimizer or "adamw").lower() == "adamw" else torch.optim.Adam
     optimizer = OptCls(model.parameters(), lr=args.lr)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=args.epochs, eta_min=args.lr * 0.01
+    ) if getattr(args, "lr_cosine", False) else None
     log(run_id, f"[train] model built, params={sum(p.numel() for p in model.parameters())}, optimizer={args.optimizer}")
 
     # 2a. --load 权重（resume 的曲线继承已在 main 开头完成；模型从 checkpoint 加载）
@@ -695,13 +707,15 @@ def main() -> int:
             loss_series.append(avg)
             ep_i = epoch - start_epoch + 1
             log(run_id, f"[train] epoch {epoch} ({ep_i}/{args.epochs}) loss={avg['loss']:.4f} psnr={avg['psnr']:.2f} bpp={avg['bpp']:.3f}")
+            if scheduler is not None:
+                scheduler.step()
             # 训练中 eval + 可视化（每 eval_every epoch）
             if eval_on and (epoch % args.eval_every == 0):
                 try:
                     em = _run_eval(model, eval_sample, device, args.lamb, args.batch, model_id=args.model)
                     em["epoch"] = epoch
                     test_metrics.append(em)
-                    vpaths = _save_viz(model, viz_sample, originals, device, run_id, epoch)
+                    vpaths = _save_viz(model, viz_sample, originals, device, run_id, epoch, model_id=args.model)
                     viz.extend(vpaths)  # 每 epoch 6 条 {epoch, sample, path}
                     log(run_id, f"[train]   eval epoch {epoch}: test psnr={em['psnr']:.2f} bpp={em['bpp']:.3f} "
                                 f"loss={em['loss']:.4f} | viz {len(vpaths)} panels -> viz/{run_id}/")
