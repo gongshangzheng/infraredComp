@@ -120,7 +120,7 @@
       "status": "active",
       "startDate": "2026-07-15",
       "assignee": "郑鑫裕",
-      "description": "接入 InterDigitalInc/LosslessSegmentationMapCompression 作为 stage2 codec。注意它是纯 C++17 CLI 二进制(encoder/decoder,链码 MSC/3OT + 算术编码),非 torch;无权重/率点、无损→单 RD 点、PSNR=inf。集成=build C++ + subprocess 包装(is_neural,写临时 .yuv→跑 encoder→读 .bin;解码反之)。RD 图对 inf PSNR cap 到有限值。纳入 stage2 评测对比。\n【进度@2026-07-17】LSMC = InterDigitalInc/LosslessSegmentationMapCompression（https://github.com/InterDigitalInc/LosslessSegmentationMapCompression）。纯 C++17 CLI codec，无损（context-adaptive chain coding + 算术编码），PSNR=∞。wrapper 已写（benchmark/video/codecs/lsmc.py，subprocess encoder/decoder.exe）。当前 models/lsmc/ 目录不存在——需 git clone + cmake+MSVC 编译（CMakeLists 需 2 修复：arithmetic_codec 路径 + 缺 acodec.cpp）。",
+      "description": "LSMC (Lossless Segmentation Map Compression)\n\n源码: https://github.com/InterDigitalInc/LosslessSegmentationMapCompression\n类型: 纯 C++17 CLI codec（encoder/decoder 二进制），非神经网络\n算法: context-adaptive chain coding (MSC/3OT) + 算术编码，压缩 raw YUV 分割图\n特点: 无损 → 单个 RD 点，PSNR=∞\n权重: 无（传统 C++ 算法，无 .pth/.ckpt）\n产物: models/lsmc/{encoder,decoder}.exe（gitignored）\n\n集成方式:\n- wrapper: benchmark/video/codecs/lsmc.py\n- is_neural=True（in-process bytes-in/bytes-out 合约），内部 subprocess C++ binary\n- encode: frames → temp .yuv (gray) → encoder → .bin bytes\n- decode: .bin → decoder → rec.yuv → parse frames\n- 10MB 内部 buffer 限制（大序列注意）\n\n当前状态:\n- wrapper 已写 ✓\n- models/lsmc/ 目录不存在 ✗ → 需 git clone + cmake+MSVC 编译\n- CMakeLists 需 2 修复: arithmetic_codec 路径 + 缺的 acodec.cpp\n\n任务:\n- t8-1: LosslessSeg 接入 stage2 codec + SA-Co 评测",
       "notePath": "",
       "children": [
         {
