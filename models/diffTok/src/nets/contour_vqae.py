@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
+from vector_quantize_pytorch import VectorQuantize
 
 from ..encoders.contour_encoder import ContourEncoder
 from ..decoders.contour_decoder import ContourDecoder
-from ..quantizers.quantizer1d import VectorQuantizer1d
 
 
 class ContourVQAE(nn.Module):
@@ -12,15 +12,11 @@ class ContourVQAE(nn.Module):
 
     Architecture: ContourEncoder → Linear → VQ → Linear → ContourDecoder
 
-    Forward returns (logits, vq_result_dict) where logits are pre-sigmoid pixel values.
+    Forward returns (logits, commit_loss).
     Use encode_indices() / decode_indices() for inference.
     """
 
     def __init__(self, cfg):
-        """
-        Args:
-            cfg: OmegaConf config with model.* and quantizer.* fields
-        """
         super().__init__()
         m = cfg.model
         q = cfg.quantizer
@@ -55,17 +51,15 @@ class ContourVQAE(nn.Module):
             qk_norm=m.get("qk_norm", False),
         )
 
-        self.quantizer = VectorQuantizer1d(
+        self.quantizer = VectorQuantize(
+            dim=q.token_dim,
             codebook_size=q.codebook_size,
-            token_dim=q.token_dim,
-            commitment_cost=q.get("commitment_cost", 0.25),
-            dead_code_threshold=q.get("dead_code_threshold", 1.0),
             decay=q.get("decay", 0.99),
-            eps=q.get("eps", 1e-5),
-            use_l2_norm=q.get("use_l2_norm", False),
+            commitment_weight=q.get("commitment_cost", 0.25),
+            threshold_ema_dead_code=q.get("dead_code_threshold", 1.0),
+            use_cosine_sim=q.get("use_l2_norm", False),
         )
 
-        # Projection layers between encoder/quantizer/decoder
         enc_dim = m.encoder.dim
         dec_dim = m.decoder.dim
         token_dim = q.token_dim
@@ -77,37 +71,33 @@ class ContourVQAE(nn.Module):
         Args:
             x: [B, C, H, W] input image (C=1 for grayscale), values in [0, 1]
         Returns:
-            (logits [B, C, H, W], vq_result_dict)
+            (logits [B, C, H, W], commit_loss scalar)
         """
-        z = self.encoder(x)                      # [B, num_latent, enc_dim]
-        z = self.pre_quant(z)                    # [B, num_latent, token_dim]
-        z_q, vq_result = self.quantizer(z)       # [B, num_latent, token_dim]
-        z_q = self.post_quant(z_q)               # [B, num_latent, dec_dim]
-        logits = self.decoder(z_q)               # [B, C, H, W]
-        return logits, vq_result
+        z = self.encoder(x)                              # [B, num_latent, enc_dim]
+        z = self.pre_quant(z)                            # [B, num_latent, token_dim]
+        z_q, indices, commit_loss = self.quantizer(z)   # [B, num_latent, token_dim]
+        z_q = self.post_quant(z_q)                       # [B, num_latent, dec_dim]
+        logits = self.decoder(z_q)                       # [B, C, H, W]
+        return logits, commit_loss
 
     @torch.no_grad()
     def encode_indices(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Args:
-            x: [B, C, H, W] input image
         Returns:
             indices: [B, num_latent] integer token ids
         """
         z = self.encoder(x)
         z = self.pre_quant(z)
-        _, vq_result = self.quantizer(z)
-        return vq_result["min_encoding_indices"]  # [B, num_latent]
+        _, indices, _ = self.quantizer(z)
+        return indices  # [B, num_latent]
 
     @torch.no_grad()
     def decode_indices(self, indices: torch.Tensor) -> torch.Tensor:
         """
-        Args:
-            indices: [B, num_latent] integer token ids
         Returns:
             image: [B, C, H, W] reconstructed image, values in [0, 1]
         """
-        z_q = self.quantizer.embedding(indices)  # [B, num_latent, token_dim]
-        z_q = self.post_quant(z_q)               # [B, num_latent, dec_dim]
-        logits = self.decoder(z_q)               # [B, C, H, W]
+        z_q = self.quantizer.get_output_from_indices(indices)  # [B, num_latent, token_dim]
+        z_q = self.post_quant(z_q)                             # [B, num_latent, dec_dim]
+        logits = self.decoder(z_q)                             # [B, C, H, W]
         return torch.sigmoid(logits)

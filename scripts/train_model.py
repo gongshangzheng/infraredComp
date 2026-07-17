@@ -404,8 +404,8 @@ def _run_eval(model, eval_sample: list, device: str, lam: float, batch: int,
             chunk = eval_sample[s:s + batch]
             x = torch.stack([t.to(device) for t in chunk], dim=0)
             if model_id == "difftok":
-                logits, vq_result = model.forward(x)
-                loss, lv, psnr, bpp = rd_loss_difftok(logits, x, vq_result["quantizer_loss"])
+                logits, commit_loss = model.forward(x)
+                loss, lv, psnr, bpp = rd_loss_difftok(logits, x, commit_loss)
             else:
                 out = model.forward(x)
                 loss, lv, psnr, bpp = rd_loss(out, x, lam)
@@ -683,8 +683,8 @@ def main() -> int:
                     batch = batch.to(device)
                     optimizer.zero_grad()
                     if args.model == "difftok":
-                        logits, vq_result = model(batch)
-                        loss, lv, psnr, bpp = rd_loss_difftok(logits, batch, vq_result["quantizer_loss"])
+                        logits, commit_loss = model(batch)
+                        loss, lv, psnr, bpp = rd_loss_difftok(logits, batch, commit_loss)
                     else:
                         out = model(batch)
                         loss, lv, psnr, bpp = rd_loss(out, batch, args.lamb)

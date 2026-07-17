@@ -195,7 +195,7 @@ def rd_loss_difftok(logits, x0, vq_loss, pos_weight=10.0):
 ```
 
 - `pos_weight=10`：边缘像素稀疏（通常 5-15%），加大边缘像素的 BCE 权重。
-- `vq_loss`：VQ 的 commitment_loss + codebook_loss（EMA 更新，训练时自动维护 codebook）。
+- `vq_loss`：EMA 模式下只含 commitment_loss（codebook 完全由 EMA 驱动，不走梯度）。
 - 返回的 `bpp` 固定为 0.0（占位），因为 difftok 的 bpp 由 token 数量决定，不是熵模型 likelihood。
 
 训练日志示例：

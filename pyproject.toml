@@ -24,4 +24,5 @@ dependencies = [
     "static-ffmpeg>=3.0",
     "pyarrow>=25.0.0",
     "modelscope>=1.38.1",
+    "vector-quantize-pytorch>=1.22.0",
 ]
