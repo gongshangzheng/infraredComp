@@ -45,6 +45,8 @@ import torch.nn as nn
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 
+from models.diffTok.src.losses.rd_loss import rd_loss_difftok
+
 # infraredComp 训练产物路径（与 server.config 一致）
 TRAINING_DIR = REPO / "results" / "training"
 CHECKPOINTS_DIR = TRAINING_DIR / "checkpoints"
@@ -275,7 +277,7 @@ def build_model(model_id: str, quality: int, device: str, warm_start: bool = Tru
         m = ELICModel(N=192, M=320, num_slices=5)
     elif model_id == "difftok":
         from omegaconf import OmegaConf
-        from third_party.diffTok.src.nets.contour_vqae import ContourVQAE
+        from models.diffTok.src.nets.contour_vqae import ContourVQAE
         cfg_path = REPO / "configs" / "difftok" / "bsds_contour.yaml"
         cfg = OmegaConf.load(cfg_path)
         m = ContourVQAE(cfg)
@@ -303,23 +305,6 @@ def rd_loss(out, x, lam: float) -> tuple[torch.Tensor, float, float, float]:
     loss = lam * (rate / num_pixels) + dist
     psnr = 10.0 * math.log10(1.0 / (mse + 1e-10))
     return loss, loss.item(), psnr, bpp
-
-
-def rd_loss_difftok(logits, x0, vq_loss, pos_weight: float = 10.0) -> tuple:
-    """BCE loss for binary contour maps + VQ commitment loss.
-
-    pos_weight upweights edge pixels to compensate class imbalance (~5-15% edges).
-    Returns (loss, loss_val, psnr_proxy, bpp_dummy) matching rd_loss tuple shape.
-    """
-    import torch.nn.functional as F
-    pw = torch.tensor([pos_weight], dtype=logits.dtype, device=logits.device)
-    bce = F.binary_cross_entropy_with_logits(logits, x0, pos_weight=pw)
-    loss = bce + vq_loss
-    with torch.no_grad():
-        x_hat = torch.sigmoid(logits)
-        mse = torch.mean((x_hat - x0) ** 2).item()
-        psnr = 10.0 * math.log10(1.0 / (mse + 1e-10))
-    return loss, loss.item(), psnr, 0.0
 
 
 def video_rd_loss(out, frames: list, lam: float) -> tuple[torch.Tensor, float, float, float]:

@@ -45,7 +45,7 @@ class DiffTokCodec(VideoCodec):
         if key in _CACHE:
             return _CACHE[key]
         from omegaconf import OmegaConf
-        from third_party.diffTok.src.nets.contour_vqae import ContourVQAE
+        from models.diffTok.src.nets.contour_vqae import ContourVQAE
         # Locate the config relative to this repo (go up 4 levels from this file)
         repo = Path(__file__).resolve().parents[3]
         cfg_path = repo / "configs" / "difftok" / "bsds_contour.yaml"

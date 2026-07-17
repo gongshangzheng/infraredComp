@@ -3,14 +3,14 @@ multi-label segfault (C++ UB handled differently by g++ vs MSVC).
 
 Usage: python scripts/build_lsmc_gcc.py
 Expects: /tmp/lsmc-gcc (shallow clone of InterDigitalInc/LosslessSegmentationMapCompression)
-Output: /tmp/lsmc-gcc/encoder_gcc.exe + decoder_gcc.exe → copied to third_party/lsmc/
+Output: /tmp/lsmc-gcc/encoder_gcc.exe + decoder_gcc.exe → copied to models/lsmc/
 """
 import subprocess, sys, os, shutil, tempfile
 from pathlib import Path
 
 GPP = r"C:\Users\wo\.conda\envs\compression\Library\mingw-w64\bin\g++.exe"
 SRC = Path(tempfile.gettempdir()) / "lsmc-gcc"  # Windows %TEMP%\lsmc-gcc
-DEST = Path(__file__).resolve().parent.parent / "third_party" / "lsmc"
+DEST = Path(__file__).resolve().parent.parent / "models" / "lsmc"
 
 INCLUDES = [
     "-Isource/arithmetic_coder",
@@ -48,7 +48,7 @@ def main():
     if not ok:
         print("BUILD FAILED")
         return 1
-    # copy to third_party/lsmc/
+    # copy to models/lsmc/
     DEST.mkdir(parents=True, exist_ok=True)
     for name in ("encoder", "decoder"):
         src = SRC / f"{name}_gcc.exe"

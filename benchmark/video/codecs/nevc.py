@@ -4,10 +4,10 @@ ByteDance NEVC-1.0 is **EHVC** (Efficient Hierarchical Reference and Quality
 Structure for Neural Video Coding, ACM MM 2025, arXiv:2509.04118) — a fork of
 microsoft/DCVC (test.py header: "modified from DCVC"). Same I/P interface as
 DCVC-DC: ``IntraNoAR`` (I-frame) + ``DMC`` (P-frame) + ``MLCodec_rans`` C++ entropy
-ext. Vendored under ``third_party/nevc/``; checkpoint on HuggingFace
+ext. Vendored under ``models/nevc/``; checkpoint on HuggingFace
 ``ByteDance/NEVC1.0`` (``nevc1.0_intra.pth.tar`` / ``nevc1.0_inter.pth.tar``) —
 reachable here, auto-downloaded. The ``MLCodec_rans`` ext is **reused** from the
-DCVC-DC build (cp312 ``.pyd`` copied into ``third_party/nevc/src/models/`` — the
+DCVC-DC build (cp312 ``.pyd`` copied into ``models/nevc/src/models/`` — the
 ``src/cpp`` is byte-identical to DCVC-DC's).
 
 Differences from ``dcvc_rt`` (DCVC-RT): (1) ``IntraNoAR`` I-frame (not ``DMCI``);
@@ -16,8 +16,8 @@ Differences from ``dcvc_rt`` (DCVC-RT): (1) ``IntraNoAR`` I-frame (not ``DMCI``)
 — the next frame, ``None`` for the last); (4) rate control = ``q_in_ckpt=True`` +
 ``q_index`` (NEVC's rate points), not DCVC-RT's ``qp``.
 
-Setup: ``third_party/nevc/src/`` vendored (tracked); checkpoints at
-``third_party/nevc/models/nevc1.0_{intra,inter}.pth.tar`` (gitignored — fetch via
+Setup: ``models/nevc/src/`` vendored (tracked); checkpoints at
+``models/nevc/models/nevc1.0_{intra,inter}.pth.tar`` (gitignored — fetch via
 ``scripts/download_nevc_weights.py`` or ``huggingface_hub``); rans ext reused
 (``MLCodec_rans``/``MLCodec_CXX`` ``.pyd`` in ``src/models/``). ``_load`` raises a
 clear error if any are missing. Inference-only (no training code shipped).
@@ -46,7 +46,7 @@ _HDR = struct.Struct("<III")      # n, h, w
 _FREC = struct.Struct("<BiI")     # type, q_index, blen
 _LEN = struct.Struct("<I")        # stats_pickle length
 
-_NEVC_DIR = Path(__file__).resolve().parents[3] / "third_party" / "nevc"
+_NEVC_DIR = Path(__file__).resolve().parents[3] / "models" / "nevc"
 DEFAULT_CKPT_I = str(_NEVC_DIR / "models" / "nevc1.0_intra.pth.tar")
 DEFAULT_CKPT_P = str(_NEVC_DIR / "models" / "nevc1.0_inter.pth.tar")
 
@@ -87,11 +87,11 @@ class NevcCodec(VideoCodec):
         return RuntimeError(
             f"NEVC setup incomplete: {reason}\n"
             "  1. vendor src: git clone --depth 1 bytedance/NEVC, copy NEVC-1.0-EHVC/src "
-            "-> third_party/nevc/src\n"
+            "-> models/nevc/src\n"
             "  2. checkpoints: python scripts/download_nevc_weights.py  "
-            "(HuggingFace ByteDance/NEVC1.0 -> third_party/nevc/models/)\n"
+            "(HuggingFace ByteDance/NEVC1.0 -> models/nevc/models/)\n"
             "  3. rans ext: reuse DCVC-DC's MLCodec_rans/MLCodec_CXX cp312 .pyd into "
-            "third_party/nevc/src/models/ (src/cpp is identical)\n"
+            "models/nevc/src/models/ (src/cpp is identical)\n"
             f"     I ckpt: {self.checkpoint_i or DEFAULT_CKPT_I}\n"
             f"     P ckpt: {self.checkpoint_p or DEFAULT_CKPT_P}"
         )
@@ -102,7 +102,7 @@ class NevcCodec(VideoCodec):
             return NevcCodec._CACHE[key]
         repo = str(_NEVC_DIR)
         if not os.path.isdir(os.path.join(repo, "src", "models")):
-            raise self._setup_error("third_party/nevc/src not found")
+            raise self._setup_error("models/nevc/src not found")
         if repo not in sys.path:
             sys.path.insert(0, repo)
 

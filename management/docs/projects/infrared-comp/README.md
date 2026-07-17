@@ -43,4 +43,4 @@ participants:
 
 ## 仓库结构
 
-`benchmark/video/`(评测库)+ `server/`(FastAPI)+ `web/`(Vue3)+ `management/`(项目数据)+ `datasets/`(junction 到 `D:/data` 大数据集)+ `third_party/`(权重 / vendor 模型)+ `scripts/`(下载 / baseline / 预览)。
+`benchmark/video/`(评测库)+ `server/`(FastAPI)+ `web/`(Vue3)+ `management/`(项目数据)+ `datasets/`(junction 到 `D:/data` 大数据集)+ `models/`(权重 / vendor 模型)+ `scripts/`(下载 / baseline / 预览)。

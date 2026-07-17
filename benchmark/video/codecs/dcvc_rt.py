@@ -92,17 +92,17 @@ class DCVCRTCodec(VideoCodec):
     def _setup_error(reason: str) -> RuntimeError:
         msg = (
             f"DCVC-RT setup incomplete ({reason}). Required setup:\n"
-            "  1. DCVC repo (MIT, microsoft/DCVC) is a git submodule at third_party/DCVC.\n"
-            "     Fetch it: `git submodule update --init third_party/DCVC`\n"
+            "  1. DCVC repo (MIT, microsoft/DCVC) is a git submodule at models/DCVC.\n"
+            "     Fetch it: `git submodule update --init models/DCVC`\n"
             "     (or set DCVC_REPO_ROOT=/path/to/DCVC to override).\n"
             "  2. Build the rans C++ ext (NO fallback): "
-            "cd third_party/DCVC/src/cpp && pip install .  "
+            "cd models/DCVC/src/cpp && pip install .  "
             "(needs cmake/g++/ninja + pybind11; installs MLCodec_extensions_cpp)\n"
             "  3. (optional, CUDA only) fused ext: "
-            "cd third_party/DCVC/src/layers/extensions/inference && pip install .  "
+            "cd models/DCVC/src/layers/extensions/inference && pip install .  "
             "(installs inference_extensions_cuda; auto-falls-back to pytorch if absent)\n"
             "  4. Download CVPR-2025 checkpoints from OneDrive (manual, NOT scriptable) "
-            "into third_party/DCVC/checkpoints/:\n"
+            "into models/DCVC/checkpoints/:\n"
             "       cvpr2025_image.pth.tar  (DMCI, I-frame)\n"
             "       cvpr2025_video.pth.tar  (DMC,  P-frame)\n"
             "See .claude/skills/dcvc-rt-usage for full instructions.\n"
@@ -114,13 +114,13 @@ class DCVCRTCodec(VideoCodec):
         if key in DCVCRTCodec._CACHE:
             return DCVCRTCodec._CACHE[key]
 
-        # DCVC repo root: env override OR the pinned git submodule at third_party/DCVC.
+        # DCVC repo root: env override OR the pinned git submodule at models/DCVC.
         # (dcvc_rt.py is at benchmark/video/codecs/ → parents[3] = infraredComp repo root)
         _REPO_ROOT = Path(__file__).resolve().parents[3]
-        repo = os.environ.get("DCVC_REPO_ROOT") or str(_REPO_ROOT / "third_party" / "DCVC")
+        repo = os.environ.get("DCVC_REPO_ROOT") or str(_REPO_ROOT / "models" / "DCVC")
         if not os.path.isdir(repo):
             raise self._setup_error(
-                "DCVC repo not found. Run `git submodule update --init third_party/DCVC` "
+                "DCVC repo not found. Run `git submodule update --init models/DCVC` "
                 "(or set DCVC_REPO_ROOT=/path/to/DCVC)"
             )
 

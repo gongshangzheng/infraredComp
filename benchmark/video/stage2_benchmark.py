@@ -227,6 +227,7 @@ def run_benchmark(
     preset: str | None = None,
     save: bool = True,
     dataset: str = "",
+    checkpoint_path: str | None = None,
 ) -> list[VideoCompressionResult]:
     """Run a (codecs × crfs) grid on one contour video.
 
@@ -263,7 +264,7 @@ def run_benchmark(
         for codec_name in codecs:
             for crf in crfs:
                 try:
-                    r = benchmark_codec(work_artifact, codec_name, crf, preset, dataset)
+                    r = benchmark_codec(work_artifact, codec_name, crf, preset, dataset, checkpoint_path=checkpoint_path)
                     results.append(r)
                 except Exception as e:  # noqa: BLE001
                     print(f"  ERROR [{codec_name} crf{crf}] on {artifact.source_name}: {e}")
