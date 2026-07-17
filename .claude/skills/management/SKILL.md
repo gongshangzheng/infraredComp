@@ -1,5 +1,5 @@
 ---
-name: contour-video-management
+name: management
 description: |
   infraredComp 项目管理模块操作指南。用于团队成员管理、日报/周报/月报、任务（看板+项目树）、里程碑、会议纪要等 CRUD 操作（脚本直接改文件，后端只读）。
   触发场景：(1) 添加/修改/删除团队成员，(2) 创建/更新/删除报表，(3) 管理任务(增删改查+改状态跨段移动)，(4) 创建/更新/删除会议纪要，(5) 了解项目结构
@@ -13,7 +13,7 @@ description: |
 
 > **任务数据单源**：任务（看板 + 项目树）的唯一来源是 **per-project `management/docs/projects/{slug}/tasks.json`**（层级树）。看板（TaskBoard）是它的**派生视图**——按 status 展平成 3 桶，按项目切换。`tasks.md` 已废弃删除。成员/报表/会议/里程碑仍是 markdown。
 
-## 脚本一览（`.claude/skills/contour-video-management/scripts/`）
+## 脚本一览（`.claude/skills/management/scripts/`）
 
 脚本 **self-locating**（用 `parents[4]` 解析仓库根），同一份文件在 infraredComp 与 ProjFlow 都能跑（两库 `tasks.json` schema 一致）。纯标准库，**推荐用 `uv run python` 运行**（项目是 uv 管理）。
 
@@ -78,7 +78,7 @@ management/
   - **不要手写 progress**：始终通过 `--progress` 脚本追加，不要直接编辑 tasks.json 的 progress 数组（日期格式、unshift 顺序容易出错）。
 
 ```bash
-SD=.claude/skills/contour-video-management/scripts
+SD=.claude/skills/management/scripts
 
 # 新增根级任务（id 自动生成 tN）
 uv run python $SD/add_task.py --slug infrared-comp --title "轮廓提取优化" --status active \
@@ -270,7 +270,7 @@ uv run python $SD/delete_meeting.py --date 2026-07-11
 ## 常用命令
 
 ```bash
-SD=.claude/skills/contour-video-management/scripts
+SD=.claude/skills/management/scripts
 uv run python $SD/list_tasks.py --slug infrared-comp          # 看任务树
 uv run python $SD/list_tasks.py --slug infrared-comp --flat  # 看展平看板桶
 uv run python $SD/list_tasks.py --slug infrared-comp --id t2-3  # 按 ID 精确定位任务详情
