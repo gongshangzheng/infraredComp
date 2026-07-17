@@ -28,6 +28,7 @@ from PIL import Image  # noqa: E402
 
 from scripts.extract_imagenet_contour import build_groups  # noqa: E402
 from scripts.hed_gpu import HEDTorch, load_hed_from_caffe, hed_edges_batch  # noqa: E402
+from benchmark.video.config import contour_dir  # noqa: E402
 
 DATASETS_DIR = Path(os.environ.get("INFRACOMP_DATASETS_DIR", str(REPO / "datasets")))
 _SPLIT = {"train": "train", "val": "validation", "validation": "validation", "test": "test"}
@@ -58,7 +59,7 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=0)
     args = ap.parse_args()
 
-    out_dir = DATASETS_DIR / "contour" / f"imagenet_{args.split}_hed"
+    out_dir = contour_dir("hed", f"imagenet_{args.split}")
     out_dir.mkdir(parents=True, exist_ok=True)
     dev = "cuda" if torch.cuda.is_available() else "cpu"
 

@@ -32,7 +32,7 @@ from benchmark.video.stage1_extract import extract_contour_video
 from benchmark.video.stage2_benchmark import run_benchmark, save_results_json
 
 DATASETS_DIR = Path(os.environ.get("INFRACOMP_DATASETS_DIR", str(PROJECT_ROOT / "datasets")))
-XIPH_DIR = DATASETS_DIR / "raw" / "xiph_cif"
+XIPH_DIR = config.raw_dir("xiph_cif")
 DATASET_NAME = "Xiph-CIF-natural"
 # 独立数据集文件:不覆盖默认 results.json(多数据集共存)。
 RESULTS_FILE = config.RESULTS_DIR / "xiph_cif.json"

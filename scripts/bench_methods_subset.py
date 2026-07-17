@@ -33,7 +33,7 @@ from benchmark.video import config
 from benchmark.video.codecs import catalog as codec_catalog
 
 DATASET = "Xiph-CIF-natural"
-RAW_TPL = "datasets/raw/xiph_cif/{seq}.y4m"
+RAW_TPL = str(config.raw_dir("xiph_cif") / "{seq}.y4m")
 
 
 def _crfs_for(codec: str, override: list[int] | None) -> list[int]:

@@ -30,6 +30,7 @@ sys.path.insert(0, str(REPO))
 
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
+from benchmark.video.config import raw_dir, contour_dir  # noqa: E402
 
 DATASETS_DIR = Path(os.environ.get("INFRACOMP_DATASETS_DIR", str(REPO / "datasets")))
 _SPLIT_PREFIX = {"train": "train", "val": "validation", "validation": "validation", "test": "test"}
@@ -49,7 +50,7 @@ def build_groups(split: str, shards: int) -> tuple[list[str], list[tuple[int, in
     groups = [(start_idx, file_idx, row_group, num_rows), ...]，按 parquet 顺序连续编号。
     """
     import pyarrow.parquet as pq
-    data_dir = DATASETS_DIR / "imagenet" / "data"
+    data_dir = raw_dir("imagenet") / "data"
     prefix = _SPLIT_PREFIX.get(split, split)
     files = sorted(data_dir.glob(f"{prefix}-*.parquet"))
     if not files:
@@ -142,7 +143,7 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=0, help=">0 = 只提前 N 张（小批量验证）")
     args = ap.parse_args()
 
-    out_dir = DATASETS_DIR / "contour" / f"imagenet_{args.split}_{args.method}"
+    out_dir = contour_dir(args.method, f"imagenet_{args.split}")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     file_paths, groups, total = build_groups(args.split, args.shards)

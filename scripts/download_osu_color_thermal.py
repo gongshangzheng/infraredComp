@@ -56,7 +56,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # Datasets 树位置可经 INFRACOMP_DATASETS_DIR 配置;默认 <repo>/datasets。
 _DATASETS_DIR = Path(os.environ.get("INFRACOMP_DATASETS_DIR", str(PROJECT_ROOT / "datasets")))
-OUT_DIR = _DATASETS_DIR / "raw" / "osu_color_thermal"
+sys.path.insert(0, str(PROJECT_ROOT))
+from benchmark.video.config import raw_dir  # noqa: E402
+OUT_DIR = raw_dir("osu_color_thermal")
 
 
 def _rel_or_abs(p: Path) -> str:

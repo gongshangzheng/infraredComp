@@ -34,7 +34,7 @@ from benchmark.video.visualize import generate_report
 from benchmark.video.html_report import generate_html_report
 
 DATASETS_DIR = Path(os.environ.get("INFRACOMP_DATASETS_DIR", str(PROJECT_ROOT / "datasets")))
-OSU_DIR = DATASETS_DIR / "raw" / "osu_color_thermal"
+OSU_DIR = config.raw_dir("osu_color_thermal")
 DATASET_NAME = "OSU Color-Thermal (OTCBVS Dataset 03)"
 SEQ_RANGE = range(1, 7)  # seq1..6
 

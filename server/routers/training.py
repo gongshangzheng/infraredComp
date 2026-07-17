@@ -24,6 +24,7 @@ from fastapi.responses import FileResponse
 
 from server.config import (
     DATASETS_DIR, TRAINING_METRICS_JSON, CHECKPOINTS_DIR, TRAINING_OUTPUTS_DIR,
+    raw_dir,
 )
 from server.utils.file_utils import read_file, safe_resolve
 from server.cache import file_cached
@@ -130,11 +131,11 @@ async def get_datasets():
         # 尝试算样本数
         if d["id"].startswith("flir/"):
             split = d["split"]
-            flir = os.path.join(DATASETS_DIR, "FLIR_ADAS_1_3", split, "thermal_16_bit")
+            flir = os.path.join(raw_dir("FLIR_ADAS_1_3"), split, "thermal_16_bit")
             if os.path.isdir(flir):
                 row["num_samples"] = len([f for f in os.listdir(flir) if f.endswith(('.png', '.tiff', '.jpg'))])
         elif d["id"] == "osu_frames":
-            osu = os.path.join(DATASETS_DIR, "raw", "osu_color_thermal")
+            osu = raw_dir("osu_color_thermal")
             if os.path.isdir(osu):
                 row["num_samples"] = sum(1 for r in os.listdir(osu) if r.endswith('.mp4'))
         out.append(row)

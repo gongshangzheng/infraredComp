@@ -32,13 +32,14 @@ from .traditional import (
     HEIC_QUALITIES,
 )
 from .visualize import generate_report
+from .video.config import raw_dir
 
 
 # Datasets 树位置可经 INFRACOMP_DATASETS_DIR 配置(默认 <repo>/datasets)。
-# NOTE: 历史代码写双层 datasets/FLIR_ADAS_1_3/FLIR_ADAS_1_3,但 download 脚本产出单层
-# datasets/FLIR_ADAS_1_3,这里修正为单层以匹配实际数据布局。
+# NOTE: raw_dir("FLIR_ADAS_1_3") → datasets/original/FLIR_ADAS_1_3（download 脚本产出
+# 单层布局；历史代码写双层 datasets/FLIR_ADAS_1_3/FLIR_ADAS_1_3 已修正为单层）。
 DATASETS_DIR = Path(os.getenv("INFRACOMP_DATASETS_DIR", str(Path(__file__).resolve().parent.parent / "datasets")))
-DATASET_ROOT = DATASETS_DIR / "FLIR_ADAS_1_3"
+DATASET_ROOT = raw_dir("FLIR_ADAS_1_3")
 # We benchmark on thermal_16_bit images (14-bit IR data in 16-bit TIFF)
 THERMAL_SUBDIRS = ["train/thermal_16_bit", "val/thermal_16_bit", "video/thermal_16_bit"]
 

@@ -93,8 +93,8 @@ def main() -> int:
     results_file = RESULTS_FILE_BY_MODE[args.mode]
 
     # ---- Stage 1: extract each sequence once ----
-    raw_dir = config.DATASETS_DIR / "raw" / "xiph_cif"
-    seqs = sorted(raw_dir.glob("*.y4m"))
+    xiph_dir = config.raw_dir("xiph_cif")
+    seqs = sorted(xiph_dir.glob("*.y4m"))
     if args.sequences:
         want = {s.strip() for s in args.sequences.split(",")}
         seqs = [s for s in seqs if s.stem in want]

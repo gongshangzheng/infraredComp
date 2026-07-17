@@ -38,6 +38,7 @@ sys.path.insert(0, str(REPO))
 
 from benchmark.video.extractors import build_extractor, list_extractors  # noqa: E402
 from benchmark.learned import _img_to_tensor  # noqa: E402
+from benchmark.video.config import raw_dir, contour_dir  # noqa: E402
 
 DATASETS_DIR = Path(os.environ.get("INFRACOMP_DATASETS_DIR", str(REPO / "datasets")))
 
@@ -86,7 +87,7 @@ class ImageNetContourDataset(Dataset):
         self.size = size
         self.rg_cache_cap = max(1, rg_cache_cap)
 
-        data_dir = DATASETS_DIR / "imagenet" / "data"
+        data_dir = raw_dir("imagenet") / "data"
         prefix = _SPLIT_PREFIX.get(split, split)
         files = sorted(data_dir.glob(f"{prefix}-*.parquet"))
         if not files:
@@ -197,5 +198,5 @@ class ContourPNGDataset(Dataset):
 
 
 def preextracted_contour_dir(split: str, method: str) -> Path:
-    """预提取 PNG 目录：datasets/contour/imagenet_<split>_<method>/。"""
-    return DATASETS_DIR / "contour" / f"imagenet_{split}_{method}"
+    """预提取 PNG 目录：datasets/<method>/imagenet_<split>/。"""
+    return contour_dir(method, f"imagenet_{split}")

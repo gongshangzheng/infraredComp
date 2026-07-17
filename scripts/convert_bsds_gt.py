@@ -28,6 +28,7 @@ sys.path.insert(0, str(REPO))
 
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
+from benchmark.video.config import raw_dir  # noqa: E402
 
 DATASETS_DIR = Path(os.environ.get("INFRACOMP_DATASETS_DIR", str(REPO / "datasets")))
 
@@ -85,15 +86,15 @@ def convert_split(src: Path, out_root: Path, split: str, save_size: int) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--src", default=str(DATASETS_DIR / "BSDS500"))
-    ap.add_argument("--out-root", default=str(DATASETS_DIR / "contour"))
+    ap.add_argument("--src", default=str(raw_dir("BSDS500")))
+    ap.add_argument("--out-root", default=str(DATASETS_DIR / "contour"))  # TODO(t19-2): 产物 bsds_<split>_gt → 新布局 gt/bsds_<split>(改 out-root + 内部目录名),阶段4 contour 迁移统一
     ap.add_argument("--splits", default="train,val,test")
     ap.add_argument("--save-size", type=int, default=0, help="0=原生分辨率；>0 则 resize 到该尺寸存盘")
     args = ap.parse_args()
 
     src = Path(args.src)
     if not src.is_dir():
-        raise SystemExit(f"BSDS500 源目录不存在：{src}（先建 datasets/BSDS500 junction）")
+        raise SystemExit(f"BSDS500 源目录不存在：{src}（先建 datasets/raw/BSDS500 软链接）")
     out_root = Path(args.out_root)
     out_root.mkdir(parents=True, exist_ok=True)
     total = 0

@@ -63,7 +63,7 @@ def main() -> int:
     if args.contour_dir:
         art = load_artifact(args.contour_dir)
     else:
-        y4m = config.DATASETS_DIR / "raw" / "xiph_cif" / f"{args.sequence}.y4m"
+        y4m = config.raw_dir("xiph_cif") / f"{args.sequence}.y4m"
         if not y4m.is_file():
             print(json.dumps({"error": f"missing {y4m}"}))
             return 2

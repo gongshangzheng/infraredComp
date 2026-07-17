@@ -533,6 +533,10 @@
       "progress": [
         {
           "date": "2026-07-18",
+          "note": "openStreamByDevID 开流成功:rc=1,status=CONNECT_OK,6s 收 151 帧(25fps)。帧回调 frame_data_t 实测:width/height=1280/1024 对;frame_src_data 才是真实 Y16 热数据指针(值~0x80xx 典型红外灰度,length=1310720=像素数);rgb_data/yuv_data 在 YUV 模式空(待 setpalette 或改 mode 填充);param_data 非空=测温ParamLine。画面 Y16 数据流已拿到。下一步:Y16->RGB24 渲染(y16torgb24 或伪彩LUT)起 MJPEG 桥接到浏览器。"
+        },
+        {
+          "date": "2026-07-18",
           "note": "SDK 探测+路径迁移:三 DLL(GuideUSBCamera/GuideUSB2LiveStream/MTSDK)ctypes 加载验证 OK;GuideUSB2LiveStream 依赖 libusb0.dll(在 AllDriverAutoInstall\\amd64\\,系统未装,加 DLL 搜索路径即解),skill 补此说明;软件目录迁 D:\\Programs\\GuideIR_V1.2.4 避中文路径坑(WPS 占用户手册 PDF 致 mv 失败 WinError32,kill 后成);5 文件路径引用同步更新,ir_probe 新路径加载验证通过。下一步反推 .pdb 签名,调 initialize+getDeviceList 验证枚举,起 MJPEG 桥接骨架。"
         }
       ]
@@ -581,15 +585,21 @@
         {
           "id": "t19-1",
           "title": "config + caller 迁移到 raw_dir/contour_dir(代码层)",
-          "status": "active",
+          "status": "completed",
           "assignee": "郑鑫裕",
           "description": "config.py raw_dir 改 original→raw;server/config.py 加 raw_dir/contour_dir;~15 scripts + server 3 router 路径字面改用函数。不删 symlink。\n\n• import 策略:scripts 统一 sys.path+from benchmark.video.config import raw_dir\n• server evaluation/training/benchmark 路径最高风险\n• train_model.py osu_color_thermal_frames 核实是否存在",
-          "children": []
+          "children": [],
+          "progress": [
+            {
+              "date": "2026-07-18",
+              "note": "[完成] config raw_dir→raw + server 加 raw_dir/contour_dir + 16 scripts + server 3 router 路径迁移;磁盘 mv original→raw + 删根下4 symlink + raw/旧compat;server 重启只读API全work(evaluation/datasets 列 raw/ 数据集,benchmark/runs 200,training/datasets 6)"
+            }
+          ]
         },
         {
           "id": "t19-2",
           "title": "磁盘重命名 original→raw + 删冗余 symlink + contour 迁移",
-          "status": "planned",
+          "status": "active",
           "assignee": "郑鑫裕",
           "description": "rm datasets/raw/ compat junction;mv original→raw;删根下 4 symlink;contour/<src>/<method> 真实数据搬到 <method>/<src>,删 contour/。\n\n• 依赖 t19-1 代码迁移完\n• contour 真实数据逐项核实,可重跑 stage1 兜底",
           "children": []

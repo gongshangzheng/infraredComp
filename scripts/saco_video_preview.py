@@ -14,12 +14,15 @@ import numpy as np, cv2
 from pathlib import Path
 from pycocotools import mask as M
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from benchmark.video.config import raw_dir  # noqa: E402
+
 VIDEO = sys.argv[1] if len(sys.argv) > 1 else "saco_sg_000008"
 SPLIT = sys.argv[2] if len(sys.argv) > 2 else "smartglasses_val"
 FF = r'D:\code\infraredComp\.venv\Lib\site-packages\static_ffmpeg\bin\win32\ffmpeg.exe'
 
-JSON_P = Path(f"datasets/SACo-VEval/annotation/saco_veval_{SPLIT}.json")
-FRAME_DIR = Path(f"datasets/SACo-VEval/media/saco_sg/JPEGImages_6fps/{VIDEO}")
+JSON_P = raw_dir("SACo-VEval") / f"annotation/saco_veval_{SPLIT}.json"
+FRAME_DIR = raw_dir("SACo-VEval") / f"media/saco_sg/JPEGImages_6fps/{VIDEO}"
 OUT = Path("results/video/saco_preview"); OUT.mkdir(parents=True, exist_ok=True)
 
 d = json.load(open(JSON_P, encoding="utf-8"))

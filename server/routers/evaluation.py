@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse
 
 from server.config import (
     DATASETS_DIR, CONTOUR_DIR, OUTPUTS_DIR, RESULTS_VIDEO_DIR, RESULTS_VIDEO_JSON,
+    RAW_ROOT, raw_dir, contour_dir,
 )
 from server.utils.file_utils import read_file, safe_resolve
 
@@ -189,8 +190,8 @@ def _bitstream_for(run: dict) -> str | None:
 
 
 def _find_raw_video(seq: str) -> str | None:
-    """Locate the original raw video for a sequence under datasets/raw/<dataset>/."""
-    raw = os.path.join(DATASETS_DIR, "raw")
+    """Locate the original raw video for a sequence under the raw root (datasets/raw/<dataset>/)."""
+    raw = RAW_ROOT
     if not os.path.isdir(raw):
         return None
     for ds in sorted(os.listdir(raw)):
@@ -202,7 +203,7 @@ def _find_raw_video(seq: str) -> str | None:
 
 
 def _contour_manifest(seq: str, method: str) -> dict:
-    m = os.path.join(DATASETS_DIR, "contour", seq, method, "manifest.json")
+    m = os.path.join(contour_dir(method, seq), "manifest.json")
     if not os.path.isfile(m):
         return {}
     try:
@@ -228,13 +229,13 @@ def _ensure_source_video(seq: str, dataset: str | None = None) -> str | None:
     ds_lower = (dataset or "").lower()
     if "bsds" in ds_lower:
         split = "val" if "val" in ds_lower else ("test" if "test" in ds_lower else "val")
-        mpath = os.path.join(DATASETS_DIR, "contour", f"bsds_{split}_gt", "manifest.json")
+        mpath = os.path.join(contour_dir("gt", f"bsds_{split}"), "manifest.json")
         if os.path.isfile(mpath):
             try:
                 m = json.loads(read_file(mpath) or "{}")
                 for si in m.get("source_images", []):
                     if si.get("stem") == seq:
-                        img = os.path.join(DATASETS_DIR, "BSDS500", "images", split, si["image"])
+                        img = os.path.join(raw_dir("BSDS500"), "images", split, si["image"])
                         if os.path.isfile(img):
                             rel = os.path.relpath(img, DATASETS_DIR).replace(os.sep, "/")
                             _VIDEO_CACHE[key] = rel
@@ -273,14 +274,14 @@ def _ensure_contour_video(seq: str, method: str, dataset: str | None = None) -> 
     if method == "gt":
         import glob
         ds_lower = (dataset or "").lower()
-        gt_pattern = "bsds_val_gt" if "val" in ds_lower else ("bsds_test_gt" if "test" in ds_lower else "bsds_*_gt")
-        for gt_dir in glob.glob(os.path.join(DATASETS_DIR, "contour", gt_pattern)):
+        gt_pattern = "bsds_val" if "val" in ds_lower else ("bsds_test" if "test" in ds_lower else "bsds_*")
+        for gt_dir in glob.glob(contour_dir("gt", gt_pattern)):
             src = os.path.join(gt_dir, f"{seq}.png")
             if os.path.isfile(src):
                 rel = os.path.relpath(src, DATASETS_DIR).replace(os.sep, "/")
                 _VIDEO_CACHE[key] = rel
                 return rel
-    cdir = os.path.join(DATASETS_DIR, "contour", seq, method)
+    cdir = contour_dir(method, seq)
     out_rel = f"contour_mp4/{seq}_{method}.mp4"
     out = os.path.join(CONTOUR_VIDEO_DIR, f"{seq}_{method}.mp4")
     contour_mp4 = os.path.join(cdir, "contour.mp4")
@@ -445,13 +446,13 @@ DATASET_VIDEO_MIME = {
 
 
 def _load_raw_datasets() -> list[dict]:
-    """读取 datasets/raw/<dataset>/manifest.json，按真实数据集家族分组。"""
+    """读取 raw root 下各 <dataset>/manifest.json，按真实数据集家族分组。"""
     out = []
-    raw_dir = os.path.join(DATASETS_DIR, "raw")
-    if not os.path.isdir(raw_dir):
+    raw_root = RAW_ROOT
+    if not os.path.isdir(raw_root):
         return out
-    for ds_dir_name in sorted(os.listdir(raw_dir)):
-        ds_dir = os.path.join(raw_dir, ds_dir_name)
+    for ds_dir_name in sorted(os.listdir(raw_root)):
+        ds_dir = os.path.join(raw_root, ds_dir_name)
         if not os.path.isdir(ds_dir):
             continue
         manifest_path = os.path.join(ds_dir, "manifest.json")

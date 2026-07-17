@@ -70,9 +70,11 @@ async def compare_results(codecs: Optional[str] = None, sequences: Optional[str]
 
 @router.get("/runs")
 async def list_runs():
-    """List available contour videos (datasets/contour/<source>/<method>/ manifest).
+    """List available contour videos (datasets/<method>/<source>/ manifest).
 
-    兼容旧扁平布局 datasets/contour/<source>/manifest.json（单方法）。
+    TODO(t19-2): 当前仍遍历旧 CONTOUR_DIR(datasets/contour/ compat),阶段4 删 contour/
+    后改遍历各 method 目录的 <method>/<source>/manifest.json。兼容旧扁平布局
+    datasets/contour/<source>/manifest.json(单方法)。
     """
     if not os.path.isdir(CONTOUR_DIR):
         return {"runs": []}

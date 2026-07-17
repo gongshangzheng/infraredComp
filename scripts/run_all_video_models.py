@@ -72,8 +72,8 @@ def ensure_contour_artifacts(
     sequences: list[str] | None = None,
 ) -> list:
     """Extract/refresh canny contour artifacts for every Xiph CIF sequence."""
-    raw_dir = config.DATASETS_DIR / "raw" / "xiph_cif"
-    seqs = sorted(raw_dir.glob("*.y4m")) if raw_dir.is_dir() else []
+    xiph_dir = config.raw_dir("xiph_cif")
+    seqs = sorted(xiph_dir.glob("*.y4m")) if xiph_dir.is_dir() else []
     if sequences:
         wanted = {s.strip() for s in sequences if s.strip()}
         seqs = [s for s in seqs if s.stem in wanted]

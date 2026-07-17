@@ -44,7 +44,7 @@ RESULTS_FILE_BY_MODE = {
 
 def load_bsds_val_artifacts(max_images: int | None = None, sequences: str | None = None) -> list[ContourArtifact]:
     """从 datasets/contour/bsds_val_gt/manifest.json 加载每张图为 1 帧 ContourArtifact。"""
-    gt_dir = config.DATASETS_DIR / "contour" / "bsds_val_gt"
+    gt_dir = config.contour_dir("gt", "bsds_val")
     manifest_path = gt_dir / "manifest.json"
     if not manifest_path.is_file():
         raise FileNotFoundError(

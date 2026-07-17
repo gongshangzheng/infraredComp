@@ -12,6 +12,18 @@ PAPERS_DIR = os.path.join(BASE_DIR, "papers")
 # CONTOUR_DIR 由 DATASETS_DIR 派生,自动跟随;/runs 端点据此列出 contour 目录。
 DATASETS_DIR = os.environ.get("INFRACOMP_DATASETS_DIR", os.path.join(BASE_DIR, "datasets"))
 CONTOUR_DIR = os.path.join(DATASETS_DIR, "contour")  # 阶段1 产出的无损轮廓帧
+# 原始数据集根目录(canonical):raw_dir()/contour_dir() 是单一来源,勿在路由里硬编码 datasets/... 字面。
+RAW_ROOT = os.path.join(DATASETS_DIR, "raw")  # canonical raw root(原始数据集)
+
+
+def raw_dir(dataset: str) -> str:
+    """原始数据集目录:datasets/raw/<dataset>/(如 raw/xiph_cif、raw/BSDS500;大数据集为 D:/data 软链接)。"""
+    return os.path.join(DATASETS_DIR, "raw", dataset)
+
+
+def contour_dir(method: str, dataset: str) -> str:
+    """轮廓产物目录:datasets/<method>/<dataset>/(如 canny/akiyo_cif、gt/bsds_train)。"""
+    return os.path.join(DATASETS_DIR, method, dataset)
 RESULTS_VIDEO_DIR = os.path.join(BASE_DIR, "results", "video")
 RESULTS_VIDEO_JSON = os.path.join(RESULTS_VIDEO_DIR, "results.json")
 # 评测输出根目录（压缩码流 bitstreams/ + 重建视频 recon/），供 /api/evaluation/outputs 按需服务

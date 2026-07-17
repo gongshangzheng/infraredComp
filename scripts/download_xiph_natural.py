@@ -32,7 +32,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # Datasets 树位置可经 INFRACOMP_DATASETS_DIR 配置;默认 <repo>/datasets。
 _DATASETS_DIR = Path(os.environ.get("INFRACOMP_DATASETS_DIR", str(PROJECT_ROOT / "datasets")))
-OUT_DIR = _DATASETS_DIR / "raw" / "xiph_cif"
+sys.path.insert(0, str(PROJECT_ROOT))
+from benchmark.video.config import raw_dir  # noqa: E402
+OUT_DIR = raw_dir("xiph_cif")
 
 BASE_URL = "https://media.xiph.org/video/derf/y4m"
 SEQUENCES = ["akiyo_cif", "bus_cif", "city_cif", "flower_cif", "foreman_cif", "mobile_cif"]
