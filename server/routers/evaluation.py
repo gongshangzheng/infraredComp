@@ -536,16 +536,35 @@ def _imagenet_image_datasets() -> list[dict]:
     ]
 
 
+def _bsds_datasets() -> list[dict]:
+    """BSDS500 val 轮廓 GT（已落地为 PNG），每张图视为 1 帧伪序列。
+
+    需先运行 `python scripts/convert_bsds_gt.py --splits val` 生成
+    datasets/contour/bsds_val_gt/frame_*.png + manifest.json。
+    """
+    return [{
+        "id": "bsds-val",
+        "name": "BSDS val（轮廓 GT · 静态图）",
+        "kind": "contour",
+        "split": "val",
+        "usage": "both",
+        "sequences": [],
+        "contour_methods": ["gt"],
+        "description": "BSDS500 val 的 ground-truth 软边缘图，每张作为 1 帧伪序列跑视频 codec。",
+    }]
+
+
 # 已下线、不再注册到评测的数据集（raw 目录仍在但不展示）
 _EVAL_HIDDEN_RAW = {"osu_color_thermal"}
 
 
 @router.get("/datasets")
 async def get_datasets():
-    """列出数据集家族（Xiph-CIF-natural / imagenet val·test）及下属序列、轮廓方法。"""
+    """列出数据集家族（Xiph-CIF-natural / imagenet val·test / BSDS val）及下属序列、轮廓方法。"""
     datasets = [d for d in _load_raw_datasets() if d["id"] not in _EVAL_HIDDEN_RAW]
     _attach_contour(datasets)
     datasets += _imagenet_image_datasets()
+    datasets += _bsds_datasets()
     return datasets
 
 
@@ -554,6 +573,7 @@ async def get_dataset_detail(dataset_id: str):
     datasets = [d for d in _load_raw_datasets() if d["id"] not in _EVAL_HIDDEN_RAW]
     _attach_contour(datasets, with_previews=True)
     datasets += _imagenet_image_datasets()
+    datasets += _bsds_datasets()
     ds = next((d for d in datasets if d["id"] == dataset_id), None)
     if not ds:
         return {"detail": "Dataset not found"}, 404
@@ -702,7 +722,21 @@ async def run_evaluation(data: dict = Body(...)):
 
     checkpoint = data.get("checkpoint")
 
-    if "osu_color_thermal" in dataset_id:
+    if dataset_id == "bsds-val":
+        script = os.path.join(scripts_dir, "run_bsds_baseline.py")
+        cmd = [_bench_python(), "-u", script, "--mode", mode]
+        if codecs:
+            cmd += ["--codecs", _join_list(codecs)]
+        if data.get("crfs"):
+            cmd += ["--crfs", _join_list(data["crfs"])]
+        if mode == "speed" and data.get("sequences"):
+            cmd += ["--sequences", _join_list(data["sequences"])]
+        elif mode == "speed":
+            # speed run 默认只跑前 50 张，快速出结果
+            cmd += ["--max-images", "50"]
+        if checkpoint:
+            cmd += ["--checkpoint", checkpoint]
+    elif "osu_color_thermal" in dataset_id:
         if has_learned:
             return {"status": "error", "config": data, "output_video": None, "metrics": None,
                     "note": "osu 数据集暂不支持学习式 codec（无 runner）；用 xiph_cif。"}

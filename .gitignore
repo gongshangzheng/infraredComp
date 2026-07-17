@@ -23,7 +23,7 @@ results/training/viz/
 results/hed_preview.png
 
 # DCVC source (cloned nested repo, not part of this repo)
-third_party/DCVC/
+models/DCVC/
 
 # Environment
 .env
@@ -67,19 +67,19 @@ results/training/logs/*.log
 results/training/metrics.json
 
 # Vendored HED model binary (56 MB; deploy.prototxt is tracked, the caffemodel is not)
-third_party/hed/*.caffemodel
+models/hed/*.caffemodel
 logs/
 results/video/contour_mp4/
 results/video/row_demo/
 results/video/source/
-third_party/pidinet/*.pth
-third_party/yoloe26/*.pt
+models/pidinet/*.pth
+models/yoloe26/*.pt
 
 # ultralytics mobileclip2 text-model cache (auto-downloaded, ~253MB, never commit)
 mobileclip2_*.ts
 mobileclip2_*.pt
 
 # NEVC checkpoints (HF ByteDance/NEVC1.0, gitignore weights only; src/ tracked)
-third_party/nevc/models/*.pth.tar
-third_party/nevc/models/*.pth
-third_party/lsmc/*.exe
+models/nevc/models/*.pth.tar
+models/nevc/models/*.pth
+models/lsmc/*.exe

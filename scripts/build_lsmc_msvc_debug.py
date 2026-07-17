@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 
 SRC = Path(tempfile.gettempdir()) / "lsmc-gcc"
-DEST = Path(__file__).resolve().parent.parent / "third_party" / "lsmc"
+DEST = Path(__file__).resolve().parent.parent / "models" / "lsmc"
 
 def fix_cmake():
     p = SRC / "CMakeLists.txt"

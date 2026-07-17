@@ -3,11 +3,11 @@
 PiDiNet ships its weights *committed in the upstream repo*
 (``trained_models/table5_pidinet.pth``, ~3 MB) — no OneDrive/Google Drive. So
 this script shallow-clones ``hellozhuo/pidinet`` to a temp dir, copies the pth
-into ``third_party/pidinet/``, and removes the temp clone. Idempotent (skips if
+into ``models/pidinet/``, and removes the temp clone. Idempotent (skips if
 already present + non-empty). Uses NO_PROXY to bypass any dead system proxy.
 
 The output path matches ``extractors/pidinet.py``'s ``DEFAULT_WEIGHTS`` exactly
-(``third_party/pidinet/table5_pidinet.pth``) — no manual rename needed.
+(``models/pidinet/table5_pidinet.pth``) — no manual rename needed.
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ os.environ.setdefault("NO_PROXY", "*")
 os.environ.setdefault("no_proxy", "*")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEST = PROJECT_ROOT / "third_party" / "pidinet" / "table5_pidinet.pth"
+DEST = PROJECT_ROOT / "models" / "pidinet" / "table5_pidinet.pth"
 REPO = "https://github.com/hellozhuo/pidinet.git"
 SRC_IN_REPO = "trained_models/table5_pidinet.pth"
 

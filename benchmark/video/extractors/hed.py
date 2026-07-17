@@ -32,11 +32,11 @@ import numpy as np
 
 from .base import ContourExtractor, register
 
-# Weights live in-repo under third_party/hed/ (the caffemodel is a 56 MB binary
+# Weights live in-repo under models/hed/ (the caffemodel is a 56 MB binary
 # fetched from the Berkeley HED release; the prototxt is from s9xie/hed). Both
 # are vendored rather than ~/.cache'd so the extractor is self-contained.
 # hed.py = benchmark/video/extractors/hed.py -> parents[3] = repo root.
-_HED_DIR = Path(__file__).resolve().parents[3] / "third_party" / "hed"
+_HED_DIR = Path(__file__).resolve().parents[3] / "models" / "hed"
 DEFAULT_PROTOTXT = str(_HED_DIR / "deploy.prototxt")
 DEFAULT_CAFFEMODEL = str(_HED_DIR / "hed_pretrained_bsds.caffemodel")
 

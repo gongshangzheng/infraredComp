@@ -1,6 +1,6 @@
 """PiDiNet (Pixel Difference Network) extractor — deep edge detector.
 
-Vendors `hellozhuo/pidinet` model code under ``third_party/pidinet/models/`` and
+Vendors `hellozhuo/pidinet` model code under ``models/pidinet/models/`` and
 runs the **converted** (vanilla-conv, re-parameterized) PiDiNet — config
 ``carv4`` with CSAM (``sa``) + CDCM (``dil``), the BSDS release
 (``table5_pidinet.pth``, committed in the upstream repo, ~3 MB). Same interface
@@ -18,7 +18,7 @@ convolutional (no fixed input size, no padding). ``forward`` returns a list of
 5 sigmoid'd side outputs; ``[-1]`` is the fused map already bilinearly resized
 back to the input HxW, so no extra sigmoid/resize is needed — just ×255.
 
-Weights must be vendored at ``third_party/pidinet/table5_pidinet.pth`` (run
+Weights must be vendored at ``models/pidinet/table5_pidinet.pth`` (run
 ``scripts/download_pidinet_weights.py``); this module pre-checks and raises a
 clear error if missing, mirroring the HED guard.
 """
@@ -35,9 +35,9 @@ from PIL import Image
 
 from .base import ContourExtractor, register
 
-# Vendored model code + weight under third_party/pidinet/.
+# Vendored model code + weight under models/pidinet/.
 # pidinet.py = benchmark/video/extractors/pidinet.py -> parents[3] = repo root.
-_PIDINET_DIR = Path(__file__).resolve().parents[3] / "third_party" / "pidinet"
+_PIDINET_DIR = Path(__file__).resolve().parents[3] / "models" / "pidinet"
 DEFAULT_WEIGHTS = str(_PIDINET_DIR / "table5_pidinet.pth")
 
 # ImageNet mean/std (PiDiNet edge_dataloader.py: ToTensor then Normalize).
@@ -59,7 +59,7 @@ def _load(device: str):
     # Make vendored models/ importable. (Mirrors dcvc_rt's sys.path approach.)
     if str(_PIDINET_DIR) not in sys.path:
         sys.path.insert(0, str(_PIDINET_DIR))
-    import models  # noqa: E402  (third_party/pidinet/models)
+    import models  # noqa: E402  (models/pidinet/models)
     from models.convert_pidinet import convert_pidinet  # noqa: E402
 
     args = types.SimpleNamespace(config="carv4", sa=True, dil=True)

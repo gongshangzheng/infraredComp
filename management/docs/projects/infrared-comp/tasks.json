@@ -98,7 +98,7 @@
           "title": "PiDiNet 接入 extractors + BSDS500/SA-Co 提取验证",
           "status": "completed",
           "assignee": "郑鑫裕",
-          "description": "PiDiNet 权重下 third_party/pidinet/,@register 注册为 stage1 提取器;BSDS500(图像边缘)+ SA-Co(视频)跑提取对比 canny/hed/sobel",
+          "description": "PiDiNet 权重下 models/pidinet/,@register 注册为 stage1 提取器;BSDS500(图像边缘)+ SA-Co(视频)跑提取对比 canny/hed/sobel",
           "children": [],
           "endDate": "2026-07-15"
         },
@@ -107,7 +107,7 @@
           "title": "yoloe26 接入 extractors + BSDS500/SA-Co 提取验证",
           "status": "completed",
           "assignee": "郑鑫裕",
-          "description": "yoloe26 权重下 third_party/yoloe26/,@register 注册;BSDS500 + SA-Co 跑提取验证",
+          "description": "yoloe26 权重下 models/yoloe26/,@register 注册;BSDS500 + SA-Co 跑提取验证",
           "children": [],
           "endDate": "2026-07-15"
         }
@@ -128,7 +128,7 @@
           "title": "LosslessSeg 接入 stage2 codec + SA-Co 评测",
           "status": "active",
           "assignee": "郑鑫裕",
-          "description": "clone InterDigitalInc/LosslessSegmentationMapCompression → cmake+MSVC build 出 encoder/decoder.exe(vendor 到 third_party/lsmc/,gitignore 二进制) → 写 codecs/lsmc.py(@register_codec, is_neural=True, encode_inprocess=拼 temp .yuv→跑 encoder→读 .bin; decode_inprocess=写 .bin→跑 decoder→读 rec.yuv→parse frames;10MB buffer 限) → 注册 catalog qualities=[0](单无损点) → 跑 akiyo 出 1 个 RD 点(无损 rec==gt,PSNR=inf→前端 cap) → viewable mp4 合成。SA-Co-VEval 视频跑评测。【进度@2026-07-16】wrapper+catalog 已就位(git 2249dd8)。C++ binaries MSVC build OK(encoder/decoder.exe)。但 encoder 在**任何多 label 输入** segfault (exit 139, 4x4 两 label 也崩;单 label 全零正常 byteNum:5)。根因=MSVC 下 C++ UB(chain-coding 多 label 时)。g++ 5.3.0 (m2w64-toolchain) 太老 ICE。待解: 装 MinGW g++ 14+ 重编 或 C++ debug。",
+          "description": "clone InterDigitalInc/LosslessSegmentationMapCompression → cmake+MSVC build 出 encoder/decoder.exe(vendor 到 models/lsmc/,gitignore 二进制) → 写 codecs/lsmc.py(@register_codec, is_neural=True, encode_inprocess=拼 temp .yuv→跑 encoder→读 .bin; decode_inprocess=写 .bin→跑 decoder→读 rec.yuv→parse frames;10MB buffer 限) → 注册 catalog qualities=[0](单无损点) → 跑 akiyo 出 1 个 RD 点(无损 rec==gt,PSNR=inf→前端 cap) → viewable mp4 合成。SA-Co-VEval 视频跑评测。【进度@2026-07-16】wrapper+catalog 已就位(git 2249dd8)。C++ binaries MSVC build OK(encoder/decoder.exe)。但 encoder 在**任何多 label 输入** segfault (exit 139, 4x4 两 label 也崩;单 label 全零正常 byteNum:5)。根因=MSVC 下 C++ UB(chain-coding 多 label 时)。g++ 5.3.0 (m2w64-toolchain) 太老 ICE。待解: 装 MinGW g++ 14+ 重编 或 C++ debug。",
           "children": []
         }
       ]
@@ -174,7 +174,7 @@
       "status": "active",
       "startDate": "2026-07-15",
       "assignee": "郑鑫裕",
-      "description": "DCVC 系列接入(训练+测试)。当前进度@2026-07-16：(1) DCVC-RT: wrapper dcvc_rt.py 已写好(DMCI+DMC+MLCodec_extensions_cpp); checkpoints 已就位(third_party/DCVC/checkpoints/cvpr2025_*.pth.tar); rans ext MLCodec_extensions_cpp 已 build cp312 ✅ (setup.py /utf-8 修 C4819); neural forward ✅ (enc/hyper_enc/dec 无 NaN); CUDA stream patch ✅ (去掉 with torch.cuda.stream → default stream); BUT rans encode_z+encode_y ×2+ → get_encoded_stream() exit 127 crash (MLCodec_extensions_cpp buffer bug on Windows/cp312)。encode_z alone + get_encoded_stream OK (3639B)。API 不兼容 MLCodec_rans (encode_y/encode_z vs encode_with_indexes), 不能 swap。待解: C++ debug rans buffer 或 build cuda_inference ext (nvcc + torch C2872)。(2) DCVC-DC(t10-1): MLCodec_rans ext 已 build cp312 ✅; checkpoints 未下(OneDrive 被拦); wrapper 未写但 NEVC(t12) 已验证 IntraNoAR+DMC+MLCodec_rans 的 encode_decode 路径跑通(bpp=0.31 psnr=33.08)。DCVC-DC 同接口, wrapper=nevc.py 改 src+ckpt 路径。(3) DCVC-HEM/FM/TCM/EVC(t10-2~6): 全 planning。",
+      "description": "DCVC 系列接入(训练+测试)。当前进度@2026-07-16：(1) DCVC-RT: wrapper dcvc_rt.py 已写好(DMCI+DMC+MLCodec_extensions_cpp); checkpoints 已就位(models/DCVC/checkpoints/cvpr2025_*.pth.tar); rans ext MLCodec_extensions_cpp 已 build cp312 ✅ (setup.py /utf-8 修 C4819); neural forward ✅ (enc/hyper_enc/dec 无 NaN); CUDA stream patch ✅ (去掉 with torch.cuda.stream → default stream); BUT rans encode_z+encode_y ×2+ → get_encoded_stream() exit 127 crash (MLCodec_extensions_cpp buffer bug on Windows/cp312)。encode_z alone + get_encoded_stream OK (3639B)。API 不兼容 MLCodec_rans (encode_y/encode_z vs encode_with_indexes), 不能 swap。待解: C++ debug rans buffer 或 build cuda_inference ext (nvcc + torch C2872)。(2) DCVC-DC(t10-1): MLCodec_rans ext 已 build cp312 ✅; checkpoints 未下(OneDrive 被拦); wrapper 未写但 NEVC(t12) 已验证 IntraNoAR+DMC+MLCodec_rans 的 encode_decode 路径跑通(bpp=0.31 psnr=33.08)。DCVC-DC 同接口, wrapper=nevc.py 改 src+ckpt 路径。(3) DCVC-HEM/FM/TCM/EVC(t10-2~6): 全 planning。",
       "notePath": "",
       "children": [
         {
@@ -183,7 +183,7 @@
           "status": "active",
           "startDate": "2026-07-15",
           "assignee": "郑鑫裕",
-          "description": "下载放 third_party/DCVC/DCVC-family/DCVC-DC/checkpoints/：cvpr2023_image_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211259&authkey=AO_gFvTcYZUFd9U ；cvpr2023_video_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211256&authkey=ACzRzK3XgbQxEyk （另 ssim/yuv420 共6个见 download.py）。MLCodec_rans+MLCodec_CXX ext 已用 MSVC 构建为 cp312(放 src/models/,导入验证通过)。NEVC(t12)已验证 IntraNoAR+DMC+MLCodec_rans 的 encode_decode 路径跑通(bpp=0.31 psnr=33.08)。DCVC-DC 同接口, wrapper=nevc.py 改 src 路径(third_party/DCVC/DCVC-family/DCVC-DC/)+ ckpt 路径(cvpr2023_*)。待 checkpoint 到位后写 codecs/dcvc_dc.py,注册 catalog,真跑 akiyo 验证 RD 点。",
+          "description": "下载放 models/DCVC/DCVC-family/DCVC-DC/checkpoints/：cvpr2023_image_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211259&authkey=AO_gFvTcYZUFd9U ；cvpr2023_video_psnr.pth.tar <- https://onedrive.live.com/download?cid=2866592D5C55DF8C&resid=2866592D5C55DF8C%211256&authkey=ACzRzK3XgbQxEyk （另 ssim/yuv420 共6个见 download.py）。MLCodec_rans+MLCodec_CXX ext 已用 MSVC 构建为 cp312(放 src/models/,导入验证通过)。NEVC(t12)已验证 IntraNoAR+DMC+MLCodec_rans 的 encode_decode 路径跑通(bpp=0.31 psnr=33.08)。DCVC-DC 同接口, wrapper=nevc.py 改 src 路径(models/DCVC/DCVC-family/DCVC-DC/)+ ckpt 路径(cvpr2023_*)。待 checkpoint 到位后写 codecs/dcvc_dc.py,注册 catalog,真跑 akiyo 验证 RD 点。",
           "children": []
         },
         {
@@ -282,7 +282,7 @@
           "title": "NEVC: 下 HF checkpoint + 复用 rans ext + vendor src",
           "status": "completed",
           "assignee": "郑鑫裕",
-          "description": "git clone --depth 1 bytedance/NEVC → vendor NEVC-1.0-EHVC/src/ 到 third_party/nevc/(tracked);下 HuggingFace ByteDance/NEVC1.0 checkpoint 到 third_party/nevc/(gitignore)+ scripts/download_nevc_weights.py(HF 可达)。MLCodec_rans ext 复用 DCVC-DC 已构建的 cp312 版(若 NEVC src/cpp 有差异则同法重建)。读 test.py 确认 q_indexes/rate 点 + I/P frame API(DCVC 同构)。",
+          "description": "git clone --depth 1 bytedance/NEVC → vendor NEVC-1.0-EHVC/src/ 到 models/nevc/(tracked);下 HuggingFace ByteDance/NEVC1.0 checkpoint 到 models/nevc/(gitignore)+ scripts/download_nevc_weights.py(HF 可达)。MLCodec_rans ext 复用 DCVC-DC 已构建的 cp312 版(若 NEVC src/cpp 有差异则同法重建)。读 test.py 确认 q_indexes/rate 点 + I/P frame API(DCVC 同构)。",
           "children": [],
           "endDate": "2026-07-15"
         },
