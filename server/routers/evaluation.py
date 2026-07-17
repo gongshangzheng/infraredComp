@@ -107,6 +107,8 @@ def _load_results() -> dict:
                 if isinstance(r, dict):
                     r.setdefault("dataset", ds)
                     r.setdefault("mode", file_mode)
+                    r.pop("per_frame_psnr", None)  # strip: per-frame 数组占大头（300帧×2），前端聚合视图不需要
+                    r.pop("per_frame_ssim", None)
                     all_runs.append(r)
     return {"generated_at": latest_gen, "runs": all_runs}
 
