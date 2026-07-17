@@ -123,13 +123,18 @@ def benchmark_codec(
                 cv2.imwrite(str(recon_dir / f"frame_{i:06d}.png"), fr)
         _, decode_ms = timed(_decode)
 
-        # Neural bitstreams are .bin (not browser-playable): synthesize a
-        # viewable mp4 from the decoded recon PNGs so the pages can show it.
-        mp4_path = str(Path(config.BITSTREAMS_DIR) / f"{tag}.mp4")
-        try:
-            synthesize_recon_video(recon_dir, artifact.fps, mp4_path)
-        except Exception as e:  # noqa: BLE001
-            print(f"  WARN: recon-video synth failed for {tag}: {e}")
+        # Neural bitstreams are .bin (not browser-playable).
+        # 单图(图片数据集):copy recon PNG 到 bitstreams/{tag}.png(前端 <img> 展示,不 synth mp4)
+        # 多帧(视频):synthesize viewable mp4 供 <video>
+        recon_frames = sorted(recon_dir.glob("frame_*.png"))
+        if len(recon_frames) == 1:
+            shutil.copy(str(recon_frames[0]), str(Path(config.BITSTREAMS_DIR) / f"{tag}.png"))
+        else:
+            mp4_path = str(Path(config.BITSTREAMS_DIR) / f"{tag}.mp4")
+            try:
+                synthesize_recon_video(recon_dir, artifact.fps, mp4_path)
+            except Exception as e:  # noqa: BLE001
+                print(f"  WARN: recon-video synth failed for {tag}: {e}")
     else:
         # ---- ffmpeg path (legacy: x264/x265/svtav1/vp9) ----
         # 1. Encode (timed wall-clock around the ffmpeg subprocess)
@@ -153,6 +158,10 @@ def benchmark_codec(
             run_ffmpeg(codec.decode_args(bitstream, str(recon_dir)))
 
         _, decode_ms = timed(_decode)
+        # x264 等传统 codec 单图(图片数据集):copy recon PNG 到 bitstreams/{tag}.png(前端展示 recon,非码流)
+        _recon_frames = sorted(recon_dir.glob("frame_*.png"))
+        if len(_recon_frames) == 1:
+            shutil.copy(str(_recon_frames[0]), str(Path(config.BITSTREAMS_DIR) / f"{tag}.png"))
 
     # 3. Load GT + reconstructed, align by index
     gt = load_contour_frames(artifact)

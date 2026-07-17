@@ -156,8 +156,12 @@ def _bitstream_index() -> dict[str, str]:
         return _BITSTREAM_INDEX
     idx = {}
     for fn in os.listdir(BITSTREAMS_DIR):
-        if os.path.splitext(fn)[1].lower() in VIDEO_EXTS:
-            idx[fn.rsplit(".", 1)[0]] = f"bitstreams/{fn}"
+        ext = os.path.splitext(fn)[1].lower()
+        if ext in VIDEO_EXTS or ext == ".png":
+            stem = fn.rsplit(".", 1)[0]
+            # .png 优先(图片数据集 recon);.mp4 是视频 viewable
+            if stem not in idx or ext == ".png":
+                idx[stem] = f"bitstreams/{fn}"
     _BITSTREAM_INDEX = idx; _BITSTREAM_MTIME = mt
     return idx
 
