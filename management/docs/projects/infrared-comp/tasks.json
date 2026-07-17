@@ -530,6 +530,39 @@
       "description": "创建新前端页面，用于展示 Surface 自带的 Infrared Camera 录到的画面。\n\n需求:\n- 新路由 + 新 Vue 页面\n- 从 Surface Infrared Camera 采集的素材展示（可能是视频/帧序列/热成像数据）\n- 可能需要后端 API 暴露素材目录 + 前端 <video>/图片展示\n- 与现有评测页（speed/formal）的 <video> 展示复用模式\n\n待定:\n- 素材格式（mp4? 帧? raw thermal?）\n- 实时预览还是回放？\n- 是否需要接入评测管线（做红外 contour 评测？）",
       "priority": "P1",
       "children": []
+    },
+    {
+      "id": "t18",
+      "title": "BSDS-val 神经 codec 正式 RD 验证（统一基准）",
+      "status": "planned",
+      "assignee": "郑鑫裕",
+      "description": "在 BSDS-val GT 软边缘图上对已接入的神经 codec 跑正式 RD 评测，产出统一基准对比。\n\n• 范围：NEVC（smoke 已过→补全 RD 扫描）、DCVC 系列（依赖 t10-1~6 接入）、diffTok（依赖权重训练完成）\n• LSMC 无损 baseline 另归 t8，不在此列\n• GPU 协调：训练正在跑，神经 codec 推理须错峰或排队，避免 CUDA OOM\n• 非目标：新 codec 接入（只验证已接入的）",
+      "children": [
+        {
+          "id": "t18-1",
+          "title": "NEVC BSDS-val 正式 RD 扫描（补全 smoke 外数据）",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "description": "在 BSDS-val 上对 NEVC 跑完整 RD 扫描（多码率点），补全 smoke 之外的正式评测数据。\n\n• smoke 已过（psnr 33.6 / bpp 0.26），需扫多个 lambda/qp 出 RD 曲线\n• GPU 推理须错峰训练，防 CUDA OOM\n• 产出入正式结果表 + BD-Rate 对比",
+          "children": []
+        },
+        {
+          "id": "t18-2",
+          "title": "DCVC 系列 BSDS-val 正式 RD 验证",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "description": "在 BSDS-val 上对 DCVC 系列已接入成员跑 RD 评测，统一对比。\n\n• 依赖 t10-1~6 各 wrapper 就位（DCVC-DC/HEM/FM/TCM/EVC/RT）\n• 各成员扫码率点出 RD，与 NEVC/diffTok 同图对比\n• GPU 推理错峰训练，防 CUDA OOM",
+          "children": []
+        },
+        {
+          "id": "t18-3",
+          "title": "diffTok BSDS-val 正式 RD 验证",
+          "status": "planned",
+          "assignee": "郑鑫裕",
+          "description": "在 BSDS-val 上对 diffTok 跑正式 RD 评测，对齐 1D token 码表 bpp。\n\n• 依赖 diffTok 权重训练完成（runner 就位、权重待训）\n• GPU 推理错峰训练，防 CUDA OOM\n• 与神经 codec 统一基准对比",
+          "children": []
+        }
+      ]
     }
   ]
 }
