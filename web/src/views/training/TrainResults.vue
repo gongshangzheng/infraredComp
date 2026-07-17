@@ -30,6 +30,23 @@
       <div v-else class="curve-placeholder">暂无 run（在「训练运行」页启动训练后曲线在此叠加显示）</div>
     </n-card>
 
+    <!-- 测试曲线（test_metrics 叠加） -->
+    <n-card size="small" class="curve-card" style="margin-top: 12px">
+      <template #header>
+        <div class="flex-between">
+          <h3>测试曲线（当前页 run 叠加）</h3>
+          <n-space size="small" align="center">
+            <span class="hint">指标</span>
+            <n-select v-model:value="testMetric" :options="metricOptions" size="small" style="width: 110px" />
+          </n-space>
+        </div>
+      </template>
+      <div v-if="testCurveOption" class="curve-wrap">
+        <v-chart class="curve" :option="testCurveOption" autoresize />
+      </div>
+      <div v-else class="curve-placeholder">暂无测试数据（eval 每 eval-every epoch 出 test_metrics）</div>
+    </n-card>
+
     <!-- 训练结果列表（run + checkpoint 合并） -->
     <n-card size="small" title="训练结果列表" style="margin-top: 12px">
       <n-spin :show="loading">
@@ -59,14 +76,14 @@ import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
+import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent } from 'echarts/components'
 import EmptyState from '../../components/common/EmptyState.vue'
 import { getTrainRuns, getTrainOutputUrl } from '../../api/training'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent])
+use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent])
 
 const message = useMessage()
 const loading = ref(false)
@@ -122,9 +139,41 @@ const curveOption = computed(() => {
   return {
     tooltip: { trigger: 'axis' },
     legend: { data: series.map(s => s.name), type: 'scroll', top: 0 },
-    grid: { top: 40 },
+    grid: { top: 40, bottom: 50 },
     xAxis: { type: 'value', name: 'epoch', minInterval: 1 },
     yAxis: { type: 'value', name: yname, scale: true },
+    dataZoom: [
+      { type: 'slider', xAxisIndex: 0, bottom: 8 },
+      { type: 'inside', xAxisIndex: 0 },
+    ],
+    series,
+  }
+})
+
+const testMetric = ref('psnr')
+const testCurveOption = computed(() => {
+  const metric = testMetric.value
+  const series = runs.value
+    .filter(r => r.test_metrics?.some(p => p[metric] != null))
+    .map(r => ({
+      name: r.id,
+      type: 'line',
+      smooth: true,
+      showSymbol: false,
+      data: r.test_metrics.filter(p => p[metric] != null).map(p => [p.epoch, p[metric]]),
+    }))
+  if (!series.length) return null
+  const yname = metric === 'psnr' ? 'PSNR(dB)' : metric
+  return {
+    tooltip: { trigger: 'axis' },
+    legend: { data: series.map(s => s.name), type: 'scroll', top: 0 },
+    grid: { top: 40, bottom: 50 },
+    xAxis: { type: 'value', name: 'epoch', minInterval: 1 },
+    yAxis: { type: 'value', name: yname, scale: true },
+    dataZoom: [
+      { type: 'slider', xAxisIndex: 0, bottom: 8 },
+      { type: 'inside', xAxisIndex: 0 },
+    ],
     series,
   }
 })

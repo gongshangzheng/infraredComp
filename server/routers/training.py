@@ -250,7 +250,7 @@ def _attach_ckpt_meta(run: dict) -> dict:
 # Fields stripped from /runs list responses to keep them lightweight.
 # viz can be 6×epochs entries (7776+); test_metrics mirrors loss_series length.
 # loss_series is kept — the frontend training curve overlay needs it.
-_STRIP_FIELDS = ("test_metrics", "viz")
+_STRIP_FIELDS = ("viz",)  # viz 太大才 strip;test_metrics 保留（TrainResults 测试曲线需要）
 
 
 @router.get("/runs")
@@ -265,7 +265,7 @@ async def get_runs(model: str = None, dataset: str = None, status: str = None,
     if status:
         runs = [r for r in runs if r.get("status") == status]
     # lite: 额外 strip loss_series（EvalRun 只需 best/latest + model_id，不需曲线数据）
-    strip = set(_STRIP_FIELDS) | ({"loss_series"} if lite else set())
+    strip = set(_STRIP_FIELDS) | ({"loss_series", "test_metrics"} if lite else set())  # lite: EvalRun 不需曲线数据
     runs = [{k: v for k, v in _attach_ckpt_meta(r).items() if k not in strip}
             for r in runs]
     if offset is not None or limit is not None:
