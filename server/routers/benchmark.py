@@ -11,14 +11,14 @@ from typing import Optional
 from fastapi import APIRouter
 
 from server.config import CONTOUR_DIR, RESULTS_VIDEO_JSON
-from server.utils.file_utils import read_file
+from server.cache import file_cached
 
 router = APIRouter(prefix="/api/benchmark", tags=["benchmark"])
 
 
 def _load_results() -> dict:
     """Read the persisted results JSON. Returns {generated_at, runs: []} if absent."""
-    content = read_file(RESULTS_VIDEO_JSON)
+    content = file_cached(RESULTS_VIDEO_JSON, ttl=5.0)
     if not content:
         return {"generated_at": None, "runs": []}
     try:
@@ -89,7 +89,7 @@ async def list_runs():
         for t in targets:
             manifest = os.path.join(t, "manifest.json")
             try:
-                m = json.loads(read_file(manifest) or "{}")
+                m = json.loads(file_cached(manifest, ttl=30.0) or "{}")
             except json.JSONDecodeError:
                 m = {}
             method = m.get("method", os.path.basename(t) if t != full else "unknown")

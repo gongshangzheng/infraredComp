@@ -26,6 +26,7 @@ from server.config import (
     DATASETS_DIR, TRAINING_METRICS_JSON, CHECKPOINTS_DIR, TRAINING_OUTPUTS_DIR,
 )
 from server.utils.file_utils import read_file, safe_resolve
+from server.cache import file_cached
 
 router = APIRouter(prefix="/api/training", tags=["training"])
 
@@ -68,7 +69,7 @@ _DEFAULT_CONFIGS = [
 
 
 def _load_metrics() -> dict:
-    content = read_file(TRAINING_METRICS_JSON)
+    content = file_cached(TRAINING_METRICS_JSON, ttl=5.0)
     if not content:
         return {"generated_at": None, "runs": []}
     try:
@@ -231,7 +232,7 @@ def _attach_ckpt_meta(run: dict) -> dict:
     meta = {}
     if os.path.isfile(mf):
         try:
-            meta = json.loads(read_file(mf) or "{}")
+            meta = json.loads(file_cached(mf, ttl=30.0) or "{}")
         except Exception:
             meta = {}
     run = dict(run)
