@@ -126,11 +126,15 @@
         {
           "id": "t8-1",
           "title": "LSMC 编译 + 接入 stage2 + BSDS-val 评测",
-          "status": "active",
+          "status": "paused",
           "assignee": "郑鑫裕",
           "description": "把 LosslessSegmentationMapCompression 接为 stage2 无损 codec,纳入评测对比。\n\n• 接入:clone repo → cmake+MSVC build encoder/decoder.exe(vendor models/lsmc/) → 写 codecs/lsmc.py(@register_codec,is_neural,encode/decode_inprocess 拼 temp .yuv/.bin) → 注册 catalog qualities=[0](单无损点)\n• 评测:跑 akiyo 出 RD 点(无损 rec==gt,PSNR=inf 前端 cap)+ SA-Co 视频\n• 待解:encoder 多 label 输入 segfault(MSVC UB),需 MinGW g++14+ 重编或 C++ debug;详见 progress\n【最新目标@2026-07-17】编译 encoder/decoder.exe → models/lsmc/ → 跑 bsds-val formal eval（无损 baseline 参照线）。当前阻塞: github clone 网络超时。\n【进度@2026-07-18】encoder.exe + decoder.exe cmake 编译成功（CMakeLists 修 2 处：arithmetic_codec 路径 + 加 acodec.cpp）。但 encoder 运行时 segfault：acodec.encode(first_color, aColor) 调基类 Arithmetic_Codec::encode → crash。根因：Adaptive_Data_Model::update(bool) 非 virtual，AdaptiveDataModel::update() 不覆盖它 → 基类 update 访问子类未初始化的内部状态。试过 virtual fix（ABI 问题）+ 2-param wrapper（forbidden=-1 导致 length=0 → crash）。需 VS Debugger 进一步定位。\n\n\n【进度@2026-07-18】git clone 成功 + CMakeLists 修 2 处(arithmetic_codec 路径+加 acodec.cpp) + cmake+MSVC 编译成功(encoder.exe+decoder.exe)。\n运行时 segfault：debug 打印定位到 base class Arithmetic_Codec::encode(unsigned, Adaptive_Data_Model&) 本身完成(S1-S5 全打)，crash 在函数返回后的后续 edge 编码操作里。\n根因：Adaptive_Data_Model::update(bool) 非 virtual → 基类 encode 调 M.update(true) 走基类版 → 不更新 distribution_forbidden → 后续 4-param encode 读 stale distribution_forbidden → 除零/越界。\n尝试修复：virtual update(bool) + override → 编译成功但仍 crash（可能 ABI 不兼容）。\n阻塞：需 VS Debugger 定位后续 edge 编码循环中具体 crash 点。Windows 10 SDK 已补装。",
           "children": [],
           "progress": [
+            {
+              "date": "2026-07-18 02:57",
+              "note": "编译成功(SDK装回+cmake+MSVC)。运行 segfault 修不好：试了空body→基类调用、virtual update+override、propagate_carry边界检查，均仍crash(在第一个encode完成后的后续edge编码操作里)。命令行fprintf定位到基类encode跑完(S1-S5通)→crash在后续。需VS Debugger但用户说不这样做。暂停 LSMC。"
+            },
             {
               "date": "2026-07-18 02:41",
               "note": "编译成功（SDK 10.0.17134 装回，cmake+MSVC 重建 OK）。运行时 segfault：基类 encode(unsigned, Adaptive_Data_Model&) 本身跑完（S1-S5 全通），crash 在返回后的后续 encode/enc_global 调用。根因：Adaptive_Data_Model::update(bool) 非 virtual → M.update(true) 走基类不更新 distribution_forbidden → 4-param encode 除零。试 virtual+override 仍 crash（crash 点在第一个 encode 之后的其他操作）。需 VS Debugger 精确定位。"
