@@ -17,7 +17,7 @@
     <n-card size="small" class="curve-card">
       <template #header>
         <div class="flex-between">
-          <h3>训练曲线（当前页 run 叠加）</h3>
+          <h3>训练曲线</h3>
           <n-space size="small" align="center">
             <span class="hint">指标</span>
             <n-select v-model:value="curveMetric" :options="metricOptions" size="small" style="width: 110px" />
@@ -34,7 +34,7 @@
     <n-card size="small" class="curve-card" style="margin-top: 12px">
       <template #header>
         <div class="flex-between">
-          <h3>测试曲线（当前页 run 叠加）</h3>
+          <h3>测试曲线</h3>
           <n-space size="small" align="center">
             <span class="hint">指标</span>
             <n-select v-model:value="testMetric" :options="metricOptions" size="small" style="width: 110px" />
