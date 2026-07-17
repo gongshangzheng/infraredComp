@@ -120,7 +120,7 @@
       "status": "active",
       "startDate": "2026-07-15",
       "assignee": "郑鑫裕",
-      "description": "接入 InterDigitalInc/LosslessSegmentationMapCompression 作为 stage2 codec。注意它是纯 C++17 CLI 二进制(encoder/decoder,链码 MSC/3OT + 算术编码),非 torch;无权重/率点、无损→单 RD 点、PSNR=inf。集成=build C++ + subprocess 包装(is_neural,写临时 .yuv→跑 encoder→读 .bin;解码反之)。RD 图对 inf PSNR cap 到有限值。纳入 stage2 评测对比。",
+      "description": "接入 InterDigitalInc/LosslessSegmentationMapCompression 作为 stage2 codec。注意它是纯 C++17 CLI 二进制(encoder/decoder,链码 MSC/3OT + 算术编码),非 torch;无权重/率点、无损→单 RD 点、PSNR=inf。集成=build C++ + subprocess 包装(is_neural,写临时 .yuv→跑 encoder→读 .bin;解码反之)。RD 图对 inf PSNR cap 到有限值。纳入 stage2 评测对比。\n【进度@2026-07-17】LSMC = InterDigitalInc/LosslessSegmentationMapCompression（https://github.com/InterDigitalInc/LosslessSegmentationMapCompression）。纯 C++17 CLI codec，无损（context-adaptive chain coding + 算术编码），PSNR=∞。wrapper 已写（benchmark/video/codecs/lsmc.py，subprocess encoder/decoder.exe）。当前 models/lsmc/ 目录不存在——需 git clone + cmake+MSVC 编译（CMakeLists 需 2 修复：arithmetic_codec 路径 + 缺 acodec.cpp）。",
       "notePath": "",
       "children": [
         {
@@ -422,7 +422,7 @@
     {
       "id": "t14",
       "title": "训练 checkpoint 接入验证流程（EvalRun 选 ckpt 自动定模型/参数）",
-      "status": "active",
+      "status": "completed",
       "assignee": "郑鑫裕",
       "startDate": "2026-07-16",
       "description": "把训练产出的 checkpoint 接进验证：EvalRun 选 checkpoint→自动填 codec(img-<model_id>/ssf2020)+quality(crfs)+checkpoint_path→一键开验证。codec 层 checkpoint_path 已支持(learned_image/ssf2020/_load_model/load_elic_model)，缺 UI→API→runner plumbing + ckpt.json 自带模型信息。",
@@ -430,33 +430,64 @@
         {
           "id": "t14-1",
           "title": "eval runner checkpoint_path 透传（codec 层 base/stage2/bench_one/run_all_subprocess 已改；剩 evaluation.py /run 收 checkpoint+解析 abs+传 --checkpoint）",
-          "status": "active",
+          "status": "completed",
           "assignee": "郑鑫裕",
           "priority": "P1",
-          "children": []
+          "children": [],
+          "progress": [
+            {
+              "date": "2026-07-17",
+              "note": "[完成] /run 收 checkpoint(data.get)+ 传 --checkpoint(evaluation.py:775/789/805/819),codec 层 base/stage2/bench_one/run_all_subprocess 已支持"
+            }
+          ]
         },
         {
           "id": "t14-2",
           "title": "ckpt.json 富化：根级带 model_id/quality/method/dataset/lambda/size（eval 自包含，老 run 回退 run 记录）",
-          "status": "planned",
+          "status": "completed",
           "assignee": "郑鑫裕",
-          "children": []
+          "children": [],
+          "progress": [
+            {
+              "date": "2026-07-17",
+              "note": "[完成] ckpt.json 根级带 model_id/quality/method/dataset/lambda/size(ELIC__bsds-train__gt__1784107118.ckpt.json 含全字段,eval 自包含,老 run 回退 run 记录)"
+            }
+          ]
         },
         {
           "id": "t14-3",
           "title": "EvalRun checkpoint 选择器：选 ckpt 自动填 codecs=img-<model_id>/ssf2020 + crfs=[quality] + checkpoint（getTrainRuns 的 best/latest）",
-          "status": "planned",
+          "status": "completed",
           "assignee": "郑鑫裕",
           "children": [],
-          "description": "【流程细化】选 ckpt 后自动填：① codec id = ssf2020 或 img-<model_id>（model_id 来自 ckpt.json/run 记录）；② crfs=[quality]（训练 quality）；③ form.checkpoint=该 ckpt 相对路径。其余 eval 目标参数（method 提取方法/dataset/sequences/mode）由用户选（不自动填——那是 eval 目标，非训练侧）。runEvaluation payload 带 checkpoint 字段一键启动验证。"
+          "description": "【流程细化】选 ckpt 后自动填：① codec id = ssf2020 或 img-<model_id>（model_id 来自 ckpt.json/run 记录）；② crfs=[quality]（训练 quality）；③ form.checkpoint=该 ckpt 相对路径。其余 eval 目标参数（method 提取方法/dataset/sequences/mode）由用户选（不自动填——那是 eval 目标，非训练侧）。runEvaluation payload 带 checkpoint 字段一键启动验证。",
+          "progress": [
+            {
+              "date": "2026-07-17",
+              "note": "[完成] EvalRun checkpoint 选择器:checkpointOptions(best/latest from getTrainRuns)+ watch checkpoint 自动填 codecs=img-<model_id>/ssf2020 + crfs=[quality](EvalRun.vue:81/102)"
+            }
+          ]
         },
         {
           "id": "t14-4",
           "title": "端到端验证 + 回归：选 ELIC__bsds-train__gt best ckpt → eval xiph_cif → 结果 JSON 出现 img-ELIC-q1(checkpoint) 行；不选 ckpt 时原 pretrained 流程不变",
-          "status": "planned",
+          "status": "completed",
           "assignee": "郑鑫裕",
           "priority": "P1",
-          "children": []
+          "children": [],
+          "progress": [
+            {
+              "date": "2026-07-17",
+              "note": "[完成] 端到端跑过:xiph_cif.json 有 24 个 img-ELIC#ELIC__bsds-train__gt__1784107118.best checkpoint runs(codec=img-ELIC#<ckpt>,crf 1/4/5,akiyo/bus 等);不选 ckpt 原 pretrained img-* 流程不变(回归)"
+            }
+          ]
+        }
+      ],
+      "endDate": "2026-07-17",
+      "progress": [
+        {
+          "date": "2026-07-17",
+          "note": "[完成] 训练 checkpoint 接入验证流程全通:/run 透传(t14-1)+ ckpt.json 富化(t14-2)+ EvalRun 选择器(t14-3)+ 端到端 ELIC ckpt→eval→results 出 checkpoint 行(t14-4)"
         }
       ]
     },
@@ -483,7 +514,13 @@
       "assignee": "郑鑫裕",
       "startDate": "2026-07-17",
       "description": "让评测页面支持图片数据集(BSDS/imagenet 单图)展示,并去掉 FormalResults 全量 results 加载。\n\n• 图片展示:后端对 BSDS/imagenet 返回单图路径(original/contour/output 非 video)+ 前端 <img> vs <video> 按扩展名\n• FormalResults:去掉 getEvalResults(mode:formal) 全量 4.69MB,改用 getAggregatedResults(dataset+method)+ getDatasets(列表)\n• 不在范围:后端按 dataset/method 过滤只返回子集(/results 端点,0.54s 已够)",
-      "children": []
+      "children": [],
+      "progress": [
+        {
+          "date": "2026-07-17",
+          "note": "[进度@2026-07-17] FormalResults 去全量 getEvalResults(4.69MB)→ getDatasets+getAggregatedResults(小,0.23s);_bsds_datasets name 改 BSDS-val 匹配 run.dataset。待做:图片数据集(BSDS/imagenet 单图)展示(后端返回单图路径+前端 <img> vs <video>)"
+        }
+      ]
     }
   ]
 }
