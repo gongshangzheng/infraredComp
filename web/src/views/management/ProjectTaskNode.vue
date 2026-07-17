@@ -252,7 +252,7 @@ function onClick() {
 
 .hover-card {
   position: absolute; left: 32px; top: 100%; z-index: 50;
-  width: 240px; padding: 12px;
+  width: 480px; padding: 12px;
   background: var(--color-card); border: 1px solid var(--color-border);
   border-radius: 8px; box-shadow: 0 8px 24px var(--color-shadow);
   word-break: break-word; overflow-wrap: anywhere;

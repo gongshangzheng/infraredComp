@@ -140,6 +140,28 @@ def _load_results() -> dict:
     return result
 
 
+_BITSTREAM_INDEX: dict[str, str] = {}
+_BITSTREAM_MTIME: float | None = None
+
+
+def _bitstream_index() -> dict[str, str]:
+    """扫一次 bitstreams/ (mtime-aware) -> {stem: 'bitstreams/{fn}'}。
+    避免每 run os.listdir（3900× → 1×）。"""
+    global _BITSTREAM_INDEX, _BITSTREAM_MTIME
+    if not os.path.isdir(BITSTREAMS_DIR):
+        _BITSTREAM_INDEX = {}; _BITSTREAM_MTIME = None
+        return _BITSTREAM_INDEX
+    mt = os.stat(BITSTREAMS_DIR).st_mtime
+    if _BITSTREAM_INDEX and _BITSTREAM_MTIME == mt:
+        return _BITSTREAM_INDEX
+    idx = {}
+    for fn in os.listdir(BITSTREAMS_DIR):
+        if os.path.splitext(fn)[1].lower() in VIDEO_EXTS:
+            idx[fn.rsplit(".", 1)[0]] = f"bitstreams/{fn}"
+    _BITSTREAM_INDEX = idx; _BITSTREAM_MTIME = mt
+    return idx
+
+
 def _bitstream_for(run: dict) -> str | None:
     """给一条 run 找对应的压缩码流相对路径（bitstreams/{seq}_{method}_{codec}_crf{N}.{ext}）。
 
@@ -152,12 +174,13 @@ def _bitstream_for(run: dict) -> str | None:
     method = run.get("method") or "canny"
     if not seq or not codec or crf is None:
         return None
-    if not os.path.isdir(BITSTREAMS_DIR):
-        return None
     prefix = f"{seq}_{method}_{codec}_crf{crf}"
-    for fn in os.listdir(BITSTREAMS_DIR):
-        if fn.startswith(prefix) and os.path.splitext(fn)[1].lower() in VIDEO_EXTS:
-            return f"bitstreams/{fn}"
+    idx = _bitstream_index()
+    if prefix in idx:
+        return idx[prefix]
+    for stem, path in idx.items():
+        if stem.startswith(prefix):
+            return path
     return None
 
 
@@ -217,14 +240,25 @@ def _ensure_source_video(seq: str) -> str | None:
     return _VIDEO_CACHE[key]
 
 
-def _ensure_contour_video(seq: str, method: str) -> str | None:
+def _ensure_contour_video(seq: str, method: str, dataset: str | None = None) -> str | None:
     """Lazy-generate a viewable lossy mp4 from the stage-1 lossless
     ``contour.mp4``. Returns relative path under OUTPUTS_DIR
     (e.g. 'contour_mp4/akiyo_cif_canny.mp4'). Returns None if the contour dir
     has no contour.mp4 (e.g. not yet extracted)."""
-    key = ("contour", seq, method)
+    key = ("contour", seq, method, dataset)
     if key in _VIDEO_CACHE:
         return _VIDEO_CACHE[key]
+    # 图片数据集(BSDS/imagenet):method=gt → 直接返 datasets 下 gt png 相对路径,前端走 /datasets/{id}/media serve,不 copy
+    if method == "gt":
+        import glob
+        ds_lower = (dataset or "").lower()
+        gt_pattern = "bsds_val_gt" if "val" in ds_lower else ("bsds_test_gt" if "test" in ds_lower else "bsds_*_gt")
+        for gt_dir in glob.glob(os.path.join(DATASETS_DIR, "contour", gt_pattern)):
+            src = os.path.join(gt_dir, f"{seq}.png")
+            if os.path.isfile(src):
+                rel = os.path.relpath(src, DATASETS_DIR).replace(os.sep, "/")
+                _VIDEO_CACHE[key] = rel
+                return rel
     cdir = os.path.join(DATASETS_DIR, "contour", seq, method)
     out_rel = f"contour_mp4/{seq}_{method}.mp4"
     out = os.path.join(CONTOUR_VIDEO_DIR, f"{seq}_{method}.mp4")
@@ -573,7 +607,7 @@ def _bsds_datasets() -> list[dict]:
     """
     return [{
         "id": "bsds-val",
-        "name": "BSDS val（轮廓 GT · 静态图）",
+        "name": "BSDS-val",
         "kind": "contour",
         "split": "val",
         "usage": "both",
@@ -846,9 +880,9 @@ async def get_results(model: str = None, dataset: str = None, metric: str = None
             if seq not in src_cache:
                 src_cache[seq] = _ensure_source_video(seq)
             row["original_video"] = src_cache[seq]
-            con_key = f"{seq}/{method}"
+            con_key = f"{seq}/{method}/{r.get('dataset')}"
             if con_key not in con_cache:
-                con_cache[con_key] = _ensure_contour_video(seq, method)
+                con_cache[con_key] = _ensure_contour_video(seq, method, r.get("dataset"))
             row["contour_video"] = con_cache[con_key]
         else:
             row["original_video"] = None

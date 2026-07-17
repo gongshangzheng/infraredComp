@@ -137,6 +137,7 @@ uv run python $SD/list_tasks.py --slug infrared-comp --id t2-3    # 单个任务
 5. **禁止**：HTML 标签、emoji、markdown 链接、`TODO:` 前缀、"详见 notePath" 这种占位废话。
 6. 中文语境下英文专有名词首字母大写（PyTorch 不是 pytorch），且左右各留一个半角空格。
 7. 如果任务已经挂了 `notePath`，description 仍要独立可读（用户不点进笔记也能看懂）。
+8. **进度/状态放 `progress` 字段，不要塞进 description**。description 只写"做什么"（静态定位 + 范围 + 非目标），不写"当前进度/做到哪了/遇到什么 bug/链接"。当前进度用 `update_task --progress` 追加（见 §1.2）。description 里出现"当前进度@日期"、"【进度@...】"、"(1) X: ... (2) Y: ..."这种长进度块、或 OneDrive/curl 链接，就是反模式——把进度/链接移到 progress（或 notePath），description 重写成首行+要点。
 
 **好例子**（tasks.json 中的 description 值）：
 ```json

@@ -57,9 +57,11 @@ DATASETS_DIR = Path(os.environ.get("INFRACOMP_DATASETS_DIR", str(REPO / "dataset
 
 def log(run_id: str, msg: str) -> None:
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    ts = time.strftime("%m-%d %H:%M:%S")
+    line = f"[{ts}] {msg}"
     with open(LOGS_DIR / f"{run_id}.log", "a", encoding="utf-8") as f:
-        f.write(msg + "\n")
-    print(msg)
+        f.write(line + "\n")
+    print(line)
 
 
 # ---- 数据集（thermal 帧 -> [0,1] 3 通道张量）---------------------------- #
@@ -845,6 +847,11 @@ def main() -> int:
     ckpt_path = CHECKPOINTS_DIR / f"{run_id}.pth"
     torch.save(model.state_dict(), ckpt_path)
     log(run_id, f"[train] checkpoint saved: {ckpt_path}")
+    # final: 写 ckpt.json(latest=final epoch + best_meta),EvalRun getTrainRuns 能拿到 latest/best
+    # (没传 --ckpt-every 时定期存没触发,这里兜底写一次,避免 ckpt.json 缺失)
+    latest_meta = {"epoch": epoch, "path": f"checkpoints/{run_id}.pth", "train": avg,
+                   "test": (test_metrics[-1] if test_metrics else None), "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    _write_ckpt_meta(run_id, latest_meta, best_meta)
 
     final_loss = loss_series[-1]["loss"] if loss_series else None
     best_metric = max((p["psnr"] for p in loss_series), default=None)

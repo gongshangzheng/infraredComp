@@ -116,19 +116,19 @@
     },
     {
       "id": "t8",
-      "title": "模型接入 LosslessSegmentationMapCompression",
+      "title": "LSMC 接入：BSDS-val 评测（LosslessSeg 无损 baseline）",
       "status": "active",
       "startDate": "2026-07-15",
       "assignee": "郑鑫裕",
-      "description": "LSMC (Lossless Segmentation Map Compression)\n\n源码: https://github.com/InterDigitalInc/LosslessSegmentationMapCompression\n类型: 纯 C++17 CLI codec（encoder/decoder 二进制），非神经网络\n算法: context-adaptive chain coding (MSC/3OT) + 算术编码，压缩 raw YUV 分割图\n特点: 无损 → 单个 RD 点，PSNR=∞\n权重: 无（传统 C++ 算法，无 .pth/.ckpt）\n产物: models/lsmc/{encoder,decoder}.exe（gitignored）\n\n集成方式:\n- wrapper: benchmark/video/codecs/lsmc.py\n- is_neural=True（in-process bytes-in/bytes-out 合约），内部 subprocess C++ binary\n- encode: frames → temp .yuv (gray) → encoder → .bin bytes\n- decode: .bin → decoder → rec.yuv → parse frames\n- 10MB 内部 buffer 限制（大序列注意）\n\n当前状态:\n- wrapper 已写 ✓\n- models/lsmc/ 目录不存在 ✗ → 需 git clone + cmake+MSVC 编译\n- CMakeLists 需 2 修复: arithmetic_codec 路径 + 缺的 acodec.cpp\n\n任务:\n- t8-1: LosslessSeg 接入 stage2 codec + SA-Co 评测",
+      "description": "LSMC (Lossless Segmentation Map Compression)\n\n源码: https://github.com/InterDigitalInc/LosslessSegmentationMapCompression\n类型: 纯 C++17 CLI codec（encoder/decoder 二进制），非神经网络\n算法: context-adaptive chain coding (MSC/3OT) + 算术编码，压缩 raw YUV 分割图\n特点: 无损 → 单个 RD 点，PSNR=∞\n权重: 无（传统 C++ 算法，无 .pth/.ckpt）\n产物: models/lsmc/{encoder,decoder}.exe（gitignored）\n\n集成方式:\n- wrapper: benchmark/video/codecs/lsmc.py\n- is_neural=True（in-process bytes-in/bytes-out 合约），内部 subprocess C++ binary\n- encode: frames → temp .yuv (gray) → encoder → .bin bytes\n- decode: .bin → decoder → rec.yuv → parse frames\n- 10MB 内部 buffer 限制（大序列注意）\n\n当前状态:\n- wrapper 已写 ✓\n- models/lsmc/ 目录不存在 ✗ → 需 git clone + cmake+MSVC 编译\n- CMakeLists 需 2 修复: arithmetic_codec 路径 + 缺的 acodec.cpp\n\n任务:\n- t8-1: LosslessSeg 接入 stage2 codec + SA-Co 评测\n\n\n【最新目的@2026-07-17】用 LSMC 在 BSDS-val GT 软边缘图上跑评测，作为无损 baseline 参照线（PSNR=∞，RD 图上是一条垂直线）。与 x264/x265/img-ELIC 等有损 codec 对比。\n\n当前进度:\n- wrapper 已写 ✓ (benchmark/video/codecs/lsmc.py)\n- git clone 网络炸（github.com 443 超时），models/lsmc/ 未落地 ✗\n- 待: clone 成功 → cmake+MSVC 编译 → 放 encoder/decoder.exe → bsds-val formal eval",
       "notePath": "",
       "children": [
         {
           "id": "t8-1",
-          "title": "LosslessSeg 接入 stage2 codec + SA-Co 评测",
+          "title": "LSMC 编译 + 接入 stage2 + BSDS-val 评测",
           "status": "active",
           "assignee": "郑鑫裕",
-          "description": "把 LosslessSegmentationMapCompression 接为 stage2 无损 codec,纳入评测对比。\n\n• 接入:clone repo → cmake+MSVC build encoder/decoder.exe(vendor models/lsmc/) → 写 codecs/lsmc.py(@register_codec,is_neural,encode/decode_inprocess 拼 temp .yuv/.bin) → 注册 catalog qualities=[0](单无损点)\n• 评测:跑 akiyo 出 RD 点(无损 rec==gt,PSNR=inf 前端 cap)+ SA-Co 视频\n• 待解:encoder 多 label 输入 segfault(MSVC UB),需 MinGW g++14+ 重编或 C++ debug;详见 progress",
+          "description": "把 LosslessSegmentationMapCompression 接为 stage2 无损 codec,纳入评测对比。\n\n• 接入:clone repo → cmake+MSVC build encoder/decoder.exe(vendor models/lsmc/) → 写 codecs/lsmc.py(@register_codec,is_neural,encode/decode_inprocess 拼 temp .yuv/.bin) → 注册 catalog qualities=[0](单无损点)\n• 评测:跑 akiyo 出 RD 点(无损 rec==gt,PSNR=inf 前端 cap)+ SA-Co 视频\n• 待解:encoder 多 label 输入 segfault(MSVC UB),需 MinGW g++14+ 重编或 C++ debug;详见 progress\n【最新目标@2026-07-17】编译 encoder/decoder.exe → models/lsmc/ → 跑 bsds-val formal eval（无损 baseline 参照线）。当前阻塞: github clone 网络超时。",
           "children": [],
           "progress": [
             {
@@ -521,6 +521,15 @@
           "note": "[进度@2026-07-17] FormalResults 去全量 getEvalResults(4.69MB)→ getDatasets+getAggregatedResults(小,0.23s);_bsds_datasets name 改 BSDS-val 匹配 run.dataset。待做:图片数据集(BSDS/imagenet 单图)展示(后端返回单图路径+前端 <img> vs <video>)"
         }
       ]
+    },
+    {
+      "id": "t17",
+      "title": "Surface Infrared Camera 画面展示页面",
+      "status": "planned",
+      "assignee": "郑鑫裕",
+      "description": "创建新前端页面，用于展示 Surface 自带的 Infrared Camera 录到的画面。\n\n需求:\n- 新路由 + 新 Vue 页面\n- 从 Surface Infrared Camera 采集的素材展示（可能是视频/帧序列/热成像数据）\n- 可能需要后端 API 暴露素材目录 + 前端 <video>/图片展示\n- 与现有评测页（speed/formal）的 <video> 展示复用模式\n\n待定:\n- 素材格式（mp4? 帧? raw thermal?）\n- 实时预览还是回放？\n- 是否需要接入评测管线（做红外 contour 评测？）",
+      "priority": "P1",
+      "children": []
     }
   ]
 }

@@ -89,7 +89,7 @@ import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import { useRoute, useRouter } from 'vue-router'
 import EmptyState from '../../components/common/EmptyState.vue'
-import { getEvalResults, getMethods, getAggregatedResults } from '../../api/evaluation'
+import { getMethods, getAggregatedResults, getDatasets } from '../../api/evaluation'
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent])
 
@@ -97,7 +97,7 @@ const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
-const results = ref([])
+const datasets = ref([])
 const methods = ref([])
 const aggregated = ref([])
 // 筛选器初始值从 URL query 恢复（F5 刷新不再清空）；首次无 query 时由 load() 填默认。
@@ -107,7 +107,7 @@ const filters = ref({
 })
 
 const methodOptions = computed(() => methods.value.map(m => ({ label: m, value: m })))
-const datasetOptions = computed(() => [...new Set(results.value.map(r => r.dataset_name).filter(Boolean))].map(d => ({ label: d, value: d })))
+const datasetOptions = computed(() => datasets.value.map(d => ({ label: d.name, value: d.name })))
 
 // 按连续同 codec 分组(供第一列 rowspan)
 const groupedAgg = computed(() => {
@@ -169,14 +169,14 @@ function syncQuery() {
 async function load() {
   loading.value = true
   try {
-    const [res, meth] = await Promise.all([getEvalResults({ mode: 'formal' }), getMethods()])
-    results.value = res
+    const [ds, meth] = await Promise.all([getDatasets(), getMethods()])
+    datasets.value = ds || []
     methods.value = meth.methods || []
     // 仅首次进入给筛选器填默认值（首个数据集 + canny）；用户手动改过或清空过都不覆盖。
     if (!defaultsApplied) {
       if (!filters.value.dataset) {
-        const datasets = [...new Set(results.value.map(r => r.dataset_name).filter(Boolean))]
-        if (datasets.length) filters.value.dataset = datasets[0]
+        const names = datasets.value.map(d => d.name).filter(Boolean)
+        if (names.length) filters.value.dataset = names[0]
       }
       if (!filters.value.method) {
         const m = methods.value
